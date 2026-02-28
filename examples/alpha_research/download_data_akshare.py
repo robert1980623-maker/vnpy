@@ -1,7 +1,11 @@
 """
-使用 AKShare 下载股票数据
+使用 AKShare 下载股票数据（增强版）
 
-用于选股策略回测的数据准备
+支持：
+- 多数据源（AKShare、Baostock）
+- 本地缓存
+- 自动重试
+- 断点续传
 """
 
 import akshare as ak
@@ -9,107 +13,277 @@ import pandas as pd
 from datetime import datetime, timedelta
 from pathlib import Path
 import json
+import time
+import random
 
 
-def get_stock_list():
-    """
-    获取 A 股股票列表
+# ==================== 缓存管理 ====================
+
+class DataCache:
+    """数据缓存管理"""
     
-    Returns:
-        pd.DataFrame: 股票列表
-    """
-    print("获取 A 股股票列表...")
-    try:
-        # 获取沪深 A 股列表
-        df = ak.stock_info_a_code_name()
-        print(f"获取到 {len(df)} 只股票")
-        return df
-    except Exception as e:
-        print(f"获取股票列表失败：{e}")
-        return None
+    def __init__(self, cache_dir: str = "./cache"):
+        self.cache_dir = Path(cache_dir)
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        self.meta_file = self.cache_dir / "cache_meta.json"
+        self.meta = self._load_meta()
+    
+    def _load_meta(self) -> dict:
+        """加载缓存元数据"""
+        if self.meta_file.exists():
+            with open(self.meta_file, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        return {}
+    
+    def _save_meta(self):
+        """保存缓存元数据"""
+        with open(self.meta_file, 'w', encoding='utf-8') as f:
+            json.dump(self.meta, f, ensure_ascii=False, indent=2)
+    
+    def get_bars(self, vt_symbol: str, start_date: str, end_date: str) -> pd.DataFrame:
+        """从缓存获取 K 线数据"""
+        cache_key = f"{vt_symbol}_{start_date}_{end_date}"
+        cache_info = self.meta.get(cache_key)
+        
+        if not cache_info:
+            return None
+        
+        cache_file = self.cache_dir / cache_info["file"]
+        if not cache_file.exists():
+            return None
+        
+        try:
+            df = pd.read_csv(cache_file)
+            df["datetime"] = pd.to_datetime(df["datetime"])
+            print(f"  ✓ 从缓存加载 {vt_symbol}")
+            return df
+        except Exception as e:
+            print(f"  ✗ 缓存读取失败：{e}")
+            return None
+    
+    def save_bars(self, vt_symbol: str, start_date: str, end_date: str, df: pd.DataFrame):
+        """保存 K 线数据到缓存"""
+        cache_key = f"{vt_symbol}_{start_date}_{end_date}"
+        cache_file = self.cache_dir / f"bars_{vt_symbol.replace('.', '_')}.csv"
+        
+        df.to_csv(cache_file, index=False)
+        self.meta[cache_key] = {
+            "file": cache_file.name,
+            "rows": len(df),
+            "created": datetime.now().isoformat()
+        }
+        self._save_meta()
+        print(f"  ✓ 已缓存 {vt_symbol} ({len(df)} 条)")
+    
+    def get_fundamental(self, vt_symbol: str) -> dict:
+        """从缓存获取财务数据"""
+        cache_key = f"fundamental_{vt_symbol}"
+        cache_info = self.meta.get(cache_key)
+        
+        if not cache_info:
+            return None
+        
+        cache_file = self.cache_dir / cache_info["file"]
+        if not cache_file.exists():
+            return None
+        
+        try:
+            with open(cache_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            print(f"  ✓ 从缓存加载 {vt_symbol} 财务数据")
+            return data
+        except Exception as e:
+            return None
+    
+    def save_fundamental(self, vt_symbol: str, data: dict):
+        """保存财务数据到缓存"""
+        cache_key = f"fundamental_{vt_symbol}"
+        cache_file = self.cache_dir / f"fundamental_{vt_symbol.replace('.', '_')}.json"
+        
+        with open(cache_file, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        
+        self.meta[cache_key] = {
+            "file": cache_file.name,
+            "created": datetime.now().isoformat()
+        }
+        self._save_meta()
 
 
-def get_stock_bars(vt_symbol: str, start_date: str, end_date: str) -> pd.DataFrame:
+# ==================== 数据下载 ====================
+
+def get_stock_bars_akshare(vt_symbol: str, start_date: str, end_date: str, 
+                           max_retries: int = 3) -> pd.DataFrame:
     """
-    获取股票 K 线数据
+    使用 AKShare 获取 K 线数据（带重试）
     
     Args:
         vt_symbol: 股票代码 (如 "000001.SZ")
         start_date: 开始日期 (如 "20240101")
         end_date: 结束日期 (如 "20241231")
+        max_retries: 最大重试次数
         
     Returns:
         pd.DataFrame: K 线数据
     """
-    # 转换代码格式
     code = vt_symbol.split(".")[0]
-    exchange = "sz" if vt_symbol.endswith(".SZ") else "sh"
     
+    for attempt in range(max_retries):
+        try:
+            # 获取日线数据（前复权）
+            df = ak.stock_zh_a_hist(
+                symbol=code,
+                period="daily",
+                start_date=start_date,
+                end_date=end_date,
+                adjust="qfq"
+            )
+            
+            if df is None or df.empty:
+                return None
+            
+            # 转换格式
+            df["vt_symbol"] = vt_symbol
+            df["datetime"] = pd.to_datetime(df["日期"])
+            df["open_price"] = df["开盘"].astype(float)
+            df["high_price"] = df["最高"].astype(float)
+            df["low_price"] = df["最低"].astype(float)
+            df["close_price"] = df["收盘"].astype(float)
+            df["volume"] = df["成交量"].astype(float) * 100  # 手转股
+            df["turnover"] = df["成交额"].astype(float)
+            
+            return df[["vt_symbol", "datetime", "open_price", "high_price", "low_price", 
+                       "close_price", "volume", "turnover"]]
+        
+        except Exception as e:
+            if attempt < max_retries - 1:
+                wait_time = random.uniform(3, 6) * (attempt + 1)
+                print(f"  重试 {attempt+1}/{max_retries}, 等待 {wait_time:.1f}秒...")
+                time.sleep(wait_time)
+            else:
+                print(f"  ✗ AKShare 失败：{e}")
+                return None
+    
+    return None
+
+
+def get_stock_bars_baostock(vt_symbol: str, start_date: str, end_date: str) -> pd.DataFrame:
+    """
+    使用 Baostock 获取 K 线数据（备选数据源）
+    
+    Args:
+        vt_symbol: 股票代码
+        start_date: 开始日期
+        end_date: 结束日期
+        
+    Returns:
+        pd.DataFrame: K 线数据
+    """
     try:
-        # 获取日线数据
-        df = ak.stock_zh_a_hist(
-            symbol=code,
-            period="daily",
+        import baostock as bs
+        
+        # 登录
+        lg = bs.login()
+        if lg.error_code != '0':
+            print(f"  Baostock 登录失败：{lg.error_msg}")
+            return None
+        
+        # 转换代码格式
+        code = vt_symbol.lower()  # baostock 需要小写
+        
+        # 获取日线数据（前复权）
+        rs = bs.query_history_k_data_plus(
+            code,
+            "date,open,high,low,close,volume,amount,adjustflag",
             start_date=start_date,
             end_date=end_date,
-            adjust="qfq"  # 前复权
+            frequency="d",
+            adjustflag="3"  # 前复权
         )
         
-        if df is None or df.empty:
+        if rs.error_code != '0':
+            print(f"  Baostock 查询失败：{rs.error_msg}")
             return None
+        
+        # 转换为 DataFrame
+        data_list = []
+        while rs.next():
+            data_list.append(rs.get_row_data())
+        
+        if not data_list:
+            return None
+        
+        df = pd.DataFrame(data_list, columns=rs.fields)
         
         # 转换格式
         df["vt_symbol"] = vt_symbol
-        df["datetime"] = pd.to_datetime(df["日期"])
-        df["open_price"] = df["开盘"].astype(float)
-        df["high_price"] = df["最高"].astype(float)
-        df["low_price"] = df["最低"].astype(float)
-        df["close_price"] = df["收盘"].astype(float)
-        df["volume"] = df["成交量"].astype(float) * 100  # 手转股
-        df["turnover"] = df["成交额"].astype(float)
+        df["datetime"] = pd.to_datetime(df["date"])
+        df["open_price"] = df["open"].astype(float)
+        df["high_price"] = df["high"].astype(float)
+        df["low_price"] = df["low"].astype(float)
+        df["close_price"] = df["close"].astype(float)
+        df["volume"] = df["volume"].astype(float)
+        df["turnover"] = df["amount"].astype(float)
+        
+        # 登出
+        bs.logout()
         
         return df[["vt_symbol", "datetime", "open_price", "high_price", "low_price", 
                    "close_price", "volume", "turnover"]]
     
+    except ImportError:
+        print("  Baostock 未安装，跳过")
+        return None
     except Exception as e:
-        print(f"获取 {vt_symbol} 数据失败：{e}")
+        print(f"  ✗ Baostock 失败：{e}")
         return None
 
 
-def get_fundamental_data(vt_symbol: str) -> dict:
+def get_fundamental_data(vt_symbol: str, max_retries: int = 2) -> dict:
     """
     获取股票财务数据
     
     Args:
         vt_symbol: 股票代码
+        max_retries: 最大重试次数
         
     Returns:
         dict: 财务指标
     """
     code = vt_symbol.split(".")[0]
     
-    try:
-        # 获取估值指标
-        df = ak.stock_value_manager(symbol=code)
-        if df is None or df.empty:
-            return None
+    for attempt in range(max_retries):
+        try:
+            # 获取估值指标
+            df = ak.stock_value_manager(symbol=code)
+            if df is None or df.empty:
+                return None
+            
+            # 取最新数据
+            latest = df.iloc[-1] if len(df) > 0 else None
+            if latest is None:
+                return None
+            
+            data = {
+                "vt_symbol": vt_symbol,
+                "report_date": datetime.now().strftime("%Y-%m-%d"),
+                "pe_ratio": float(latest.get("市盈率", 0)) if "市盈率" in latest else None,
+                "pb_ratio": float(latest.get("市净率", 0)) if "市净率" in latest else None,
+                "dividend_yield": float(latest.get("股息率", 0)) if "股息率" in latest else None,
+            }
+            
+            return data
         
-        # 取最新数据
-        latest = df.iloc[-1] if len(df) > 0 else None
-        if latest is None:
-            return None
-        
-        return {
-            "vt_symbol": vt_symbol,
-            "report_date": datetime.now().strftime("%Y-%m-%d"),
-            "pe_ratio": float(latest.get("市盈率", 0)) if "市盈率" in latest else None,
-            "pb_ratio": float(latest.get("市净率", 0)) if "市净率" in latest else None,
-            "dividend_yield": float(latest.get("股息率", 0)) if "股息率" in latest else None,
-        }
+        except Exception as e:
+            if attempt < max_retries - 1:
+                wait_time = random.uniform(2, 4)
+                print(f"  重试 {attempt+1}/{max_retries}, 等待 {wait_time:.1f}秒...")
+                time.sleep(wait_time)
+            else:
+                print(f"  ✗ 财务数据获取失败：{e}")
+                return None
     
-    except Exception as e:
-        # print(f"获取 {vt_symbol} 财务数据失败：{e}")
-        return None
+    return None
 
 
 def download_index_components(index_code: str = "000300") -> list:
@@ -125,17 +299,9 @@ def download_index_components(index_code: str = "000300") -> list:
     print(f"获取 {index_code} 成分股...")
     
     try:
-        if index_code == "000300":
-            # 沪深 300 成分股
-            df = ak.index_stock_cons(symbol=index_code)
-        elif index_code == "000016":
-            # 上证 50
-            df = ak.index_stock_cons(symbol=index_code)
-        else:
-            df = ak.index_stock_cons(symbol=index_code)
+        df = ak.index_stock_cons(symbol=index_code)
         
         if df is not None and not df.empty:
-            # 转换代码格式
             components = []
             for _, row in df.iterrows():
                 code = row.get("品种代码", row.get("股票代码", ""))
@@ -151,47 +317,123 @@ def download_index_components(index_code: str = "000300") -> list:
     return []
 
 
-def save_data(data_dir: str, bars_dict: dict, fundamental_dict: dict) -> None:
+# ==================== 主流程 ====================
+
+def download_all_data(
+    components: list,
+    start_date: str = "20240101",
+    end_date: str = "20241231",
+    max_stocks: int = None,
+    use_cache: bool = True,
+    cache_dir: str = "./cache"
+):
     """
-    保存数据到文件
+    批量下载股票数据
     
     Args:
-        data_dir: 数据目录
-        bars_dict: K 线数据字典 {vt_symbol: DataFrame}
-        fundamental_dict: 财务数据字典 {vt_symbol: dict}
+        components: 股票代码列表
+        start_date: 开始日期
+        end_date: 结束日期
+        max_stocks: 最大下载数量（None 表示全部）
+        use_cache: 是否使用缓存
+        cache_dir: 缓存目录
     """
-    data_path = Path(data_dir)
-    data_path.mkdir(parents=True, exist_ok=True)
+    # 初始化缓存
+    cache = DataCache(cache_dir) if use_cache else None
     
-    # 保存 K 线数据
-    bars_path = data_path / "bars"
-    bars_path.mkdir(exist_ok=True)
+    # 限制数量
+    if max_stocks:
+        components = components[:max_stocks]
     
-    for vt_symbol, df in bars_dict.items():
-        if df is not None and not df.empty:
-            filepath = bars_path / f"{vt_symbol.replace('.', '_')}.csv"
-            df.to_csv(filepath, index=False)
+    print(f"\n准备下载 {len(components)} 只股票数据")
+    print(f"时间范围：{start_date} - {end_date}")
+    if use_cache:
+        print(f"缓存目录：{cache_dir}")
+    print("=" * 60)
     
-    # 保存财务数据
-    fundamental_path = data_path / "fundamental.json"
-    with open(fundamental_path, 'w', encoding='utf-8') as f:
-        json.dump(fundamental_dict, f, ensure_ascii=False, indent=2)
+    # 下载数据
+    bars_dict = {}
+    fundamental_dict = {}
+    success_count = 0
+    cache_hit_count = 0
     
-    print(f"数据已保存到 {data_dir}")
+    for i, vt_symbol in enumerate(components, 1):
+        print(f"\n[{i}/{len(components)}] 下载 {vt_symbol}...")
+        
+        # 下载 K 线数据
+        bars = None
+        if use_cache and cache:
+            bars = cache.get_bars(vt_symbol, start_date, end_date)
+            if bars is not None:
+                cache_hit_count += 1
+        
+        if bars is None:
+            # 尝试 AKShare
+            bars = get_stock_bars_akshare(vt_symbol, start_date, end_date)
+            
+            # 如果 AKShare 失败，尝试 Baostock
+            if bars is None:
+                print("  尝试 Baostock...")
+                bars = get_stock_bars_baostock(vt_symbol, start_date, end_date)
+            
+            # 保存到缓存
+            if bars is not None and use_cache and cache:
+                cache.save_bars(vt_symbol, start_date, end_date, bars)
+        
+        if bars is not None and not bars.empty:
+            bars_dict[vt_symbol] = bars
+            print(f"  ✓ K 线数据：{len(bars)} 条")
+            success_count += 1
+        else:
+            print(f"  ✗ K 线数据：失败")
+        
+        # 下载财务数据
+        fundamental = None
+        if use_cache and cache:
+            fundamental = cache.get_fundamental(vt_symbol)
+        
+        if fundamental is None:
+            fundamental = get_fundamental_data(vt_symbol)
+            if fundamental and use_cache and cache:
+                cache.save_fundamental(vt_symbol, fundamental)
+        
+        if fundamental:
+            fundamental_dict[vt_symbol] = {fundamental["report_date"]: fundamental}
+            pe = fundamental.get('pe_ratio', 'N/A')
+            print(f"  ✓ 财务数据：PE={pe}")
+        else:
+            print(f"  ✗ 财务数据：失败")
+        
+        # 延迟，避免请求过快
+        if i % 3 == 0 and i < len(components):
+            wait_time = random.uniform(3, 5)
+            print(f"\n休息 {wait_time:.1f}秒...")
+            time.sleep(wait_time)
+    
+    # 统计
+    print("\n" + "=" * 60)
+    print("下载完成！")
+    print(f"  - 成功：{success_count}/{len(components)} 只股票")
+    print(f"  - 缓存命中：{cache_hit_count} 次")
+    print(f"  - 财务数据：{len(fundamental_dict)} 只股票")
+    print("=" * 60)
+    
+    return bars_dict, fundamental_dict
 
 
 def main():
     """主函数"""
     print("=" * 60)
-    print("下载股票数据")
+    print("下载股票数据（增强版）")
     print("=" * 60)
     
     # 设置参数
     index_code = "000300"  # 沪深 300
     start_date = "20240101"
     end_date = "20241231"
-    data_dir = "./data/akshare"
     max_stocks = 10  # 限制下载数量，测试用
+    use_cache = True
+    cache_dir = "./cache"
     
     # 1. 获取成分股
     components = download_index_components(index_code)
@@ -199,51 +441,36 @@ def main():
         print("获取成分股失败，使用示例股票")
         components = ["000001.SZ", "000002.SZ", "600000.SH", "600036.SH", "600519.SH"]
     
-    # 限制数量
-    components = components[:max_stocks]
-    print(f"准备下载 {len(components)} 只股票数据")
-    
     # 2. 下载数据
-    bars_dict = {}
-    fundamental_dict = {}
+    bars_dict, fundamental_dict = download_all_data(
+        components=components,
+        start_date=start_date,
+        end_date=end_date,
+        max_stocks=max_stocks,
+        use_cache=use_cache,
+        cache_dir=cache_dir
+    )
     
-    for i, vt_symbol in enumerate(components, 1):
-        print(f"\n[{i}/{len(components)}] 下载 {vt_symbol}...")
-        
-        # 下载 K 线数据
-        bars = get_stock_bars(vt_symbol, start_date, end_date)
-        if bars is not None and not bars.empty:
-            bars_dict[vt_symbol] = bars
-            print(f"  ✓ K 线数据：{len(bars)} 条")
-        else:
-            print(f"  ✗ K 线数据：失败")
-        
-        # 下载财务数据
-        fundamental = get_fundamental_data(vt_symbol)
-        if fundamental:
-            fundamental_dict[vt_symbol] = {fundamental["report_date"]: fundamental}
-            print(f"  ✓ 财务数据：PE={fundamental.get('pe_ratio', 'N/A')}")
-        else:
-            print(f"  ✗ 财务数据：失败")
-        
-        # 避免请求过快
-        if i % 5 == 0:
-            print("休息 2 秒...")
-            import time
-            time.sleep(2)
-    
-    # 3. 保存数据
+    # 3. 保存数据到输出目录
     if bars_dict:
-        save_data(data_dir, bars_dict, fundamental_dict)
+        from pathlib import Path
+        data_dir = Path("./data/akshare")
+        data_dir.mkdir(parents=True, exist_ok=True)
         
-        print("\n" + "=" * 60)
-        print("下载完成！")
-        print(f"  - K 线数据：{len(bars_dict)} 只股票")
-        print(f"  - 财务数据：{len(fundamental_dict)} 只股票")
-        print(f"  - 数据目录：{data_dir}")
-        print("=" * 60)
-    else:
-        print("\n没有成功下载任何数据")
+        # 保存 K 线数据
+        bars_path = data_dir / "bars"
+        bars_path.mkdir(exist_ok=True)
+        for vt_symbol, df in bars_dict.items():
+            filepath = bars_path / f"{vt_symbol.replace('.', '_')}.csv"
+            df.to_csv(filepath, index=False)
+        
+        # 保存财务数据
+        fundamental_path = data_dir / "fundamental.json"
+        with open(fundamental_path, 'w', encoding='utf-8') as f:
+            json.dump(fundamental_dict, f, ensure_ascii=False, indent=2)
+        
+        print(f"\n数据已保存到 {data_dir}")
+        print(f"下一步：python run_backtest.py --data {data_dir}")
 
 
 if __name__ == "__main__":
