@@ -1,0 +1,86 @@
+{
+  "000001.SZ": {
+    "2024-03-31": {
+      "vt_symbol": "000001.SZ",
+      "report_date": "2024-03-31",
+      "valuation": {
+        "pe_ratio": 5.2,
+        "pb_ratio": null,
+        "ps_ratio": null,
+        "pcf_ratio": null,
+        "dividend_yield": null
+      },
+      "profitability": {
+        "roe": 8.5,
+        "roa": null,
+        "gross_margin": null,
+        "net_margin": null,
+        "operating_margin": null
+      },
+      "growth": {
+        "revenue_growth": null,
+        "net_profit_growth": null,
+        "eps_growth": null,
+        "book_value_growth": null
+      },
+      "solvency": {
+        "debt_to_asset": null,
+        "current_ratio": null,
+        "quick_ratio": null,
+        "interest_coverage": null
+      },
+      "cashflow": {
+        "operating_cash_flow": null,
+        "free_cash_flow": null,
+        "cash_flow_per_share": null
+      },
+      "per_share": {
+        "eps": null,
+        "bps": null,
+        "revenue_per_share": null
+      }
+    }
+  },
+  "600036.SH": {
+    "2024-03-31": {
+      "vt_symbol": "600036.SH",
+      "report_date": "2024-03-31",
+      "valuation": {
+        "pe_ratio": 6.8,
+        "pb_ratio": null,
+        "ps_ratio": null,
+        "pcf_ratio": null,
+        "dividend_yield": null
+      },
+      "profitability": {
+        "roe": 11.2,
+        "roa": null,
+        "gross_margin": null,
+        "net_margin": null,
+        "operating_margin": null
+      },
+      "growth": {
+        "revenue_growth": null,
+        "net_profit_growth": null,
+        "eps_growth": null,
+        "book_value_growth": null
+      },
+      "solvency": {
+        "debt_to_asset": null,
+        "current_ratio": null,
+        "quick_ratio": null,
+        "interest_coverage": null
+      },
+      "cashflow": {
+        "operating_cash_flow": null,
+        "free_cash_flow": null,
+        "cash_flow_per_share": null
+      },
+      "per_share": {
+        "eps": null,
+        "bps": null,
+        "revenue_per_share": null
+      }
+    }
+  }
+}
