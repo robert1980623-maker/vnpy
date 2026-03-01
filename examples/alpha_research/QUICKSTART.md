@@ -26,17 +26,43 @@
 cd ~/projects/vnpy/examples/alpha_research
 ```
 
-### 2. 安装核心依赖
+### 2. 检查依赖（推荐）
 
 ```bash
-# 方式 1: 使用 pip（推荐）
-pip3 install pandas numpy polars pyyaml --break-system-packages
-
-# 方式 2: 如果有 requirements.txt
-pip3 install -r requirements.txt --break-system-packages
+# 运行依赖检查脚本
+python3 check_dependencies.py
 ```
 
-### 3. 验证安装
+**输出示例**:
+```
+============================================================
+vnpy 量化交易系统 - 依赖检查
+============================================================
+
+📦 核心依赖:
+  ✅ pandas                - 数据处理
+  ✅ numpy                 - 数值计算
+  ✅ polars                - 高性能数据处理
+  ✅ pyyaml                - 配置文件解析
+  ✅ akshare               - AKShare 数据源（推荐）
+
+------------------------------------------------------------
+✅ 所有核心依赖已安装！
+============================================================
+```
+
+如果缺少依赖，脚本会提供安装命令。
+
+### 3. 安装核心依赖
+
+```bash
+# 一键安装所有核心依赖
+pip3 install pandas numpy polars pyyaml akshare --break-system-packages
+
+# 或查看 QUICKSTART.md 获取详细安装指南
+```
+
+### 4. 验证安装
 
 ```bash
 python3 -c "import pandas; import numpy; import yaml; print('✅ 依赖安装成功')"
@@ -280,12 +306,19 @@ $ python3 main.py --strategy value --stocks 5
 
 **解决**:
 ```bash
-# 安装缺失的依赖
-pip3 install pandas numpy polars pyyaml --break-system-packages
+# 方式 1: 运行依赖检查脚本（推荐）
+python3 check_dependencies.py
+
+# 方式 2: 手动安装
+pip3 install pandas numpy polars pyyaml akshare --break-system-packages
 
 # 验证安装
+python3 check_dependencies.py
+# 或
 python3 -c "import pandas; print('OK')"
 ```
+
+**预防**: 运行任何功能前，先运行 `python3 check_dependencies.py`
 
 ---
 

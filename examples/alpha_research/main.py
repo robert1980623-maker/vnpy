@@ -150,6 +150,15 @@ def download_data(max_stocks: int = 20, force: bool = False, data_dir: str = "./
     logger.info(f"开始下载数据，最大股票数：{max_stocks}")
     
     try:
+        # 检查依赖
+        try:
+            import akshare
+        except ImportError:
+            logger.error("缺少 akshare 依赖，请运行：pip3 install akshare")
+            logger.error("或使用备选数据源：python3 test_baostock.py")
+            logger.error("或生成模拟数据：python3 generate_mock_data.py")
+            return False
+        
         # 导入下载脚本
         from download_data_akshare import download_stocks
         
@@ -333,6 +342,14 @@ def run_paper_trading(
     logger.info(f"开始模拟交易，股票数：{len(stocks)}, 初始资金：{initial_capital:,.0f}")
     
     try:
+        # 检查依赖
+        try:
+            import pandas
+        except ImportError:
+            logger.error("缺少 pandas 依赖，请运行：pip3 install pandas numpy")
+            logger.error("或查看 QUICKSTART.md 获取详细安装指南")
+            return {}
+        
         # 导入模拟交易模块
         from paper_trading import PaperTradingAccount
         
@@ -364,11 +381,14 @@ def run_paper_trading(
         logger.info(f"总盈亏：¥{summary['total_profit']:,.2f} ({summary['total_return_pct']:.2%})")
         logger.info(f"持仓数量：{summary['position_count']}")
         
-        # 保存结果
-        output_dir = Path("./paper_trading_main")
+        # 保存结果（统一路径）
+        output_dir = Path("./paper_trading")
         output_dir.mkdir(exist_ok=True)
-        account.save_to_directory(str(output_dir))
-        logger.info(f"交易记录已保存到：{output_dir}")
+        account.save_to_file(str(output_dir))
+        logger.info(f"交易记录已保存到：{output_dir.absolute()}")
+        logger.info(f"  - 持仓：{output_dir}/positions.json")
+        logger.info(f"  - 成交：{output_dir}/trades.csv")
+        logger.info(f"  - 概览：{output_dir}/portfolio_summary.json")
         
         return summary
         
