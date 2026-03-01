@@ -1,0 +1,66 @@
+# Crontab 定时任务配置
+# 使用方法：crontab -e，然后粘贴以下内容
+
+# 环境变量
+SHELL=/bin/zsh
+PATH=/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin
+LANG=zh_CN.UTF-8
+
+# ============================================================================
+# 选股策略系统 - 定时任务
+# ============================================================================
+
+# 每日 09:00 - 多策略选股 (100 只股票)
+0 9 * * 1-5 cd /Users/rowang/projects/vnpy/examples/alpha_research && python3 daily_stock_selection.py >> logs/selection.log 2>&1
+
+# 每日 09:15 - 发送交易计划通知 (钉钉)
+15 9 * * 1-5 cd /Users/rowang/projects/vnpy/examples/alpha_research && python3 send_notification.py --type trading_plan >> logs/notification.log 2>&1
+
+# 每日 09:30 - 消息面分析
+30 9 * * 1-5 cd /Users/rowang/projects/vnpy/examples/alpha_research && python3 news_analyzer.py >> logs/news.log 2>&1
+
+# 每日 14:50 - 执行模拟交易
+50 14 * * 1-5 cd /Users/rowang/projects/vnpy/examples/alpha_research && python3 execute_trading.py >> logs/trading.log 2>&1
+
+# 每日 15:30 - 收盘统计
+30 15 * * 1-5 cd /Users/rowang/projects/vnpy/examples/alpha_research && python3 daily_stats.py >> logs/stats.log 2>&1
+
+# 每日 20:00 - 每日复盘 (发送钉钉消息)
+0 20 * * 1-5 cd /Users/rowang/projects/vnpy/examples/alpha_research && python3 daily_review.py >> logs/review.log 2>&1
+
+# 每周六 10:00 - 周总结
+0 10 * * 6 cd /Users/rowang/projects/vnpy/examples/alpha_research && python3 weekly_summary.py >> logs/weekly.log 2>&1
+
+# ============================================================================
+# 维护任务
+# ============================================================================
+
+# 每日 08:30 - 更新数据
+30 8 * * 1-5 cd /Users/rowang/projects/vnpy/examples/alpha_research && python3 download_optimized.py --max 50 --cache >> logs/data_update.log 2>&1
+
+# 每周日 23:00 - 清理旧日志 (保留 30 天)
+0 23 * * 0 find /Users/rowang/projects/vnpy/examples/alpha_research/logs -name "*.log" -mtime +30 -delete
+
+# 每月 1 日 00:00 - 归档旧报告
+0 0 1 * * mkdir -p /Users/rowang/projects/vnpy/examples/alpha_research/reports/archive/$(date +\%Y-\%m) && mv /Users/rowang/projects/vnpy/examples/alpha_research/reports/daily/*.json /Users/rowang/projects/vnpy/examples/alpha_research/reports/archive/$(date +\%Y-\%m)/ 2>/dev/null || true
+
+# ============================================================================
+# 监控任务
+# ============================================================================
+
+# 每小时检查系统状态
+0 * * * * cd /Users/rowang/projects/vnpy/examples/alpha_research && python3 check_system.py >> logs/system.log 2>&1
+
+# ============================================================================
+# 说明
+# ============================================================================
+# 1. 时间格式：分钟 小时 日期 月份 星期
+# 2. 所有时间为北京时间 (Asia/Shanghai)
+# 3. 日志文件位置：logs/*.log
+# 4. 报告文件位置：reports/
+# 
+# 查看日志：tail -f logs/selection.log
+# 查看 crontab: crontab -l
+# 编辑 crontab: crontab -e
+# 删除 crontab: crontab -r
+# ============================================================================
