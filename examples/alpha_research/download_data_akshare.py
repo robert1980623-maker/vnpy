@@ -356,7 +356,8 @@ def download_all_data(
     end_date: str = "20241231",
     max_stocks: int = None,
     use_cache: bool = True,
-    cache_dir: str = "./cache"
+    cache_dir: str = "./cache",
+    night_mode: bool = False
 ):
     """
     批量下载股票数据
