@@ -29,6 +29,13 @@ from pathlib import Path
 from datetime import datetime
 from typing import Optional, List
 
+# 尝试导入 YAML 支持
+try:
+    import yaml
+    YAML_AVAILABLE = True
+except ImportError:
+    YAML_AVAILABLE = False
+
 # 添加项目根目录到路径
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -49,8 +56,55 @@ except ImportError as e:
     VNPY_AVAILABLE = False
 
 
-def setup_logging(log_dir: str = "./logs", log_level: str = "INFO") -> logging.Logger:
-    """设置日志系统"""
+def load_config(config_path: Optional[str] = None) -> dict:
+    """
+    加载配置文件
+    
+    Args:
+        config_path: 配置文件路径，如果为 None 则使用默认路径
+        
+    Returns:
+        配置字典
+    """
+    if not YAML_AVAILABLE:
+        logging.warning("PyYAML 未安装，使用默认配置")
+        return {}
+    
+    # 默认配置文件路径
+    if config_path is None:
+        config_path = Path(__file__).parent / "config.yaml"
+    else:
+        config_path = Path(config_path)
+    
+    if not config_path.exists():
+        logging.warning(f"配置文件不存在：{config_path}，使用默认配置")
+        return {}
+    
+    try:
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = yaml.safe_load(f)
+        logging.info(f"配置文件已加载：{config_path}")
+        return config
+    except Exception as e:
+        logging.error(f"加载配置文件失败：{e}")
+        return {}
+
+
+def setup_logging(log_dir: str = "./logs", log_level: str = "INFO", config: dict = None) -> logging.Logger:
+    """
+    设置日志系统
+    
+    Args:
+        log_dir: 日志目录
+        log_level: 日志级别
+        config: 配置字典（可选）
+    """
+    # 如果提供了配置文件，优先使用配置
+    if config and 'logging' in config:
+        log_config = config['logging']
+        log_dir = log_config.get('directory', log_dir)
+        log_level = log_config.get('level', log_level)
+    
     log_path = Path(log_dir)
     log_path.mkdir(exist_ok=True)
     
@@ -325,6 +379,16 @@ def run_paper_trading(
 
 def main():
     """主函数"""
+    # 先加载配置文件
+    # 注意：此时 logger 还未初始化，使用 print 输出
+    config_path = None
+    for i, arg in enumerate(sys.argv):
+        if arg in ['--config', '-c'] and i + 1 < len(sys.argv):
+            config_path = sys.argv[i + 1]
+            break
+    
+    config = load_config(config_path)
+    
     # 解析命令行参数
     parser = argparse.ArgumentParser(
         description="量化交易系统主入口",
@@ -339,23 +403,29 @@ def main():
     
     # 仅下载数据
     python main.py --only-download --max 20
+    
+    # 使用配置文件
+    python main.py --config config.yaml
         """
     )
     
-    # 策略参数
+    # 策略参数（从配置文件读取默认值）
+    default_strategy = config.get('strategy', {}).get('default_strategy', 'value')
+    default_stocks = config.get('strategy', {}).get('max_stocks', 10)
+    
     parser.add_argument(
         "--strategy", "-s",
         type=str,
-        default="value",
+        default=default_strategy,
         choices=["value", "growth", "momentum", "quality", "industry"],
-        help="选股策略 (默认：value)"
+        help=f"选股策略 (默认：{default_strategy})"
     )
     
     parser.add_argument(
         "--stocks", "-n",
         type=int,
-        default=10,
-        help="选股数量 (默认：10)"
+        default=default_stocks,
+        help=f"选股数量 (默认：{default_stocks})"
     )
     
     # 流程控制
@@ -391,63 +461,73 @@ def main():
         help="配置文件路径 (YAML)"
     )
     
+    # 数据参数
+    default_data_dir = config.get('data', {}).get('directory', './data/akshare/bars')
+    default_max_download = config.get('data', {}).get('max_stocks', 20)
+    
     parser.add_argument(
         "--data-dir",
         type=str,
-        default="./data/akshare/bars",
-        help="数据目录 (默认：./data/akshare/bars)"
+        default=default_data_dir,
+        help=f"数据目录 (默认：{default_data_dir})"
     )
     
     parser.add_argument(
         "--lab-dir",
         type=str,
-        default="./lab/test",
+        default=config.get('advanced', {}).get('lab_directory', './lab/test'),
         help="Lab 工作目录 (默认：./lab/test)"
     )
     
     parser.add_argument(
         "--max-download",
         type=int,
-        default=20,
-        help="最大下载股票数 (默认：20)"
+        default=default_max_download,
+        help=f"最大下载股票数 (默认：{default_max_download})"
     )
     
     # 交易参数
+    default_capital = config.get('trading', {}).get('initial_capital', 1_000_000.0)
+    default_volume = config.get('trading', {}).get('default_volume', 1000)
+    
     parser.add_argument(
         "--capital",
         type=float,
-        default=1_000_000.0,
-        help="初始资金 (默认：1,000,000)"
+        default=default_capital,
+        help=f"初始资金 (默认：{default_capital:,.0f})"
     )
     
     parser.add_argument(
         "--volume",
         type=int,
-        default=1000,
-        help="每只股票买入数量 (默认：1000)"
+        default=default_volume,
+        help=f"每只股票买入数量 (默认：{default_volume})"
     )
     
     # 日志参数
+    default_log_level = config.get('logging', {}).get('level', 'INFO')
+    default_log_dir = config.get('logging', {}).get('directory', './logs')
+    
     parser.add_argument(
         "--log-level",
         type=str,
-        default="INFO",
+        default=default_log_level,
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
-        help="日志级别 (默认：INFO)"
+        help=f"日志级别 (默认：{default_log_level})"
     )
     
     parser.add_argument(
         "--log-dir",
         type=str,
-        default="./logs",
-        help="日志目录 (默认：./logs)"
+        default=default_log_dir,
+        help=f"日志目录 (默认：{default_log_dir})"
     )
     
     args = parser.parse_args()
     
-    # 设置日志
+    # 设置日志（传入配置）
     global logger
-    logger = setup_logging(args.log_dir, args.log_level)
+    logger = setup_logging(args.log_dir, args.log_level, config)
     
     # 打印欢迎信息
     logger.info("=" * 60)
