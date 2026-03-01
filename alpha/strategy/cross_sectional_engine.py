@@ -21,7 +21,8 @@ from vnpy.alpha.strategy.stock_screener_strategy import StockScreenerStrategy
 try:
     from vnpy.trader.constant import Interval
 except ImportError:
-    Interval = Any
+    class Interval:
+        DAILY = "daily"
 
 
 @dataclass

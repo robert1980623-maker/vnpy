@@ -5,6 +5,7 @@ from pathlib import Path
 from datetime import datetime, timedelta
 from collections import defaultdict
 from functools import lru_cache
+from typing import Optional
 
 import polars as pl
 
@@ -345,6 +346,86 @@ class AlphaLab:
                 component_filters[vt_symbol].append((period_start, period_end))
 
         return component_filters
+
+    def save_signals(self, signals: pl.DataFrame) -> None:
+        """
+        保存信号数据
+        
+        Args:
+            signals: 信号 DataFrame，需要包含 datetime, vt_symbol 列
+        """
+        if signals.is_empty():
+            logger.warning("信号数据为空，跳过保存")
+            return
+        
+        # 按日期分组保存
+        dates = signals["datetime"].unique().to_list()
+        
+        for dt in dates:
+            date_str = dt.strftime("%Y-%m-%d") if isinstance(dt, datetime) else str(dt)
+            file_path = self.signal_path.joinpath(f"signals_{date_str}.parquet")
+            
+            daily_signals = signals.filter(pl.col("datetime") == dt)
+            daily_signals.write_parquet(file_path)
+        
+        logger.info(f"已保存 {len(dates)} 个交易日的信号数据")
+
+    def load_signals(
+        self,
+        start: Optional[datetime | str] = None,
+        end: Optional[datetime | str] = None
+    ) -> pl.DataFrame:
+        """
+        加载信号数据
+        
+        Args:
+            start: 开始日期
+            end: 结束日期
+            
+        Returns:
+            合并后的信号 DataFrame
+        """
+        if not self.signal_path.exists():
+            logger.warning("信号文件夹不存在")
+            return pl.DataFrame()
+        
+        # 收集所有信号文件
+        all_dfs = []
+        
+        for file_path in self.signal_path.glob("signals_*.parquet"):
+            # 从文件名提取日期
+            date_str = file_path.stem.replace("signals_", "")
+            try:
+                file_date = datetime.strptime(date_str, "%Y-%m-%d")
+            except ValueError:
+                continue
+            
+            # 日期过滤
+            if start:
+                start_dt = to_datetime(start)
+                if file_date < start_dt:
+                    continue
+            
+            if end:
+                end_dt = to_datetime(end)
+                if file_date > end_dt:
+                    continue
+            
+            # 读取文件
+            try:
+                df = pl.read_parquet(file_path)
+                all_dfs.append(df)
+            except Exception as e:
+                logger.error(f"读取信号文件失败：{file_path} - {e}")
+        
+        if not all_dfs:
+            return pl.DataFrame()
+        
+        # 合并所有数据
+        merged = pl.concat(all_dfs)
+        logger.info(f"已加载 {len(merged)} 条信号记录")
+        
+        return merged
 
     def add_contract_setting(
         self,
