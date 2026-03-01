@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# 虚拟环境
+venv/
+env/
+ENV/
+
+# 数据文件（运行时生成）
+data/
+data_real/
+cache/
+
+# 回测结果
+*.html
+*.json
+*.csv
+!*.py
+
+# 模拟交易记录
+paper_trading/
+paper_trading_demo/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# 系统文件
+.DS_Store
+Thumbs.db
