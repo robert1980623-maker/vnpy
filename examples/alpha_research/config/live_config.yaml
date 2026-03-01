@@ -1,0 +1,55 @@
+# 实盘交易配置 (小资金测试版)
+
+account:
+  initial_capital: 50000      # 初始资金 5 万 (测试用)
+  mode: live                  # 实盘模式
+
+broker:
+  name: hts                   # 华泰证券
+  account: "your_account"     # 替换为你的账号
+  password: "your_password"   # 替换为你的密码
+  api_key: "your_api_key"     # 替换为你的 API 密钥
+
+strategy:
+  name: value
+  max_pe: 20
+  min_roe: 10
+  min_dividend_yield: 2.0
+  max_positions: 10           # 实盘减少持仓
+
+trading:
+  position_size: 0.10         # 单只 10% 仓位
+  rebalance_days: 20
+  commission_rate: 0.00025    # 实际佣金 (万 2.5)
+  slippage: 0.01
+  manual_confirm: true        # ⚠️ 初期必须开启手动确认
+  
+risk_control:
+  max_daily_loss: 0.02        # 日最大亏损 2%
+  max_position_ratio: 0.90    # 最大仓位 90%
+  stop_loss: 0.10             # 单只止损 10%
+  max_sector_ratio: 0.30      # 单一行业最大 30%
+
+data:
+  source: akshare
+  data_dir: ./data/akshare/bars
+  cache_enabled: true
+  update_time: "08:30"
+
+logging:
+  level: INFO
+  file: logs/trading.log
+  backup_days: 90
+
+notifications:
+  enabled: true
+  channels:
+    - type: email
+      recipient: "your_email@example.com"
+    # - type: wechat  # 可选
+    # - type: sms     # 可选
+
+# ⚠️ 重要提示:
+# 1. 首次使用请开启 manual_confirm: true
+# 2. 建议先用 1-2 周模拟交易
+# 3. 确认策略有效后再加大资金

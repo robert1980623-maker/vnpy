@@ -1,0 +1,77 @@
+# 自动化实盘配置 (充分测试后使用)
+
+account:
+  initial_capital: 200000     # 初始资金 20 万
+  mode: live                  # 实盘模式
+
+broker:
+  name: hts                   # 华泰证券
+  account: "your_account"
+  password: "your_password"
+  api_key: "your_api_key"
+
+strategy:
+  name: value
+  max_pe: 20
+  min_roe: 10
+  min_dividend_yield: 2.0
+  max_positions: 20
+
+trading:
+  position_size: 0.05         # 单只 5% 仓位
+  rebalance_days: 20
+  commission_rate: 0.00025
+  slippage: 0.01
+  manual_confirm: false       # ⚠️ 充分测试后可关闭
+
+risk_control:
+  max_daily_loss: 0.02        # 日最大亏损 2%
+  max_weekly_loss: 0.05       # 周最大亏损 5%
+  max_monthly_loss: 0.10      # 月最大亏损 10%
+  max_position_ratio: 0.95    # 最大仓位 95%
+  min_position_ratio: 0.70    # 最小仓位 70%
+  stop_loss: 0.10             # 单只止损 10%
+  take_profit: 0.30           # 单只止盈 30%
+  max_sector_ratio: 0.35      # 单一行业最大 35%
+  max_single_turnover: 0.20   # 单笔最大换手 20%
+
+data:
+  source: akshare
+  data_dir: ./data/akshare/bars
+  cache_enabled: true
+  update_time: "08:30"
+  backup_source: baostock     # 备用数据源
+
+logging:
+  level: INFO
+  file: logs/trading.log
+  backup_days: 365
+  enable_detail: true
+
+notifications:
+  enabled: true
+  channels:
+    - type: email
+      recipient: "your_email@example.com"
+      on_trade: true
+      on_error: true
+      on_daily_report: true
+    - type: wechat
+      on_error: true
+      on_daily_report: false
+
+schedule:
+  data_update: "08:30"
+  stock_selection: "09:15"
+  trading: "14:50"
+  daily_report: "15:30"
+  weekly_report: "Friday 17:00"
+
+# ⚠️ 警告:
+# 此配置用于 fully automated trading
+# 请确保已完成以下条件:
+# 1. ✅ 模拟交易运行 2 周以上
+# 2. ✅ 小资金实盘测试 2 周以上
+# 3. ✅ 确认策略稳定有效
+# 4. ✅ 设置好所有风险控制参数
+# 5. ✅ 配置好告警通知
