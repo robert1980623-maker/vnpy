@@ -188,27 +188,41 @@ def get_stock_bars_baostock(vt_symbol: str, start_date: str, end_date: str) -> p
             print(f"  Baostock 登录失败：{lg.error_msg}")
             return None
         
-        # 转换代码格式
-        code = vt_symbol.lower()  # baostock 需要小写
+        # 转换代码格式 (baostock 需要 sh.600000 或 sz.000001 格式)
+        code = vt_symbol.lower()
+        if "." in code:
+            parts = code.split(".")
+            if parts[1] == "sh":
+                code = f"sh.{parts[0]}"
+            elif parts[1] == "sz":
+                code = f"sz.{parts[0]}"
+        
+        # 转换日期格式 (baostock 需要 YYYY-MM-DD)
+        start_date_fmt = f"{start_date[:4]}-{start_date[4:6]}-{start_date[6:]}"
+        end_date_fmt = f"{end_date[:4]}-{end_date[4:6]}-{end_date[6:]}"
         
         # 获取日线数据（前复权）
         rs = bs.query_history_k_data_plus(
             code,
             "date,open,high,low,close,volume,amount,adjustflag",
-            start_date=start_date,
-            end_date=end_date,
+            start_date=start_date_fmt,
+            end_date=end_date_fmt,
             frequency="d",
             adjustflag="3"  # 前复权
         )
         
         if rs.error_code != '0':
             print(f"  Baostock 查询失败：{rs.error_msg}")
+            bs.logout()
             return None
         
         # 转换为 DataFrame
         data_list = []
         while rs.next():
             data_list.append(rs.get_row_data())
+        
+        # 登出
+        bs.logout()
         
         if not data_list:
             return None
@@ -224,9 +238,6 @@ def get_stock_bars_baostock(vt_symbol: str, start_date: str, end_date: str) -> p
         df["close_price"] = df["close"].astype(float)
         df["volume"] = df["volume"].astype(float)
         df["turnover"] = df["amount"].astype(float)
-        
-        # 登出
-        bs.logout()
         
         return df[["vt_symbol", "datetime", "open_price", "high_price", "low_price", 
                    "close_price", "volume", "turnover"]]
