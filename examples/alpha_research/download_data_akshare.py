@@ -243,6 +243,8 @@ def get_fundamental_data(vt_symbol: str, max_retries: int = 2) -> dict:
     """
     获取股票财务数据
     
+    使用多个 AKShare 接口获取财务指标
+    
     Args:
         vt_symbol: 股票代码
         max_retries: 最大重试次数
@@ -254,25 +256,47 @@ def get_fundamental_data(vt_symbol: str, max_retries: int = 2) -> dict:
     
     for attempt in range(max_retries):
         try:
-            # 获取估值指标
-            df = ak.stock_value_manager(symbol=code)
-            if df is None or df.empty:
-                return None
+            # 方法 1: 获取个股估值指标
+            try:
+                df = ak.stock_value_em(symbol=code)
+            except:
+                # 备用方法
+                df = None
             
-            # 取最新数据
-            latest = df.iloc[-1] if len(df) > 0 else None
-            if latest is None:
-                return None
+            if df is not None and not df.empty:
+                latest = df.iloc[-1] if len(df) > 0 else None
+                if latest is not None:
+                    return {
+                        "vt_symbol": vt_symbol,
+                        "report_date": datetime.now().strftime("%Y-%m-%d"),
+                        "pe_ratio": float(latest.get("市盈率", 0)) if "市盈率" in latest else None,
+                        "pb_ratio": float(latest.get("市净率", 0)) if "市净率" in latest else None,
+                        "dividend_yield": float(latest.get("股息率", 0)) if "股息率" in latest else None,
+                    }
             
-            data = {
+            # 方法 2: 获取财务指标
+            try:
+                df2 = ak.stock_financial_analysis_indicator(symbol=code)
+                if df2 is not None and not df2.empty:
+                    latest = df2.iloc[0]  # 取最新一期
+                    return {
+                        "vt_symbol": vt_symbol,
+                        "report_date": latest.get("报告期", datetime.now().strftime("%Y-%m-%d")),
+                        "pe_ratio": float(latest.get("市盈率", 0)) if "市盈率" in latest else None,
+                        "pb_ratio": float(latest.get("市净率", 0)) if "市净率" in latest else None,
+                        "roe": float(latest.get("净资产收益率", 0)) if "净资产收益率" in latest else None,
+                    }
+            except:
+                pass
+            
+            # 如果都失败，返回基础数据
+            return {
                 "vt_symbol": vt_symbol,
                 "report_date": datetime.now().strftime("%Y-%m-%d"),
-                "pe_ratio": float(latest.get("市盈率", 0)) if "市盈率" in latest else None,
-                "pb_ratio": float(latest.get("市净率", 0)) if "市净率" in latest else None,
-                "dividend_yield": float(latest.get("股息率", 0)) if "股息率" in latest else None,
+                "pe_ratio": None,
+                "pb_ratio": None,
+                "dividend_yield": None,
             }
-            
-            return data
         
         except Exception as e:
             if attempt < max_retries - 1:
@@ -281,7 +305,14 @@ def get_fundamental_data(vt_symbol: str, max_retries: int = 2) -> dict:
                 time.sleep(wait_time)
             else:
                 print(f"  ✗ 财务数据获取失败：{e}")
-                return None
+                # 返回空数据，不影响 K 线下载
+                return {
+                    "vt_symbol": vt_symbol,
+                    "report_date": datetime.now().strftime("%Y-%m-%d"),
+                    "pe_ratio": None,
+                    "pb_ratio": None,
+                    "dividend_yield": None,
+                }
     
     return None
 
@@ -405,10 +436,18 @@ def download_all_data(
             print(f"  ✗ 财务数据：失败")
         
         # 延迟，避免请求过快
-        if i % 3 == 0 and i < len(components):
-            wait_time = random.uniform(3, 5)
-            print(f"\n休息 {wait_time:.1f}秒...")
-            time.sleep(wait_time)
+        if i < len(components):
+            # 夜间模式使用更长延迟
+            if night_mode:
+                if i % 2 == 0:  # 每 2 只股票休息
+                    wait_time = random.uniform(8, 12)
+                    print(f"\n休息 {wait_time:.1f}秒 (夜间模式)...")
+                    time.sleep(wait_time)
+            else:
+                if i % 3 == 0:  # 每 3 只股票休息
+                    wait_time = random.uniform(3, 5)
+                    print(f"\n休息 {wait_time:.1f}秒...")
+                    time.sleep(wait_time)
     
     # 统计
     print("\n" + "=" * 60)
@@ -423,17 +462,41 @@ def download_all_data(
 
 def main():
     """主函数"""
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="下载股票数据（增强版）")
+    parser.add_argument("--index", type=str, default="000300", 
+                       help="指数代码 (默认：000300 沪深 300)")
+    parser.add_argument("--start", type=str, default="20240101",
+                       help="开始日期 (默认：20240101)")
+    parser.add_argument("--end", type=str, default="20241231",
+                       help="结束日期 (默认：20241231)")
+    parser.add_argument("--max", type=int, default=5,
+                       help="最大下载数量 (默认：5，小批量下载)")
+    parser.add_argument("--cache", type=str, default="./cache",
+                       help="缓存目录 (默认：./cache)")
+    parser.add_argument("--no-cache", action="store_true",
+                       help="不使用缓存")
+    parser.add_argument("--night-mode", action="store_true",
+                       help="夜间下载模式 (更长延迟，避免限流)")
+    
+    args = parser.parse_args()
+    
     print("=" * 60)
     print("下载股票数据（增强版）")
     print("=" * 60)
     
     # 设置参数
-    index_code = "000300"  # 沪深 300
-    start_date = "20240101"
-    end_date = "20241231"
-    max_stocks = 10  # 限制下载数量，测试用
-    use_cache = True
-    cache_dir = "./cache"
+    index_code = args.index
+    start_date = args.start
+    end_date = args.end
+    max_stocks = args.max
+    use_cache = not args.no_cache
+    cache_dir = args.cache
+    night_mode = args.night_mode
+    
+    if night_mode:
+        print("夜间模式：启用（更长延迟）")
     
     # 1. 获取成分股
     components = download_index_components(index_code)
