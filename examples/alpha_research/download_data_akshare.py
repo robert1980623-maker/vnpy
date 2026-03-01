@@ -5,8 +5,18 @@
 - 多数据源（AKShare、Baostock）
 - 本地缓存
 - 自动重试
-- 断点续传
+- akshare-proxy-patch 支持
 """
+
+# 先加载 akshare-proxy-patch（在导入 akshare 之前）
+try:
+    import akshare_proxy_patch
+    akshare_proxy_patch.install_patch("101.201.173.125", "", 30)
+    print("✓ akshare-proxy-patch 已加载")
+except ImportError:
+    print("⚠️ akshare-proxy-patch 未安装，将使用原始 AKShare")
+except Exception as e:
+    print(f"⚠️ akshare-proxy-patch 加载失败：{e}")
 
 import akshare as ak
 import pandas as pd
