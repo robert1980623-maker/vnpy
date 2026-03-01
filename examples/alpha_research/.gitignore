@@ -18,6 +18,9 @@ data/
 data_real/
 cache/
 
+# 日志文件
+logs/
+
 # 回测结果
 *.html
 *.json
