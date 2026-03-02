@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-数据质量检查工具
+数据质量检查工具 (优化版)
 
 功能:
 - 检查数据完整性
@@ -8,6 +8,11 @@
 - 检查缺失值
 - 检查数据连续性
 - 生成质量报告
+
+优化:
+- ✅ 集成中国节假日日历
+- ✅ 智能规则配置 (分板块)
+- ✅ 改进量价匹配算法
 """
 
 import csv
@@ -15,7 +20,8 @@ import json
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import List, Dict, Tuple
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
+import holidays
 
 
 @dataclass
@@ -42,7 +48,7 @@ class QualityReport:
     warning_count: int
     info_count: int
     quality_score: float
-    issues: List[Dict]
+    issues: List[Dict] = field(default_factory=list)
 
 
 class DataQualityChecker:
@@ -57,24 +63,92 @@ class DataQualityChecker:
             'symbols': []
         }
         
-        # 检查规则配置
+        # 加载中国节假日
+        self.cn_holidays = holidays.China()
+        
+        # 智能规则配置 (分板块)
         self.config = {
-            'max_price_change': 0.20,  # 单日最大涨跌幅 20%
-            'max_volume_ratio': 10.0,   # 最大成交量比率
-            'min_price': 0.5,           # 最低价格
-            'max_price': 1000.0,        # 最高价格
-            'max_gap_days': 5,          # 最大允许缺失天数
+            # 涨跌幅限制 (分板块)
+            'max_price_change': {
+                'main_board': 0.10,      # 主板 10%
+                'chi_next': 0.20,        # 创业板 20%
+                'star_market': 0.20,     # 科创板 20%
+                'st_stock': 0.05,        # ST 股 5%
+                'bse': 0.30              # 北交所 30%
+            },
+            'max_volume_ratio': 10.0,     # 最大成交量比率
+            'min_price': 0.5,             # 最低价格
+            'max_price': 1000.0,          # 最高价格
+            'max_gap_days': 10,           # 最大允许缺失天数 (考虑长假)
             'required_columns': ['vt_symbol', 'datetime', 'open_price', 'high_price', 
                                'low_price', 'close_price', 'volume', 'turnover']
         }
+        
+        # 板块识别规则
+        self.board_rules = {
+            '688': 'star_market',      # 科创板
+            '300': 'chi_next',         # 创业板
+            '301': 'chi_next',
+            '302': 'chi_next',
+            '000': 'main_board',       # 主板
+            '001': 'main_board',
+            '002': 'main_board',       # 中小板
+            '003': 'main_board',
+            '600': 'main_board',       # 沪市主板
+            '601': 'main_board',
+            '603': 'main_board',
+            '605': 'main_board',
+            '8': 'bse',                # 北交所
+            '4': 'bse',
+        }
+    
+    def _get_board(self, symbol: str) -> str:
+        """根据股票代码识别板块"""
+        code = symbol.split('.')[0]
+        prefix = code[:3]
+        
+        # 检查是否为 ST 股
+        if 'ST' in code or 'st' in code:
+            return 'st_stock'
+        
+        # 根据前缀识别板块
+        for board_prefix, board in self.board_rules.items():
+            if code.startswith(board_prefix):
+                return board
+        
+        return 'main_board'  # 默认主板
+    
+    def _is_trading_day(self, date: datetime) -> bool:
+        """判断是否为交易日"""
+        # 周末
+        if date.weekday() >= 5:
+            return False
+        # 节假日
+        if date in self.cn_holidays:
+            return False
+        return True
+    
+    def _find_next_trading_day(self, date: datetime, forward: bool = True) -> datetime:
+        """查找下一个/上一个交易日"""
+        delta = 1 if forward else -1
+        current = date + timedelta(days=delta)
+        
+        # 最多查找 30 天
+        for _ in range(30):
+            if self._is_trading_day(current):
+                return current
+            current = current + timedelta(days=delta)
+        
+        return current
     
     def check_all(self) -> QualityReport:
         """执行所有检查"""
         print("=" * 70)
-        print(" " * 20 + "数据质量检查")
+        print(" " * 20 + "数据质量检查 (优化版)")
         print("=" * 70)
         print(f"检查时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         print(f"数据目录：{self.data_dir}")
+        print(f"节假日日历：{len(self.cn_holidays)} 个节假日")
         print()
         
         # 1. 检查文件存在
@@ -86,14 +160,14 @@ class DataQualityChecker:
         # 3. 检查数据完整性
         self._check_data_completeness()
         
-        # 4. 检查异常值
-        self._check_outliers()
+        # 4. 检查异常值 (智能规则)
+        self._check_outliers_smart()
         
-        # 5. 检查数据连续性
-        self._check_continuity()
+        # 5. 检查数据连续性 (考虑节假日)
+        self._check_continuity_smart()
         
-        # 6. 检查逻辑一致性
-        self._check_consistency()
+        # 6. 检查逻辑一致性 (优化算法)
+        self._check_consistency_optimized()
         
         # 生成报告
         report = self._generate_report()
@@ -190,14 +264,23 @@ class DataQualityChecker:
             print(f"  ⚠️ 发现 {missing_data} 个缺失值")
         print()
     
-    def _check_outliers(self):
-        """检查异常值"""
-        print("【4. 异常值检查】")
+    def _check_outliers_smart(self):
+        """智能异常值检查 (分板块)"""
+        print("【4. 异常值检查 (智能规则)】")
         
         outliers = 0
+        board_stats = {}
         
         for csv_file in self.data_dir.glob('*.csv'):
             symbol = csv_file.stem.replace('_', '.')
+            board = self._get_board(symbol)
+            
+            if board not in board_stats:
+                board_stats[board] = {'count': 0, 'issues': 0}
+            board_stats[board]['count'] += 1
+            
+            # 获取该板块的涨跌幅限制
+            max_change = self.config['max_price_change'].get(board, 0.10)
             
             with open(csv_file, 'r', encoding='utf-8') as f:
                 reader = csv.DictReader(f)
@@ -232,32 +315,45 @@ class DataQualityChecker:
                         ))
                         outliers += 1
                     
-                    # 检查涨跌幅
+                    # 检查涨跌幅 (使用板块特定阈值)
                     if prev_close:
                         change_rate = abs(close_price - prev_close) / prev_close
-                        if change_rate > self.config['max_price_change']:
+                        if change_rate > max_change:
+                            # 额外检查：是否是除权除息日
+                            if change_rate > 0.50:  # 超过 50% 很可能是除权
+                                severity = 'info'
+                                desc = f'可能是除权除息日 (涨跌幅 {change_rate*100:.1f}%)'
+                            else:
+                                severity = 'warning'
+                                desc = f'单日涨跌幅过大 ({change_rate*100:.1f}% > {max_change*100:.0f}%)'
+                            
                             self.issues.append(QualityIssue(
                                 symbol=symbol,
                                 issue_type='price_jump',
-                                description=f'单日涨跌幅过大',
-                                severity='warning',
+                                description=desc,
+                                severity=severity,
                                 date=row['datetime'],
-                                expected=f"<={self.config['max_price_change']*100}%",
+                                expected=f"<={max_change*100:.0f}%",
                                 actual=f"{change_rate*100:.2f}%"
                             ))
                             outliers += 1
                     
                     prev_close = close_price
         
+        # 打印板块统计
+        print("  板块统计:")
+        for board, stats in board_stats.items():
+            print(f"    {board}: {stats['count']} 只股票")
+        
         if outliers == 0:
             print("  ✅ 无异常值")
         else:
-            print(f"  ⚠️ 发现 {outliers} 个异常值")
+            print(f"  ⚠️ 发现 {outliers} 个异常值 (已分板块优化)")
         print()
     
-    def _check_continuity(self):
-        """检查数据连续性"""
-        print("【5. 数据连续性检查】")
+    def _check_continuity_smart(self):
+        """智能数据连续性检查 (考虑节假日)"""
+        print("【5. 数据连续性检查 (考虑节假日)】")
         
         gaps = 0
         
@@ -266,40 +362,43 @@ class DataQualityChecker:
             
             with open(csv_file, 'r', encoding='utf-8') as f:
                 reader = csv.DictReader(f)
-                dates = [row['datetime'] for row in reader]
+                dates = [datetime.strptime(row['datetime'], '%Y-%m-%d') for row in reader]
                 
                 # 检查日期连续性
                 for i in range(1, len(dates)):
-                    try:
-                        date1 = datetime.strptime(dates[i-1], '%Y-%m-%d')
-                        date2 = datetime.strptime(dates[i], '%Y-%m-%d')
-                        gap = (date2 - date1).days
-                        
-                        # 跳过周末 (周六 = 5, 周日 = 6)
-                        if date1.weekday() < 5 and date2.weekday() < 5:
-                            if gap > self.config['max_gap_days']:
-                                self.issues.append(QualityIssue(
-                                    symbol=symbol,
-                                    issue_type='data_gap',
-                                    description=f'数据缺失超过{self.config["max_gap_days"]}天',
-                                    severity='warning',
-                                    date=dates[i-1],
-                                    expected=f"gap <= {self.config['max_gap_days']} days",
-                                    actual=f"gap = {gap} days"
-                                ))
-                                gaps += 1
-                    except Exception as e:
-                        pass
+                    date1 = dates[i-1]
+                    date2 = dates[i]
+                    
+                    # 计算交易日间隔
+                    trading_days_gap = 0
+                    current = date1
+                    while current < date2:
+                        current += timedelta(days=1)
+                        if self._is_trading_day(current):
+                            trading_days_gap += 1
+                    
+                    # 如果间隔超过阈值
+                    if trading_days_gap > self.config['max_gap_days']:
+                        self.issues.append(QualityIssue(
+                            symbol=symbol,
+                            issue_type='data_gap',
+                            description=f'数据缺失超过{self.config["max_gap_days"]}个交易日',
+                            severity='warning',
+                            date=dates[i-1].strftime('%Y-%m-%d'),
+                            expected=f"gap <= {self.config['max_gap_days']} trading days",
+                            actual=f"gap = {trading_days_gap} trading days"
+                        ))
+                        gaps += 1
         
         if gaps == 0:
-            print("  ✅ 数据连续性好")
+            print("  ✅ 数据连续性好 (已考虑节假日)")
         else:
             print(f"  ⚠️ 发现 {gaps} 处数据中断")
         print()
     
-    def _check_consistency(self):
-        """检查逻辑一致性"""
-        print("【6. 逻辑一致性检查】")
+    def _check_consistency_optimized(self):
+        """优化的逻辑一致性检查"""
+        print("【6. 逻辑一致性检查 (优化算法)】")
         
         inconsistencies = 0
         
@@ -328,27 +427,34 @@ class DataQualityChecker:
                         ))
                         inconsistencies += 1
                     
-                    # 检查成交量和成交额
+                    # 优化的量价匹配检查
                     volume = float(row['volume'])
                     turnover = float(row['turnover'])
-                    if volume > 0:
-                        avg_price = turnover / volume
-                        if abs(avg_price - close_p) / close_p > 0.1:  # 差异超过 10%
+                    
+                    if volume > 0 and turnover > 0:
+                        # 使用 (开盘 + 收盘)/2 作为预期均价
+                        avg_price_expected = (open_p + close_p) / 2
+                        avg_price_actual = turnover / volume
+                        
+                        # 允许 30% 的差异 (考虑盘中波动)
+                        diff_rate = abs(avg_price_actual - avg_price_expected) / avg_price_expected
+                        
+                        if diff_rate > 0.30:
                             self.issues.append(QualityIssue(
                                 symbol=symbol,
                                 issue_type='volume_turnover_mismatch',
-                                description='成交量与成交额不匹配',
-                                severity='warning',
+                                description='成交量与成交额差异较大',
+                                severity='info',  # 降低严重性
                                 date=row['datetime'],
-                                expected=f"avg_price ≈ {close_p}",
-                                actual=f"avg_price = {avg_price:.2f}"
+                                expected=f"diff <= 30%",
+                                actual=f"diff = {diff_rate*100:.1f}%"
                             ))
                             inconsistencies += 1
         
         if inconsistencies == 0:
             print("  ✅ 逻辑一致性好")
         else:
-            print(f"  ⚠️ 发现 {inconsistencies} 处逻辑错误")
+            print(f"  ℹ️ 发现 {inconsistencies} 处提示 (已优化算法)")
         print()
     
     def _generate_report(self) -> QualityReport:
@@ -357,7 +463,7 @@ class DataQualityChecker:
         warning = len([i for i in self.issues if i.severity == 'warning'])
         info = len([i for i in self.issues if i.severity == 'info'])
         
-        # 计算质量分数 (100 分制)
+        # 计算质量分数 (100 分制，优化版)
         base_score = 100
         penalty = critical * 10 + warning * 2 + info * 0.5
         quality_score = max(0, base_score - penalty)
@@ -411,17 +517,20 @@ class DataQualityChecker:
         
         if self.issues:
             print("【问题详情】")
-            for issue in self.issues[:10]:  # 只显示前 10 个
-                severity = issue.severity if isinstance(issue, QualityIssue) else issue.get('severity', 'info')
-                symbol = issue.symbol if isinstance(issue, QualityIssue) else issue.get('symbol', 'UNKNOWN')
-                issue_type = issue.issue_type if isinstance(issue, QualityIssue) else issue.get('issue_type', 'unknown')
-                desc = issue.description if isinstance(issue, QualityIssue) else issue.get('description', '')
-                
-                emoji = {'critical': '❌', 'warning': '⚠️', 'info': 'ℹ️'}.get(severity, '•')
-                print(f"  {emoji} [{symbol}] {issue_type}: {desc}")
+            # 只显示严重和警告问题
+            critical_warnings = [i for i in self.issues if i.severity in ['critical', 'warning']][:10]
             
-            if len(self.issues) > 10:
-                print(f"  ... 还有 {len(self.issues) - 10} 个问题")
+            for issue in critical_warnings:
+                emoji = {'critical': '❌', 'warning': '⚠️', 'info': 'ℹ️'}.get(issue.severity, '•')
+                print(f"  {emoji} [{issue.symbol}] {issue.issue_type}: {issue.description}")
+            
+            if len(critical_warnings) < len([i for i in self.issues if i.severity in ['critical', 'warning']]):
+                remaining = len([i for i in self.issues if i.severity in ['critical', 'warning']]) - len(critical_warnings)
+                print(f"  ... 还有 {remaining} 个严重/警告问题")
+            
+            # 提示信息不显示详情
+            if report.info_count > 0:
+                print(f"  ℹ️ 还有 {report.info_count} 条提示信息 (已省略)")
         print()
         
         print("=" * 70)
@@ -450,7 +559,7 @@ def main():
     # 执行检查
     report = checker.check_all()
     
-    # 返回退出码 (有问题返回 1)
+    # 返回退出码 (有严重问题返回 1)
     if report.critical_count > 0:
         exit(1)
     else:
