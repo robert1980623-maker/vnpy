@@ -8,6 +8,7 @@
 - 评估选股策略
 - 分享心得
 - 明日展望
+- 显示股票名称
 """
 
 import json
@@ -15,11 +16,17 @@ from pathlib import Path
 from datetime import datetime
 import random
 
+# 导入股票名称工具
+from stock_name_utils import StockNameCache, format_symbol_with_name
+
 
 def generate_daily_review():
     """生成每日复盘报告"""
     
     today = datetime.now().strftime('%Y-%m-%d')
+    
+    # 加载股票名称缓存
+    name_cache = StockNameCache()
     
     print("=" * 70)
     print(" " * 20 + f"每日复盘 - {today}")
@@ -57,23 +64,35 @@ def generate_daily_review():
     strategies = ['价值', '成长', '质量', '高息']
     for strategy in strategies:
         return_rate = random.uniform(-2, 5)
-        print(f"  {strategy}策略: {return_rate:+.2f}%")
+        print(f"  {strategy}策略：{return_rate:+.2f}%")
     print()
     
-    # 4. 最佳/最差股票
+    # 4. 最佳/最差股票 (带名称)
     print("【4. 个股表现】")
+    
+    # 生成模拟数据 (实际应从交易记录获取)
+    best_stocks = [
+        ('604808.SZ', random.uniform(4, 6)),
+        ('301577.SZ', random.uniform(5, 7)),
+        ('608999.SZ', random.uniform(4, 6)),
+    ]
+    
+    worst_stocks = [
+        ('607981.SZ', random.uniform(-5, -3)),
+        ('006670.SZ', random.uniform(-4, -2)),
+        ('306813.SZ', random.uniform(-4, -2)),
+    ]
+    
     print("  最佳股票:")
-    for i in range(3):
-        symbol = f"{random.choice(['00', '30', '60'])}{random.randint(1000, 9999)}.SZ"[:12]
-        gain = random.uniform(3, 10)
-        print(f"    {symbol}: +{gain:.2f}%")
+    for symbol, gain in best_stocks:
+        symbol_with_name = format_symbol_with_name(symbol)
+        print(f"    🥇 {symbol_with_name}: +{gain:.2f}%")
     
     print()
     print("  最差股票:")
-    for i in range(3):
-        symbol = f"{random.choice(['00', '30', '60'])}{random.randint(1000, 9999)}.SZ"[:12]
-        loss = random.uniform(-5, -1)
-        print(f"    {symbol}: {loss:.2f}%")
+    for symbol, loss in worst_stocks:
+        symbol_with_name = format_symbol_with_name(symbol)
+        print(f"    📉 {symbol_with_name}: {loss:.2f}%")
     print()
     
     # 5. 心得分享
@@ -81,7 +100,7 @@ def generate_daily_review():
     insights = [
         "今日市场震荡，价值股表现稳健，高股息策略抗跌性较好。",
         "成长股波动较大，建议控制仓位，等待更好买点。",
-        "选股策略中，质量因子表现突出，ROE>15%的股票普遍跑赢大盘。",
+        "选股策略中，质量因子表现突出，ROE>15% 的股票普遍跑赢大盘。",
         "交易执行方面，早盘买入时机较好，滑点控制在 1% 以内。",
         "明日关注成交量变化，若持续放量可适当增加仓位。",
     ]
@@ -106,6 +125,12 @@ def generate_daily_review():
         'buy_count': buy_count,
         'sell_count': sell_count,
         'success_rate': round(success_rate, 2),
+        'best_stocks': [
+            {'symbol': s, 'gain': round(g, 2)} for s, g in best_stocks
+        ],
+        'worst_stocks': [
+            {'symbol': s, 'gain': round(g, 2)} for s, g in worst_stocks
+        ],
         'insights': random.sample(insights, 3),
     }
     

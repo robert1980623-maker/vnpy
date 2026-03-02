@@ -7,6 +7,7 @@
 2. 生成交易计划
 3. 发送钉钉通知
 4. 保存选股报告
+5. 显示股票名称
 """
 
 import sys
@@ -20,6 +21,7 @@ project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root.parent.parent))
 
 from vnpy.alpha.dataset import StockPool, FundamentalData
+from stock_name_utils import StockNameCache, format_symbol_with_name
 
 
 class DailyStockSelector:
@@ -34,6 +36,8 @@ class DailyStockSelector:
             'sell': [],
             'hold': []
         }
+        # 加载股票名称缓存
+        self.name_cache = StockNameCache()
         
     def load_stocks(self):
         """加载股票池"""
@@ -176,6 +180,7 @@ class DailyStockSelector:
         for symbol, data in self.selected_stocks:
             stock_info = {
                 'symbol': symbol,
+                'name': self.name_cache.get_name(symbol),
                 'strategies': data['strategies'],
                 'score': data['score'],
                 'reasons': data['reasons'],
@@ -202,20 +207,21 @@ class DailyStockSelector:
         return selection_file, plan_file
         
     def print_top_stocks(self, top_n=10):
-        """打印前 N 只股票"""
+        """打印前 N 只股票 (带名称)"""
         print("\n" + "=" * 70)
         print(f" " * 18 + f"Top {top_n} 股票")
         print("=" * 70)
-        print(f"{'排名':<4} {'代码':<12} {'得分':<6} {'策略':<20} {'原因':<40}")
+        print(f"{'排名':<4} {'代码':<16} {'名称':<12} {'得分':<6} {'策略':<20} {'原因':<40}")
         print("-" * 70)
         
         for i, (symbol, data) in enumerate(self.selected_stocks[:top_n], 1):
+            name = self.name_cache.get_name(symbol) or ''
             strategies = ', '.join(data['strategies'])
             reason = data['reasons'][0] if data['reasons'] else ''
             if len(reason) > 38:
                 reason = reason[:35] + '...'
             
-            print(f"{i:<4} {symbol:<12} {data['score']:<6} {strategies:<20} {reason:<40}")
+            print(f"{i:<4} {symbol:<16} {name:<12} {data['score']:<6} {strategies:<20} {reason:<40}")
 
 
 def main():
@@ -240,7 +246,7 @@ def main():
     print("\n【步骤 3】多策略选股...")
     selector.multi_strategy_selection(symbols, fundamentals, target_count=100)
     
-    # 4. 打印 Top 10
+    # 4. 打印 Top 10 (带名称)
     selector.print_top_stocks(top_n=10)
     
     # 5. 生成交易计划
@@ -249,19 +255,22 @@ def main():
     current_holdings = random.sample([s[0] for s in selector.selected_stocks], min(10, len(selector.selected_stocks)))
     plan = selector.generate_trading_plan(current_holdings)
     
-    # 6. 打印交易计划
+    # 6. 打印交易计划 (带名称)
     print("\n" + "=" * 70)
     print(" " * 20 + "交易计划")
     print("=" * 70)
+    
     print(f"\n买入 ({len(plan['buy'])}只):")
     for symbol in plan['buy'][:5]:
-        print(f"  - {symbol}")
+        symbol_with_name = format_symbol_with_name(symbol)
+        print(f"  - {symbol_with_name}")
     if len(plan['buy']) > 5:
         print(f"  ... 还有 {len(plan['buy']) - 5} 只")
     
     print(f"\n卖出 ({len(plan['sell'])}只):")
     for symbol in plan['sell'][:5]:
-        print(f"  - {symbol}")
+        symbol_with_name = format_symbol_with_name(symbol)
+        print(f"  - {symbol_with_name}")
     if len(plan['sell']) > 5:
         print(f"  ... 还有 {len(plan['sell']) - 5} 只")
     
