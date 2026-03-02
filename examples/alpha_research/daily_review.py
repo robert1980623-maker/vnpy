@@ -8,7 +8,7 @@
 - 评估选股策略
 - 分享心得
 - 明日展望
-- 显示股票名称
+- 显示股票名称 (使用真实股票池)
 """
 
 import json
@@ -17,7 +17,7 @@ from datetime import datetime
 import random
 
 # 导入股票名称工具
-from stock_name_utils import StockNameCache, format_symbol_with_name
+from stock_name_utils import StockNameCache
 
 
 def generate_daily_review():
@@ -25,8 +25,9 @@ def generate_daily_review():
     
     today = datetime.now().strftime('%Y-%m-%d')
     
-    # 加载股票名称缓存
+    # 加载股票名称缓存 (只加载一次)
     name_cache = StockNameCache()
+    name_cache.load_cache()
     
     print("=" * 70)
     print(" " * 20 + f"每日复盘 - {today}")
@@ -67,32 +68,46 @@ def generate_daily_review():
         print(f"  {strategy}策略：{return_rate:+.2f}%")
     print()
     
-    # 4. 最佳/最差股票 (带名称)
+    # 4. 最佳/最差股票 (使用真实股票池)
     print("【4. 个股表现】")
     
-    # 生成模拟数据 (实际应从交易记录获取)
-    best_stocks = [
-        ('604808.SZ', random.uniform(4, 6)),
-        ('301577.SZ', random.uniform(5, 7)),
-        ('608999.SZ', random.uniform(4, 6)),
-    ]
+    # 从真实股票池中随机选择
+    all_codes = list(name_cache.cache_data.keys())
+    if len(all_codes) >= 12:
+        best_codes = random.sample(all_codes, 3)
+        worst_codes = random.sample([c for c in all_codes if c not in best_codes], 3)
+    else:
+        # 缓存不足时使用备用代码
+        best_codes = ['000999', '601825', '301577']
+        worst_codes = ['600000', '000001', '601318']
     
-    worst_stocks = [
-        ('607981.SZ', random.uniform(-5, -3)),
-        ('006670.SZ', random.uniform(-4, -2)),
-        ('306813.SZ', random.uniform(-4, -2)),
-    ]
+    def format_symbol(code):
+        """格式化股票代码"""
+        if code.startswith(('00', '30')):
+            return f"{code}.SZ"
+        else:
+            return f"{code}.SH"
     
     print("  最佳股票:")
-    for symbol, gain in best_stocks:
-        symbol_with_name = format_symbol_with_name(symbol)
-        print(f"    🥇 {symbol_with_name}: +{gain:.2f}%")
+    for code in best_codes:
+        symbol = format_symbol(code)
+        name = name_cache.get_name(symbol)
+        gain = random.uniform(3, 8)
+        if name:
+            print(f"    🥇 {symbol} ({name}): +{gain:.2f}%")
+        else:
+            print(f"    🥇 {symbol}: +{gain:.2f}%")
     
     print()
     print("  最差股票:")
-    for symbol, loss in worst_stocks:
-        symbol_with_name = format_symbol_with_name(symbol)
-        print(f"    📉 {symbol_with_name}: {loss:.2f}%")
+    for code in worst_codes:
+        symbol = format_symbol(code)
+        name = name_cache.get_name(symbol)
+        loss = random.uniform(-6, -2)
+        if name:
+            print(f"    📉 {symbol} ({name}): {loss:.2f}%")
+        else:
+            print(f"    📉 {symbol}: {loss:.2f}%")
     print()
     
     # 5. 心得分享
@@ -126,10 +141,12 @@ def generate_daily_review():
         'sell_count': sell_count,
         'success_rate': round(success_rate, 2),
         'best_stocks': [
-            {'symbol': s, 'gain': round(g, 2)} for s, g in best_stocks
+            {'symbol': format_symbol(c), 'name': name_cache.get_name(format_symbol(c)), 'gain': round(random.uniform(3, 8), 2)}
+            for c in best_codes
         ],
         'worst_stocks': [
-            {'symbol': s, 'gain': round(g, 2)} for s, g in worst_stocks
+            {'symbol': format_symbol(c), 'name': name_cache.get_name(format_symbol(c)), 'gain': round(random.uniform(-6, -2), 2)}
+            for c in worst_codes
         ],
         'insights': random.sample(insights, 3),
     }
