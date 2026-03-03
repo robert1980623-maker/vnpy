@@ -1,17 +1,17 @@
 #!/bin/bash
-# 分批下载股票数据（增强版）
-# 支持：更多批次、更长间隔、自动重试
+# 分批下载股票数据（优化版）
+# 优化：减少批次间隔、增加并行、避免超时
 
 # 配置
-BATCH_SIZE=5          # 每批数量
-BATCH_DELAY=60        # 批次间隔（秒）
-MAX_RETRIES=2         # 最大重试次数
-TOTAL_STOCKS=50       # 总下载数量（可增加）
+BATCH_SIZE=10         # 每批数量（增加）
+BATCH_DELAY=30        # 批次间隔（减少到 30 秒）
+MAX_RETRIES=1         # 重试次数（减少）
+TOTAL_STOCKS=30       # 总下载数量（减少，避免超时）
 
 cd /Users/rowang/projects/vnpy/examples/alpha_research
 
 echo "======================================================================"
-echo "                    分批下载股票数据（增强版）"
+echo "                    分批下载股票数据（优化版）"
 echo "======================================================================"
 echo "每批：${BATCH_SIZE} 只股票"
 echo "间隔：${BATCH_DELAY}秒"
@@ -49,7 +49,7 @@ download_with_retry() {
         else
             retry_count=$((retry_count + 1))
             if [ $retry_count -le $MAX_RETRIES ]; then
-                echo "⚠️ 批次 ${batch_num} 失败，10 秒后重试..."
+                echo "⚠️  批次 ${batch_num} 失败，10 秒后重试..."
                 sleep 10
             else
                 echo "❌ 批次 ${batch_num} 失败（已重试 ${MAX_RETRIES} 次）"
