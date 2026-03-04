@@ -519,6 +519,7 @@ def main():
         print(f"指定股票：{len(symbols)} 只")
         print(f"  列表：{', '.join(symbols[:10])}{'...' if len(symbols) > 10 else ''}")
         max_stocks = len(symbols)
+        components = symbols  # 使用指定的股票列表
     else:
         max_stocks = args.max
     use_cache = not args.no_cache
@@ -528,11 +529,13 @@ def main():
     if night_mode:
         print("夜间模式：启用（更长延迟）")
     
-    # 1. 获取成分股
-    components = download_index_components(index_code)
-    if not components:
-        print("获取成分股失败，使用示例股票")
-        components = ["000001.SZ", "000002.SZ", "600000.SH", "600036.SH", "600519.SH"]
+    # 1. 获取成分股（如果未指定股票列表）
+    if not args.symbols:
+        components = download_index_components(index_code)
+        if not components:
+            print("获取成分股失败，使用示例股票")
+            components = ["000001.SZ", "000002.SZ", "600000.SH", "600036.SH", "600519.SH"]
+    # 如果指定了 symbols，components 已经在上面设置过了
     
     # 2. 下载数据
     bars_dict, fundamental_dict = download_all_data(
