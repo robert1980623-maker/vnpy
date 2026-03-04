@@ -1,24 +1,27 @@
 #!/bin/bash
 # 分批下载股票数据（优化版）
-# 优化：减少批次间隔、增加并行、避免超时
+# 下载最近 1 天的数据（昨日收盘价）
 
 # 配置
-BATCH_SIZE=10         # 每批数量（增加）
-BATCH_DELAY=30        # 批次间隔（减少到 30 秒）
-MAX_RETRIES=1         # 重试次数（减少）
-TOTAL_STOCKS=30       # 总下载数量（减少，避免超时）
+BATCH_SIZE=10         # 每批数量
+BATCH_DELAY=30        # 批次间隔（秒）
+MAX_RETRIES=1         # 重试次数
+TOTAL_STOCKS=30       # 总下载数量
+
+# 计算日期范围（macOS 兼容）
+TODAY=$(date +%Y%m%d)
+# macOS 计算昨天：date -v-1d +%Y%m%d
+YESTERDAY=$(date -v-1d +%Y%m%d)
 
 cd /Users/rowang/projects/vnpy/examples/alpha_research
 
 echo "======================================================================"
 echo "                    分批下载股票数据（优化版）"
 echo "======================================================================"
+echo "日期范围：$YESTERDAY - $TODAY"
 echo "每批：${BATCH_SIZE} 只股票"
 echo "间隔：${BATCH_DELAY}秒"
-echo "重试：最多 ${MAX_RETRIES} 次"
 echo "总数：${TOTAL_STOCKS} 只股票"
-echo "预计批次：$((TOTAL_STOCKS / BATCH_SIZE + (TOTAL_STOCKS % BATCH_SIZE > 0 ? 1 : 0)))"
-echo "预计时间：$((TOTAL_STOCKS / BATCH_SIZE * BATCH_DELAY / 60)) 分钟"
 echo "======================================================================"
 
 # 统计
@@ -39,8 +42,8 @@ download_with_retry() {
             total_retries=$((total_retries + 1))
         fi
         
-        # 执行下载
-        python3 download_data_akshare.py --max ${BATCH_SIZE} > /tmp/batch_${batch_num}_retry_${retry_count}.log 2>&1
+        # 执行下载（传入日期参数）
+        python3 download_data_akshare.py --max ${BATCH_SIZE} --start ${YESTERDAY} --end ${TODAY} > /tmp/batch_${batch_num}_retry_${retry_count}.log 2>&1
         
         if [ $? -eq 0 ]; then
             success=true
@@ -106,6 +109,13 @@ echo ""
 echo "验证数据："
 file_count=$(ls -1 data/akshare/bars/*.csv 2>/dev/null | wc -l)
 echo "数据文件：${file_count} 只股票"
+
+# 显示最新日期
+if [ $file_count -gt 0 ]; then
+    echo ""
+    echo "最新数据日期："
+    tail -1 data/akshare/bars/*.csv 2>/dev/null | grep -v "^==" | cut -d',' -f2 | sort -u | tail -5
+fi
 echo "======================================================================"
 
 # 如果有失败，提示

@@ -373,7 +373,7 @@ def download_index_components(index_code: str = "000300") -> list:
 
 def download_all_data(
     components: list,
-    start_date: str = "20250304",
+    start_date: str = "20240101",
     end_date: str = "20260304",
     max_stocks: int = None,
     use_cache: bool = True,
@@ -489,12 +489,12 @@ def main():
     parser = argparse.ArgumentParser(description="下载股票数据（增强版）")
     parser.add_argument("--index", type=str, default="000300", 
                        help="指数代码 (默认：000300 沪深 300)")
-    parser.add_argument("--start", type=str, default="20250304", help="开始日期 (默认：20240101)")
-    parser.add_argument("--end", type=str, default="20260304", help="结束日期 (默认：20241231)")
+    parser.add_argument("--start", type=str, default="20240101",
+                       help="开始日期 (默认：20240101)")
+    parser.add_argument("--end", type=str, default="20241231",
+                       help="结束日期 (默认：20241231)")
     parser.add_argument("--max", type=int, default=5,
                        help="最大下载数量 (默认：5，小批量下载)")
-    parser.add_argument("--symbols", type=str, nargs='+',
-                       help="指定股票代码列表（覆盖 index 和 max 参数）")
     parser.add_argument("--cache", type=str, default="./cache",
                        help="缓存目录 (默认：./cache)")
     parser.add_argument("--no-cache", action="store_true",
@@ -512,15 +512,7 @@ def main():
     index_code = args.index
     start_date = args.start
     end_date = args.end
-    
-    # 支持指定股票代码列表
-    if args.symbols:
-        symbols = args.symbols
-        print(f"指定股票：{len(symbols)} 只")
-        print(f"  列表：{', '.join(symbols[:10])}{'...' if len(symbols) > 10 else ''}")
-        max_stocks = len(symbols)
-    else:
-        max_stocks = args.max
+    max_stocks = args.max
     use_cache = not args.no_cache
     cache_dir = args.cache
     night_mode = args.night_mode
@@ -568,7 +560,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-# 添加 --symbols 参数支持（在 main 函数内）
-# 找到 args.max 后面添加：
-# parser.add_argument("--symbols", type=str, nargs='+', help="指定股票代码列表")
