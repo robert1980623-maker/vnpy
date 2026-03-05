@@ -489,8 +489,8 @@ def main():
     parser = argparse.ArgumentParser(description="下载股票数据（增强版）")
     parser.add_argument("--index", type=str, default="000300", 
                        help="指数代码 (默认：000300 沪深 300)")
-    parser.add_argument("--start", type=str, default="20250304", help="开始日期 (默认：20240101)")
-    parser.add_argument("--end", type=str, default="20260304", help="结束日期 (默认：20241231)")
+    parser.add_argument("--start", type=str, default=(datetime.now() - timedelta(days=30)).strftime("%Y%m%d"), help="开始日期 (默认：30 天前)")
+    parser.add_argument("--end", type=str, default=datetime.now().strftime("%Y%m%d"), help="结束日期 (默认：当天)")
     parser.add_argument("--max", type=int, default=5,
                        help="最大下载数量 (默认：5，小批量下载)")
     parser.add_argument("--symbols", type=str, nargs='+',
