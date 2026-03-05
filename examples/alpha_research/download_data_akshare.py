@@ -28,6 +28,7 @@ import time
 import random
 import yaml
 import os
+import requests
 
 # ==================== 配置加载 ====================
 
@@ -217,9 +218,9 @@ def get_stock_bars_akshare(vt_symbol: str, start_date: str, end_date: str,
 
 
 def get_stock_bars_tushare(vt_symbol: str, start_date: str, end_date: str, 
-                          max_retries: int = 3) -> pd.DataFrame:
+                           max_retries: int = 3) -> pd.DataFrame:
     """
-    使用 Tushare 获取 K 线数据（带重试）
+    使用 Tushare SDK 获取 K 线数据（带重试）
     
     Args:
         vt_symbol: 股票代码 (如 "000001.SZ")
@@ -230,38 +231,26 @@ def get_stock_bars_tushare(vt_symbol: str, start_date: str, end_date: str,
     Returns:
         pd.DataFrame: K 线数据
     """
-    if not TUSHARE_TOKEN:
+    if not pro:
         return None
     
     code = vt_symbol.split(".")[0]
     exchange = vt_symbol.split(".")[1] if "." in vt_symbol else "SZ"
     
-    # 转换交易所代码
+    # 转换交易所代码为 Tushare 格式
     ts_exchange = "SZ" if exchange == "SZ" else "SH"
     ts_symbol = f"{code}.{ts_exchange}"
     
     for attempt in range(max_retries):
         try:
-            # Tushare API 请求
-            url = "https://api.tushare.club/daily"
-            params = {
-                "ts_code": ts_symbol,
-                "start_date": start_date,
-                "end_date": end_date,
-                "token": TUSHARE_TOKEN
-            }
+            # 使用 Tushare Pro SDK API 获取日线数据
+            df = pro.daily(
+                ts_code=ts_symbol,
+                start_date=start_date,
+                end_date=end_date
+            )
             
-            response = requests.get(url, params=params, timeout=30)
-            response.raise_for_status()
-            
-            data = response.json()
-            
-            if not data or "data" not in data or not data["data"]:
-                return None
-            
-            df = pd.DataFrame(data["data"])
-            
-            if df.empty:
+            if df is None or df.empty:
                 return None
             
             # 转换格式
