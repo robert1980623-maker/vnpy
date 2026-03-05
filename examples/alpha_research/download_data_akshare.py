@@ -27,6 +27,7 @@ import json
 import time
 import random
 import yaml
+import os
 
 # ==================== 配置加载 ====================
 
@@ -39,14 +40,29 @@ def load_data_config() -> dict:
         return config.get('data', {})
     return {}
 
-DATA_CONFIG = load_data_config()
-TUSHARE_TOKEN = DATA_CONFIG.get('tushare_token', '')
+# 优先从环境变量读取 TUSHARE_TOKEN，其次从配置文件
+ENV_TOKEN = os.environ.get('TUSHARE_TOKEN', '')
+CONFIG_TOKEN = load_data_config().get('tushare_token', '')
+TUSHARE_TOKEN = ENV_TOKEN if ENV_TOKEN else CONFIG_TOKEN
+
 USE_TUSHARE = bool(TUSHARE_TOKEN and TUSHARE_TOKEN.strip())
 
 if USE_TUSHARE:
     print(f"✓ Tushare 已配置，将优先使用 Tushare 数据源")
+    if ENV_TOKEN:
+        print("  来源：环境变量 TUSHARE_TOKEN")
+    else:
+        print("  来源：config/auto_config.yaml")
+    # 初始化 Tushare
+    import tushare as ts
+    ts.set_token(TUSHARE_TOKEN)
+    pro = ts.pro_api()
 else:
     print("ℹ Tushare 未配置，将使用 AKShare 数据源")
+    print("  设置方式:")
+    print("  1. 环境变量：export TUSHARE_TOKEN='your_token'")
+    print("  2. 配置文件：config/auto_config.yaml 中的 data.tushare_token")
+    pro = None
 
 
 # ==================== 缓存管理 ====================
