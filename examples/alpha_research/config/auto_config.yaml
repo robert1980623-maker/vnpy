@@ -41,6 +41,7 @@ data:
   cache_enabled: true
   update_time: "08:30"
   backup_source: baostock     # 备用数据源
+  tshare_token: ""            # TShare API token (可选，配置后优先使用 TShare)
 
 logging:
   level: INFO
