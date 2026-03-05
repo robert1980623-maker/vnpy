@@ -1,9 +1,9 @@
 """
-使用 AKShare/TShare 下载股票数据（增强版）
+使用 AKShare/Tushare 下载股票数据（增强版）
 
 支持：
-- 多数据源（TShare 优先、AKShare、Baostock）
-- TShare token 配置（config/auto_config.yaml）
+- 多数据源（Tushare 优先、AKShare、Baostock）
+- Tushare token 配置（config/auto_config.yaml）
 - 本地缓存
 - 自动重试
 - akshare-proxy-patch 支持
@@ -27,7 +27,6 @@ import json
 import time
 import random
 import yaml
-import requests
 
 # ==================== 配置加载 ====================
 
@@ -41,13 +40,13 @@ def load_data_config() -> dict:
     return {}
 
 DATA_CONFIG = load_data_config()
-TSHARE_TOKEN = DATA_CONFIG.get('tshare_token', '')
-USE_TSHARE = bool(TSHARE_TOKEN and TSHARE_TOKEN.strip())
+TUSHARE_TOKEN = DATA_CONFIG.get('tushare_token', '')
+USE_TUSHARE = bool(TUSHARE_TOKEN and TUSHARE_TOKEN.strip())
 
-if USE_TSHARE:
-    print(f"✓ TShare 已配置，将优先使用 TShare 数据源")
+if USE_TUSHARE:
+    print(f"✓ Tushare 已配置，将优先使用 Tushare 数据源")
 else:
-    print("ℹ TShare 未配置，将使用 AKShare 数据源")
+    print("ℹ Tushare 未配置，将使用 AKShare 数据源")
 
 
 # ==================== 缓存管理 ====================
@@ -201,10 +200,10 @@ def get_stock_bars_akshare(vt_symbol: str, start_date: str, end_date: str,
 
 
 
-def get_stock_bars_tshare(vt_symbol: str, start_date: str, end_date: str, 
+def get_stock_bars_tushare(vt_symbol: str, start_date: str, end_date: str, 
                           max_retries: int = 3) -> pd.DataFrame:
     """
-    使用 TShare 获取 K 线数据（带重试）
+    使用 Tushare 获取 K 线数据（带重试）
     
     Args:
         vt_symbol: 股票代码 (如 "000001.SZ")
@@ -215,7 +214,7 @@ def get_stock_bars_tshare(vt_symbol: str, start_date: str, end_date: str,
     Returns:
         pd.DataFrame: K 线数据
     """
-    if not TSHARE_TOKEN:
+    if not TUSHARE_TOKEN:
         return None
     
     code = vt_symbol.split(".")[0]
@@ -227,13 +226,13 @@ def get_stock_bars_tshare(vt_symbol: str, start_date: str, end_date: str,
     
     for attempt in range(max_retries):
         try:
-            # TShare API 请求
-            url = "https://api.tshare.club/daily"
+            # Tushare API 请求
+            url = "https://api.tushare.club/daily"
             params = {
                 "ts_code": ts_symbol,
                 "start_date": start_date,
                 "end_date": end_date,
-                "token": TSHARE_TOKEN
+                "token": TUSHARE_TOKEN
             }
             
             response = requests.get(url, params=params, timeout=30)
@@ -259,7 +258,7 @@ def get_stock_bars_tshare(vt_symbol: str, start_date: str, end_date: str,
             df["volume"] = df["vol"].astype(float) * 100  # 手转股
             df["turnover"] = df["amount"].astype(float)
             
-            print(f"  ✓ TShare 成功获取 {vt_symbol}")
+            print(f"  ✓ Tushare 成功获取 {vt_symbol}")
             
             return df[["vt_symbol", "datetime", "open_price", "high_price", "low_price", 
                        "close_price", "volume", "turnover"]]
@@ -267,10 +266,10 @@ def get_stock_bars_tshare(vt_symbol: str, start_date: str, end_date: str,
         except Exception as e:
             if attempt < max_retries - 1:
                 wait_time = random.uniform(2, 4) * (attempt + 1)
-                print(f"  TShare 重试 {attempt+1}/{max_retries}, 等待 {wait_time:.1f}秒...")
+                print(f"  Tushare 重试 {attempt+1}/{max_retries}, 等待 {wait_time:.1f}秒...")
                 time.sleep(wait_time)
             else:
-                print(f"  ✗ TShare 失败：{e}")
+                print(f"  ✗ Tushare 失败：{e}")
                 return None
     
     return None
@@ -520,12 +519,12 @@ def download_all_data(
                 cache_hit_count += 1
         
         if bars is None:
-            # 数据源优先级：TShare > AKShare > Baostock
-            if USE_TSHARE:
-                print("  使用 TShare 数据源...")
-                bars = get_stock_bars_tshare(vt_symbol, start_date, end_date)
+            # 数据源优先级：Tushare > AKShare > Baostock
+            if USE_TUSHARE:
+                print("  使用 Tushare 数据源...")
+                bars = get_stock_bars_tushare(vt_symbol, start_date, end_date)
             
-            # TShare 失败或未配置，尝试 AKShare
+            # Tushare 失败或未配置，尝试 AKShare
             if bars is None:
                 print("  使用 AKShare 数据源...")
                 bars = get_stock_bars_akshare(vt_symbol, start_date, end_date)
