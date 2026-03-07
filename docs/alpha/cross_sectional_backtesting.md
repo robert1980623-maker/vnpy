@@ -1,771 +1,688 @@
-# 截面回测 API 文档
+# 截面回测引擎 API 文档
 
 ## 概述
 
-截面回测引擎支持多股票同时回测，模拟真实选股策略的执行过程，包括定期调仓、仓位管理、交易成本和绩效统计。
+截面回测引擎支持多股票同时回测，模拟真实选股策略的执行过程，包括定期调仓、仓位管理、交易成本模拟和绩效统计。
 
 **模块位置**: `vnpy/alpha/strategy/cross_sectional_engine.py`
 
 ---
 
-## 快速开始
+## 核心类
+
+### Position - 持仓信息
+
+记录单只股票的持仓信息。
+
+#### 属性
 
 ```python
-from vnpy.alpha.lab import AlphaLab
-from vnpy.alpha.strategy import ValueStockStrategy
-from vnpy.alpha.strategy.cross_sectional_engine import create_cross_sectional_engine
-from datetime import datetime
+from vnpy.alpha.strategy.cross_sectional_engine import Position
 
-# 1. 创建实验室
-lab = AlphaLab("./lab/backtest")
-
-# 2. 创建回测引擎
-engine = create_cross_sectional_engine(
-    lab,
-    initial_capital=1_000_000  # 初始资金 100 万
+position = Position(
+    vt_symbol="000001.SZ",
+    size=1000,           # 持仓股数
+    price=10.5,          # 买入价格
+    entry_date=datetime(2024, 3, 1)
 )
-
-# 3. 设置回测参数
-engine.set_parameters(
-    vt_symbols=["000001.SZ", "600036.SH", "600519.SH"],
-    start=datetime(2023, 1, 1),
-    end=datetime(2024, 12, 31)
-)
-
-# 4. 添加策略
-engine.add_strategy(
-    ValueStockStrategy,
-    setting={
-        "max_pe": 20,
-        "min_roe": 10,
-        "min_dividend_yield": 2.0
-    }
-)
-
-# 5. 运行回测
-engine.load_data()
-engine.run_backtesting()
-
-# 6. 查看结果
-stats = engine.calculate_statistics()
-print(f"总收益：{stats['total_return_pct']:.2f}%")
-print(f"年化收益：{stats['annual_return_pct']:.2f}%")
-print(f"最大回撤：{stats['max_drawdown_pct']:.2f}%")
-
-# 7. 显示图表
-engine.show_chart()
 ```
+
+**属性**:
+- `vt_symbol` (str): 股票代码
+- `size` (float): 持仓股数
+- `price` (float): 买入价格
+- `entry_date` (datetime): 买入日期
+
+#### 方法
+
+##### market_value(current_price) - 计算市值
+
+```python
+value = position.market_value(current_price=12.0)
+print(f"当前市值：{value}")
+```
+
+**参数**:
+- `current_price` (float): 当前价格
+
+**返回**: `float` - 持仓市值
+
+##### pnl(current_price) - 计算盈亏
+
+```python
+profit = position.pnl(current_price=12.0)
+print(f"盈亏：{profit}")
+```
+
+**参数**:
+- `current_price` (float): 当前价格
+
+**返回**: `float` - 盈亏金额
+
+##### pnl_pct(current_price) - 计算盈亏比例
+
+```python
+pct = position.pnl_pct(current_price=12.0)
+print(f"盈亏比例：{pct*100:.2f}%")
+```
+
+**参数**:
+- `current_price` (float): 当前价格
+
+**返回**: `float` - 盈亏比例
 
 ---
 
-## 核心类
+### Trade - 交易记录
+
+记录单次交易信息。
+
+#### 属性
+
+```python
+from vnpy.alpha.strategy.cross_sectional_engine import Trade
+
+trade = Trade(
+    vt_symbol="000001.SZ",
+    direction="buy",     # "buy" 或 "sell"
+    size=1000,
+    price=10.5,
+    date=datetime(2024, 3, 1),
+    commission=5.25      # 手续费
+)
+```
+
+**属性**:
+- `vt_symbol` (str): 股票代码
+- `direction` (str): 交易方向 ("buy" 或 "sell")
+- `size` (float): 交易股数
+- `price` (float): 成交价格
+- `date` (datetime): 交易日期
+- `commission` (float): 手续费
+
+#### 方法
+
+##### to_dict() - 转换为字典
+
+```python
+data = trade.to_dict()
+# {
+#     "vt_symbol": "000001.SZ",
+#     "direction": "buy",
+#     "size": 1000,
+#     "price": 10.5,
+#     "date": "2024-03-01T00:00:00",
+#     "commission": 5.25
+# }
+```
+
+**返回**: `Dict` - 交易记录的字典表示
+
+---
+
+### DailySnapshot - 每日快照
+
+记录每日账户状态。
+
+#### 属性
+
+```python
+from vnpy.alpha.strategy.cross_sectional_engine import DailySnapshot
+
+snapshot = DailySnapshot(
+    date=datetime(2024, 3, 1),
+    total_value=1000000,
+    cash=100000,
+    position_count=10,
+    positions={...}
+)
+```
+
+**属性**:
+- `date` (datetime): 日期
+- `total_value` (float): 总资产
+- `cash` (float): 现金
+- `position_count` (int): 持仓数量
+- `positions` (Dict): 持仓详情
+
+#### 方法
+
+##### to_dict() - 转换为字典
+
+```python
+data = snapshot.to_dict()
+```
+
+**返回**: `Dict` - 快照的字典表示
+
+---
 
 ### CrossSectionalEngine - 截面回测引擎
+
+核心回测引擎类，模拟选股策略的实际执行过程。
 
 #### 初始化
 
 ```python
-from vnpy.alpha.strategy.cross_sectional_engine import CrossSectionalEngine
+from vnpy.alpha.strategy import CrossSectionalEngine
+from vnpy.alpha.lab import AlphaLab
 
+# 创建 AlphaLab
+lab = AlphaLab()
+
+# 创建回测引擎
 engine = CrossSectionalEngine(
     lab=lab,
-    initial_capital=1_000_000,
-    commission_rate=0.0003,
-    slippage_rate=0.001
+    initial_capital=1_000_000,    # 初始资金 100 万
+    commission_rate=0.0003,       # 手续费率 万三
+    slippage=0.001,               # 滑点 千一
+    max_positions=30,             # 最大持仓 30 只
+    position_size=0.03            # 单只股票 3% 仓位
 )
 ```
 
 **参数**:
-- `lab` (AlphaLab): Alpha 实验室实例
+- `lab` (AlphaLab): AlphaLab 实例
 - `initial_capital` (float): 初始资金，默认 1,000,000
 - `commission_rate` (float): 手续费率，默认 0.0003 (万三)
-- `slippage_rate` (float): 滑点率，默认 0.001 (千一)
+- `slippage` (float): 滑点，默认 0.001 (千一)
+- `max_positions` (int): 最大持仓数，默认 30
+- `position_size` (float): 单只股票仓位比例，默认 0.03 (3%)
 
-#### 工厂函数
+#### 主要方法
 
-##### `create_cross_sectional_engine(lab, **kwargs)` - 创建引擎
-
-```python
-from vnpy.alpha.strategy.cross_sectional_engine import create_cross_sectional_engine
-
-engine = create_cross_sectional_engine(
-    lab,
-    initial_capital=1_000_000
-)
-```
-
-**返回**: `CrossSectionalEngine` - 回测引擎实例
-
----
-
-### 方法
-
-#### 配置方法
-
-##### `set_parameters()` - 设置回测参数
+##### set_parameters() - 设置回测参数
 
 ```python
+from datetime import datetime
+from vnpy.trader.constant import Interval
+
 engine.set_parameters(
-    vt_symbols=["000001.SZ", "600036.SH", "600519.SH"],
-    interval="daily",
+    vt_symbols=["000001.SZ", "000002.SZ", "600000.SH"],
+    interval=Interval.DAILY,
     start=datetime(2023, 1, 1),
-    end=datetime(2024, 12, 31),
-    rebalance_days=20
+    end=datetime(2024, 3, 1),
+    capital=1_000_000
 )
 ```
 
 **参数**:
 - `vt_symbols` (List[str]): 股票代码列表
-- `interval` (str): K 线周期，默认 "daily"
-- `start` (datetime): 回测开始日期
-- `end` (datetime): 回测结束日期
-- `rebalance_days` (int): 调仓周期，默认 20
+- `interval` (Interval): K 线周期
+- `start` (datetime): 开始日期
+- `end` (datetime): 结束日期
+- `capital` (float, 可选): 初始资金
 
-##### `add_strategy(strategy_class, setting=None, name=None)` - 添加策略
+##### add_strategy() - 添加策略
 
 ```python
 from vnpy.alpha.strategy import ValueStockStrategy
 
-# 添加单个策略
 engine.add_strategy(
-    ValueStockStrategy,
-    setting={"max_pe": 20, "min_roe": 10}
-)
-
-# 添加带名称的策略
-engine.add_strategy(
-    ValueStockStrategy,
-    setting={"max_pe": 20},
-    name="my_value_strategy"
+    strategy_class=ValueStockStrategy,
+    setting={
+        "max_pe": 20,
+        "min_roe": 10,
+        "min_dividend_yield": 2,
+        "max_positions": 20,
+        "rebalance_days": 20
+    }
 )
 ```
 
 **参数**:
-- `strategy_class` (Type): 策略类
-- `setting` (Dict, optional): 策略参数
-- `name` (str, optional): 策略名称
+- `strategy_class` (Type[StockScreenerStrategy]): 策略类
+- `setting` (Dict, 可选): 策略参数字典
 
----
-
-#### 执行方法
-
-##### `load_data()` - 加载数据
+##### load_data() - 加载数据
 
 ```python
 engine.load_data()
 ```
 
-从实验室加载 K 线数据和财务数据。
+加载股票池的 K 线数据到内存。
 
-##### `run_backtesting()` - 运行回测
+**注意**: 调用前必须先调用 `set_parameters()` 设置 `vt_symbols`。
+
+##### run_backtesting() - 运行回测
 
 ```python
 engine.run_backtesting()
 ```
 
-执行回测，模拟策略交易过程。
+执行回测，模拟选股策略的完整执行过程。
 
-##### `run_intraday_backtesting()` - 运行日内回测
+**注意**: 调用前必须先调用 `add_strategy()` 和 `load_data()`。
 
-```python
-engine.run_intraday_backtesting()
-```
-
-运行更精细的日内回测（如果数据支持）。
-
----
-
-#### 统计方法
-
-##### `calculate_statistics()` - 计算绩效统计
+##### calculate_statistics() - 计算统计指标
 
 ```python
 stats = engine.calculate_statistics()
+print(stats)
 ```
 
-**返回**: `Dict` - 绩效统计字典
+**返回**: `Dict[str, Any]` - 统计结果，包含：
+
+| 字段 | 说明 | 类型 |
+|------|------|------|
+| `total_return` | 总收益率 | float |
+| `total_return_pct` | 总收益率 (%) | float |
+| `annual_return` | 年化收益率 | float |
+| `annual_return_pct` | 年化收益率 (%) | float |
+| `volatility` | 年化波动率 | float |
+| `volatility_pct` | 年化波动率 (%) | float |
+| `sharpe_ratio` | 夏普比率 | float |
+| `max_drawdown` | 最大回撤 | float |
+| `max_drawdown_pct` | 最大回撤 (%) | float |
+| `total_trades` | 总交易次数 | int |
+| `buy_trades` | 买入次数 | int |
+| `sell_trades` | 卖出次数 | int |
+| `total_commission` | 总手续费 | float |
+| `final_value` | 最终资产 | float |
+| `initial_value` | 初始资产 | float |
+| `start_date` | 开始日期 | str |
+| `end_date` | 结束日期 | str |
+| `trading_days` | 交易天数 | int |
+
+##### get_trades() - 获取交易记录
 
 ```python
-{
-    # 收益指标
-    "total_return_pct": 25.5,        # 总收益率 (%)
-    "annual_return_pct": 15.2,       # 年化收益率 (%)
-    "excess_return_pct": 8.5,        # 超额收益率 (%)
-    
-    # 风险指标
-    "max_drawdown_pct": -15.3,       # 最大回撤 (%)
-    "volatility_pct": 18.5,          # 年化波动率 (%)
-    
-    # 风险调整收益
-    "sharpe_ratio": 1.25,            # 夏普比率
-    "sortino_ratio": 1.50,           # 索提诺比率
-    "calmar_ratio": 0.99,            # 卡玛比率
-    
-    # 交易统计
-    "total_trades": 150,             # 总交易次数
-    "win_rate": 0.65,                # 胜率
-    "avg_win_pct": 5.2,              # 平均盈利 (%)
-    "avg_loss_pct": -3.1,            # 平均亏损 (%)
-    "profit_factor": 1.68,           # 盈亏比
-    
-    # 时间统计
-    "trading_days": 480,             # 交易天数
-    "start_date": "2023-01-01",
-    "end_date": "2024-12-31",
-    
-    # 资金统计
-    "initial_capital": 1000000,
-    "final_capital": 1255000,
-    "total_commission": 3500         # 总手续费
-}
+trades = engine.get_trades()
+for trade in trades[:5]:  # 显示前 5 笔交易
+    print(f"{trade['date']}: {trade['direction']} {trade['vt_symbol']} "
+          f"@ {trade['price']}, 手续费：{trade['commission']}")
 ```
 
-##### `calculate_all_strategies_statistics()` - 计算所有策略统计
+**返回**: `List[Dict]` - 交易记录列表
+
+##### get_daily_values() - 获取每日净值
 
 ```python
-all_stats = engine.calculate_all_strategies_statistics()
-for name, stats in all_stats.items():
-    print(f"{name}: {stats['total_return_pct']:.2f}%")
+daily_values = engine.get_daily_values()
+for snapshot in daily_values[:5]:  # 显示前 5 天
+    print(f"{snapshot['date']}: 总资产={snapshot['total_value']}, "
+          f"现金={snapshot['cash']}, 持仓数={snapshot['position_count']}")
 ```
 
-**返回**: `Dict[str, Dict]` - 各策略的统计字典
+**返回**: `List[Dict]` - 每日快照列表
 
-##### `get_trade_log()` - 获取交易日志
+##### show_chart() - 显示回测图表
 
 ```python
-trades = engine.get_trade_log()
-for trade in trades[:10]:
-    print(f"{trade.date}: {trade.direction} {trade.vt_symbol} @ {trade.price}")
+engine.show_chart()
 ```
 
-**返回**: `List[Trade]` - 交易记录列表
+显示净值曲线和收益分布图。
 
-##### `get_daily_snapshots()` - 获取每日快照
-
-```python
-snapshots = engine.get_daily_snapshots()
-for snapshot in snapshots[-5:]:
-    print(f"{snapshot.date}: 总值={snapshot.total_value:.2f}")
-```
-
-**返回**: `List[DailySnapshot]` - 每日快照列表
+**依赖**: 需要安装 `matplotlib`
 
 ---
 
-#### 可视化方法
+## 工厂函数
 
-##### `show_chart()` - 显示收益曲线
+### create_cross_sectional_engine()
+
+创建截面回测引擎的便捷函数。
 
 ```python
-engine.show_chart(
-    title="策略收益曲线",
-    save_path="backtest_result.png"
+from vnpy.alpha.strategy import create_cross_sectional_engine
+
+engine = create_cross_sectional_engine(
+    lab=lab,
+    initial_capital=1_000_000,
+    commission_rate=0.0003,
+    max_positions=30
 )
 ```
 
 **参数**:
-- `title` (str, optional): 图表标题
-- `save_path` (str, optional): 保存路径
+- `lab` (AlphaLab): AlphaLab 实例
+- `**kwargs`: 其他参数
 
-##### `show_drawdown_chart()` - 显示回撤曲线
-
-```python
-engine.show_drawdown_chart()
-```
-
-##### `show_monthly_return_chart()` - 显示月度收益热力图
-
-```python
-engine.show_monthly_return_chart()
-```
-
-##### `show_strategy_comparison()` - 显示策略比较
-
-```python
-engine.show_strategy_comparison()
-```
-
-比较多策略的收益曲线。
-
-##### `show_position_distribution()` - 显示持仓分布
-
-```python
-engine.show_position_distribution()
-```
-
----
-
-#### 数据导出方法
-
-##### `export_trades()` - 导出交易记录
-
-```python
-engine.export_trades("trades.csv")
-```
-
-**参数**:
-- `path` (str): 导出路径
-
-##### `export_daily_values()` - 导出每日净值
-
-```python
-engine.export_daily_values("daily_values.csv")
-```
-
-**参数**:
-- `path` (str): 导出路径
-
-##### `export_statistics()` - 导出统计结果
-
-```python
-engine.export_statistics("statistics.json")
-```
-
-**参数**:
-- `path` (str): 导出路径
-
----
-
-## 数据结构
-
-### Position - 持仓信息
-
-```python
-@dataclass
-class Position:
-    vt_symbol: str           # 股票代码
-    size: float              # 持仓数量
-    price: float             # 持仓成本
-    entry_date: datetime     # 建仓日期
-    
-    def market_value(self, current_price: float) -> float:
-        """计算市值"""
-    
-    def pnl(self, current_price: float) -> float:
-        """计算盈亏"""
-    
-    def pnl_pct(self, current_price: float) -> float:
-        """计算盈亏比例"""
-```
-
-### Trade - 交易记录
-
-```python
-@dataclass
-class Trade:
-    vt_symbol: str           # 股票代码
-    direction: str           # "buy" 或 "sell"
-    size: float              # 交易数量
-    price: float             # 成交价格
-    date: datetime           # 交易日期
-    commission: float        # 手续费
-    
-    def to_dict(self) -> Dict:
-        """转换为字典"""
-```
-
-### DailySnapshot - 每日快照
-
-```python
-@dataclass
-class DailySnapshot:
-    date: datetime                    # 日期
-    total_value: float                # 总资产
-    cash: float                       # 现金
-    position_count: int               # 持仓数量
-    positions: Dict[str, Dict]        # 持仓详情
-    
-    def to_dict(self) -> Dict:
-        """转换为字典"""
-```
+**返回**: `CrossSectionalEngine` - 回测引擎实例
 
 ---
 
 ## 完整示例
 
-### 示例 1: 基础回测
+### 示例 1：价值股策略回测
 
 ```python
 from vnpy.alpha.lab import AlphaLab
-from vnpy.alpha.strategy import ValueStockStrategy
-from vnpy.alpha.strategy.cross_sectional_engine import create_cross_sectional_engine
+from vnpy.alpha.strategy import CrossSectionalEngine, ValueStockStrategy
 from datetime import datetime
+from vnpy.trader.constant import Interval
 
-# 创建实验室
-lab = AlphaLab("./lab/value_backtest")
+# 创建 AlphaLab
+lab = AlphaLab()
 
-# 创建引擎
-engine = create_cross_sectional_engine(
-    lab,
-    initial_capital=1_000_000
+# 创建回测引擎
+engine = CrossSectionalEngine(
+    lab=lab,
+    initial_capital=1_000_000,
+    commission_rate=0.0003,
+    slippage=0.001,
+    max_positions=20,
+    position_size=0.05
+)
+
+# 设置回测参数
+engine.set_parameters(
+    vt_symbols=lab.get_stock_list(),  # 获取股票池
+    interval=Interval.DAILY,
+    start=datetime(2022, 1, 1),
+    end=datetime(2024, 3, 1)
+)
+
+# 添加价值股策略
+engine.add_strategy(
+    strategy_class=ValueStockStrategy,
+    setting={
+        "max_pe": 20,
+        "max_pb": 3,
+        "min_roe": 10,
+        "min_dividend_yield": 2,
+        "max_positions": 20,
+        "rebalance_days": 20
+    }
+)
+
+# 加载数据
+engine.load_data()
+
+# 运行回测
+engine.run_backtesting()
+
+# 查看统计结果
+stats = engine.calculate_statistics()
+print("=" * 50)
+print("回测结果")
+print("=" * 50)
+print(f"总收益率：{stats['total_return_pct']:.2f}%")
+print(f"年化收益率：{stats['annual_return_pct']:.2f}%")
+print(f"夏普比率：{stats['sharpe_ratio']:.2f}")
+print(f"最大回撤：{stats['max_drawdown_pct']:.2f}%")
+print(f"总交易次数：{stats['total_trades']}")
+print(f"总手续费：{stats['total_commission']:.2f}元")
+```
+
+### 示例 2：成长股策略回测
+
+```python
+from vnpy.alpha.strategy import GrowthStockStrategy
+
+# 创建回测引擎
+engine = CrossSectionalEngine(
+    lab=lab,
+    initial_capital=1_000_000,
+    max_positions=15,
+    position_size=0.06
 )
 
 # 设置参数
 engine.set_parameters(
-    vt_symbols=["000001.SZ", "600036.SH", "600519.SH", "000002.SZ", "000063.SZ"],
-    start=datetime(2023, 1, 1),
-    end=datetime(2024, 12, 31),
-    rebalance_days=20
+    vt_symbols=lab.get_stock_list(),
+    interval=Interval.DAILY,
+    start=datetime(2022, 1, 1),
+    end=datetime(2024, 3, 1)
 )
 
-# 添加策略
+# 添加成长股策略
 engine.add_strategy(
-    ValueStockStrategy,
+    strategy_class=GrowthStockStrategy,
     setting={
-        "max_pe": 20,
-        "min_roe": 10,
-        "min_dividend_yield": 2.0,
-        "max_positions": 10
+        "min_revenue_growth": 25,
+        "min_profit_growth": 30,
+        "min_roe": 15,
+        "max_pe": 50,
+        "max_positions": 15,
+        "rebalance_days": 25
     }
 )
 
 # 运行回测
-print("加载数据...")
 engine.load_data()
-
-print("运行回测...")
 engine.run_backtesting()
 
 # 查看结果
-print("\n=== 回测结果 ===")
 stats = engine.calculate_statistics()
-print(f"总收益：{stats['total_return_pct']:.2f}%")
-print(f"年化收益：{stats['annual_return_pct']:.2f}%")
-print(f"最大回撤：{stats['max_drawdown_pct']:.2f}%")
+print(f"成长股策略年化收益：{stats['annual_return_pct']:.2f}%")
 print(f"夏普比率：{stats['sharpe_ratio']:.2f}")
-print(f"总交易次数：{stats['total_trades']}")
-print(f"胜率：{stats['win_rate']:.2%}")
-
-# 显示图表
-engine.show_chart(title="价值策略回测")
 ```
 
-### 示例 2: 多策略比较
+### 示例 3：多策略对比
 
 ```python
-from vnpy.alpha.lab import AlphaLab
 from vnpy.alpha.strategy import (
     ValueStockStrategy,
     GrowthStockStrategy,
     QualityStockStrategy,
     DividendStockStrategy
 )
-from vnpy.alpha.strategy.cross_sectional_engine import create_cross_sectional_engine
-from datetime import datetime
 
-# 创建实验室
-lab = AlphaLab("./lab/strategy_comparison")
+# 策略配置
+strategies = {
+    "价值股": {
+        "class": ValueStockStrategy,
+        "setting": {"max_pe": 20, "min_roe": 10, "min_dividend_yield": 2}
+    },
+    "成长股": {
+        "class": GrowthStockStrategy,
+        "setting": {"min_revenue_growth": 25, "min_profit_growth": 30}
+    },
+    "质量股": {
+        "class": QualityStockStrategy,
+        "setting": {"min_roe": 15, "min_gross_margin": 30}
+    },
+    "高股息": {
+        "class": DividendStockStrategy,
+        "setting": {"min_dividend_yield": 4, "min_roe": 8}
+    }
+}
 
-# 创建引擎
-engine = create_cross_sectional_engine(
-    lab,
-    initial_capital=1_000_000
-)
+# 回测对比
+results = {}
 
-# 设置参数
-engine.set_parameters(
-    vt_symbols=["000001.SZ", "600036.SH", "600519.SH", ...],  # 50 只股票
-    start=datetime(2023, 1, 1),
-    end=datetime(2024, 12, 31)
-)
-
-# 添加多个策略
-engine.add_strategy(
-    ValueStockStrategy,
-    {"max_pe": 20, "min_roe": 10},
-    name="value"
-)
-
-engine.add_strategy(
-    GrowthStockStrategy,
-    {"min_revenue_growth": 20, "min_net_profit_growth": 25},
-    name="growth"
-)
-
-engine.add_strategy(
-    QualityStockStrategy,
-    {"min_roe": 15, "min_gross_margin": 30},
-    name="quality"
-)
-
-engine.add_strategy(
-    DividendStockStrategy,
-    {"min_dividend_yield": 4.0},
-    name="dividend"
-)
-
-# 运行回测
-engine.load_data()
-engine.run_backtesting()
-
-# 比较结果
-print("\n=== 策略比较 ===")
-all_stats = engine.calculate_all_strategies_statistics()
-
-for name, stats in all_stats.items():
-    print(f"\n{name.upper()} 策略:")
-    print(f"  总收益：{stats['total_return_pct']:.2f}%")
-    print(f"  年化收益：{stats['annual_return_pct']:.2f}%")
-    print(f"  最大回撤：{stats['max_drawdown_pct']:.2f}%")
-    print(f"  夏普比率：{stats['sharpe_ratio']:.2f}")
-    print(f"  胜率：{stats['win_rate']:.2%}")
-
-# 显示比较图表
-engine.show_strategy_comparison()
-```
-
-### 示例 3: 参数优化
-
-```python
-from vnpy.alpha.lab import AlphaLab
-from vnpy.alpha.strategy import ValueStockStrategy
-from vnpy.alpha.strategy.cross_sectional_engine import create_cross_sectional_engine
-from datetime import datetime
-import itertools
-
-# 创建实验室
-lab = AlphaLab("./lab/parameter_optimization")
-
-# 参数网格
-pe_range = [15, 20, 25, 30]
-roe_range = [8, 10, 12, 15]
-dividend_range = [1.0, 2.0, 3.0]
-
-best_return = 0
-best_params = {}
-results = []
-
-# 网格搜索
-for max_pe, min_roe, min_dividend in itertools.product(pe_range, roe_range, dividend_range):
-    # 创建引擎
-    engine = create_cross_sectional_engine(lab, initial_capital=1_000_000)
-    engine.set_parameters(
-        vt_symbols=["000001.SZ", "600036.SH", "600519.SH", ...],
-        start=datetime(2023, 1, 1),
-        end=datetime(2024, 12, 31)
-    )
-    engine.add_strategy(
-        ValueStockStrategy,
-        {
-            "max_pe": max_pe,
-            "min_roe": min_roe,
-            "min_dividend_yield": min_dividend
-        }
-    )
+for name, config in strategies.items():
+    print(f"\n回测 {name} 策略...")
     
-    # 运行回测
+    engine = CrossSectionalEngine(lab=lab, initial_capital=1_000_000)
+    engine.set_parameters(
+        vt_symbols=lab.get_stock_list(),
+        interval=Interval.DAILY,
+        start=datetime(2022, 1, 1),
+        end=datetime(2024, 3, 1)
+    )
+    engine.add_strategy(config["class"], setting=config["setting"])
     engine.load_data()
     engine.run_backtesting()
+    
     stats = engine.calculate_statistics()
+    results[name] = stats
     
-    # 记录结果
-    result = {
-        "max_pe": max_pe,
-        "min_roe": min_roe,
-        "min_dividend_yield": min_dividend,
-        "total_return": stats["total_return_pct"],
-        "sharpe_ratio": stats["sharpe_ratio"],
-        "max_drawdown": stats["max_drawdown_pct"]
-    }
-    results.append(result)
-    
-    # 更新最优
-    if stats["total_return_pct"] > best_return:
-        best_return = stats["total_return_pct"]
-        best_params = {
-            "max_pe": max_pe,
-            "min_roe": min_roe,
-            "min_dividend_yield": min_dividend
-        }
+    print(f"  年化收益：{stats['annual_return_pct']:.2f}%")
+    print(f"  夏普比率：{stats['sharpe_ratio']:.2f}")
+    print(f"  最大回撤：{stats['max_drawdown_pct']:.2f}%")
 
-# 输出结果
-print("\n=== 参数优化结果 ===")
-print(f"最优参数：{best_params}")
-print(f"最优收益：{best_return:.2f}%")
-
-# 导出结果
-import csv
-with open("parameter_scan_results.csv", "w", newline="") as f:
-    writer = csv.DictWriter(f, fieldnames=results[0].keys())
-    writer.writeheader()
-    writer.writerows(results)
-
-print("结果已保存到 parameter_scan_results.csv")
+# 对比表格
+print("\n" + "=" * 60)
+print(f"{'策略':<10} {'年化收益':>12} {'夏普比率':>12} {'最大回撤':>12}")
+print("=" * 60)
+for name, stats in results.items():
+    print(f"{name:<10} {stats['annual_return_pct']:>11.2f}% "
+          f"{stats['sharpe_ratio']:>12.2f} {stats['max_drawdown_pct']:>11.2f}%")
 ```
 
-### 示例 4: 详细分析
+### 示例 4：查看交易记录
 
 ```python
-from vnpy.alpha.lab import AlphaLab
-from vnpy.alpha.strategy import ValueStockStrategy
-from vnpy.alpha.strategy.cross_sectional_engine import create_cross_sectional_engine
-from datetime import datetime
-
-# 运行回测
-lab = AlphaLab("./lab/detailed_analysis")
-engine = create_cross_sectional_engine(lab, initial_capital=1_000_000)
-engine.set_parameters(
-    vt_symbols=["000001.SZ", "600036.SH", "600519.SH", ...],
-    start=datetime(2023, 1, 1),
-    end=datetime(2024, 12, 31)
-)
-engine.add_strategy(ValueStockStrategy, {"max_pe": 20, "min_roe": 10})
-engine.load_data()
+# 运行回测后
 engine.run_backtesting()
 
-# 详细分析
-stats = engine.calculate_statistics()
+# 获取交易记录
+trades = engine.get_trades()
 
-print("\n=== 详细回测分析 ===\n")
+print(f"总交易次数：{len(trades)}\n")
 
-# 1. 收益分析
-print("【收益分析】")
-print(f"  初始资金：¥{stats['initial_capital']:,.2f}")
-print(f"  最终资金：¥{stats['final_capital']:,.2f}")
-print(f"  总收益：{stats['total_return_pct']:.2f}%")
-print(f"  年化收益：{stats['annual_return_pct']:.2f}%")
-print(f"  超额收益：{stats['excess_return_pct']:.2f}%")
+# 显示前 10 笔交易
+print("前 10 笔交易:")
+for i, trade in enumerate(trades[:10], 1):
+    direction = "买入" if trade['direction'] == 'buy' else "卖出"
+    print(f"{i}. {trade['date'][:10]} {direction} {trade['vt_symbol']} "
+          f"@ {trade['price']:.2f} x {trade['size']:.0f}股, "
+          f"手续费：¥{trade['commission']:.2f}")
 
-# 2. 风险分析
-print("\n【风险分析】")
-print(f"  最大回撤：{stats['max_drawdown_pct']:.2f}%")
-print(f"  年化波动率：{stats['volatility_pct']:.2f}%")
+# 统计买入卖出
+buy_count = sum(1 for t in trades if t['direction'] == 'buy')
+sell_count = sum(1 for t in trades if t['direction'] == 'sell')
+print(f"\n买入次数：{buy_count}, 卖出次数：{sell_count}")
+```
 
-# 3. 风险调整收益
-print("\n【风险调整收益】")
-print(f"  夏普比率：{stats['sharpe_ratio']:.2f}")
-print(f"  索提诺比率：{stats['sortino_ratio']:.2f}")
-print(f"  卡玛比率：{stats['calmar_ratio']:.2f}")
+### 示例 5：分析每日净值
 
-# 4. 交易统计
-print("\n【交易统计】")
-print(f"  总交易次数：{stats['total_trades']}")
-print(f"  交易天数：{stats['trading_days']}")
-print(f"  胜率：{stats['win_rate']:.2%}")
-print(f"  平均盈利：{stats['avg_win_pct']:.2f}%")
-print(f"  平均亏损：{stats['avg_loss_pct']:.2f}%")
-print(f"  盈亏比：{stats['profit_factor']:.2f}")
+```python
+# 获取每日净值
+daily_values = engine.get_daily_values()
 
-# 5. 成本分析
-print("\n【成本分析】")
-print(f"  总手续费：¥{stats['total_commission']:,.2f}")
-print(f"  手续费占比：{stats['total_commission']/stats['initial_capital']*100:.2f}%")
+# 提取数据
+dates = [v['date'][:10] for v in daily_values]
+values = [v['total_value'] for v in daily_values]
 
-# 获取交易日志
-trades = engine.get_trade_log()
-print(f"\n【最近 10 笔交易】")
-for trade in trades[-10:]:
-    direction = "买入" if trade.direction == "buy" else "卖出"
-    print(f"  {trade.date.strftime('%Y-%m-%d')} {direction} {trade.vt_symbol} @ ¥{trade.price:.2f}")
+# 计算每日收益
+daily_returns = []
+for i in range(1, len(values)):
+    ret = (values[i] - values[i-1]) / values[i-1]
+    daily_returns.append(ret)
 
-# 导出所有数据
-engine.export_trades("all_trades.csv")
-engine.export_daily_values("daily_values.csv")
-engine.export_statistics("statistics.json")
-print("\n数据已导出!")
+# 统计
+import statistics
+print(f"交易日数：{len(dates)}")
+print(f"正收益天数：{sum(1 for r in daily_returns if r > 0)}")
+print(f"负收益天数：{sum(1 for r in daily_returns if r < 0)}")
+print(f"胜率：{sum(1 for r in daily_returns if r > 0) / len(daily_returns) * 100:.2f}%")
+print(f"日均收益：{statistics.mean(daily_returns) * 100:.4f}%")
+print(f"日收益波动率：{statistics.stdev(daily_returns) * 100:.4f}%")
+```
 
-# 显示图表
+### 示例 6：显示回测图表
+
+```python
+# 需要安装 matplotlib: pip install matplotlib
 engine.show_chart()
-engine.show_drawdown_chart()
-engine.show_monthly_return_chart()
+```
+
+图表包含：
+1. **净值曲线**: 显示组合资产随时间的变化
+2. **收益分布**: 显示每日收益的直方图
+
+---
+
+## 回测流程
+
+```
+1. 创建 AlphaLab
+       ↓
+2. 创建 CrossSectionalEngine
+       ↓
+3. set_parameters() - 设置股票池、时间范围
+       ↓
+4. add_strategy() - 添加选股策略
+       ↓
+5. load_data() - 加载 K 线数据
+       ↓
+6. run_backtesting() - 运行回测
+       ↓
+7. calculate_statistics() - 计算统计指标
+       ↓
+8. get_trades() / get_daily_values() - 获取详细数据
+       ↓
+9. show_chart() - 可视化（可选）
 ```
 
 ---
 
-## 绩效指标说明
+## 交易成本模型
 
-### 收益指标
+### 手续费
 
-| 指标 | 公式 | 说明 |
-|------|------|------|
-| 总收益率 | (最终资金 - 初始资金) / 初始资金 | 回测期间的总收益 |
-| 年化收益率 | (1 + 总收益率)^(252/交易天数) - 1 | 年化后的收益率 |
-| 超额收益率 | 策略收益 - 基准收益 | 相对基准的超额收益 |
+```python
+commission = max(amount * commission_rate, 5.0)
+```
 
-### 风险指标
+- 费率：默认 0.0003 (万三)
+- 最低：5 元
 
-| 指标 | 公式 | 说明 |
-|------|------|------|
-| 最大回撤 | max(历史最高值 - 当前值) / 历史最高值 | 最大亏损幅度 |
-| 年化波动率 | 日收益率标准差 × √252 | 收益的波动程度 |
+### 滑点
 
-### 风险调整收益
+```python
+# 买入
+exec_price = price * (1 + slippage)
 
-| 指标 | 公式 | 说明 |
-|------|------|------|
-| 夏普比率 | (年化收益 - 无风险利率) / 波动率 | 单位风险的超额收益 |
-| 索提诺比率 | (年化收益 - 无风险利率) / 下行波动率 | 只考虑下行风险 |
-| 卡玛比率 | 年化收益 / |最大回撤 | | 收益与最大回撤的比值 |
+# 卖出
+exec_price = price * (1 - slippage)
+```
 
-### 交易统计
-
-| 指标 | 说明 |
-|------|------|
-| 胜率 | 盈利交易次数 / 总交易次数 |
-| 平均盈利 | 盈利交易的平均收益率 |
-| 平均亏损 | 亏损交易的平均收益率 |
-| 盈亏比 | 平均盈利 / |平均亏损 | |
+- 默认：0.001 (千一)
+- 买入价格上浮，卖出价格下浮
 
 ---
 
 ## 最佳实践
 
-### 1. 数据质量检查
+1. **合理的股票池**: 选择流动性好的股票，排除 ST、*ST 等风险股
+2. **足够的回测周期**: 至少 2-3 年，覆盖不同市场环境
+3. **真实的成本假设**: 设置合理的手续费和滑点
+4. **关注最大回撤**: 不仅看收益，也要看风险
+5. **多策略对比**: 对比不同策略的表现，选择适合的
+6. **样本外验证**: 用部分数据做验证，避免过拟合
+7. **定期复盘**: 分析交易记录，优化策略参数
 
-```python
-# 回测前检查数据质量
-def check_data_quality(lab, vt_symbols, start, end):
-    for symbol in vt_symbols:
-        bars = lab.load_bars(symbol, start, end)
-        if len(bars) == 0:
-            print(f"警告：{symbol} 无数据")
-        elif len(bars) < 100:
-            print(f"警告：{symbol} 数据不足 ({len(bars)}条)")
+---
 
-check_data_quality(lab, symbols, start, end)
+## 性能指标解读
+
+### 年化收益率 (Annual Return)
+
+```
+年化收益 = (1 + 总收益)^(365/天数) - 1
 ```
 
-### 2. 避免未来函数
+- 反映策略的盈利能力
+- 一般 >15% 为优秀
 
-```python
-# 确保只使用历史数据
-def screen_stocks(self, stock_pool, fundamental_data, current_date):
-    # ✅ 正确：使用当前日期之前的数据
-    data = fundamental_data.get(symbol, report_date=current_date)
-    
-    # ❌ 错误：不要使用未来数据
-    # data = fundamental_data.get(symbol)  # 可能获取到未来数据
+### 夏普比率 (Sharpe Ratio)
+
+```
+夏普比率 = (年化收益 - 无风险利率) / 波动率
 ```
 
-### 3. 合理的交易成本
+- 反映风险调整后的收益
+- >1 为良好，>2 为优秀
+- 无风险利率默认 3%
 
-```python
-# 设置 realistic 的交易成本
-engine = create_cross_sectional_engine(
-    lab,
-    commission_rate=0.0003,  # 万三手续费
-    slippage_rate=0.001      # 千一滑点
-)
+### 最大回撤 (Max Drawdown)
+
+```
+最大回撤 = (峰值 - 谷值) / 峰值
 ```
 
-### 4. 足够的回测周期
+- 反映策略的最大亏损幅度
+- 一般 <20% 为可接受
+- 越小越好
 
-```python
-# 建议至少 2-3 年的回测周期
-start = datetime(2021, 1, 1)
-end = datetime(2024, 12, 31)
-# 覆盖牛熊周期
+### 波动率 (Volatility)
+
 ```
+波动率 = 日收益标准差 × √252
+```
+
+- 反映策略的风险程度
+- 一般 <30% 为稳健
 
 ---
 
 ## 相关文件
 
-- **源码**: `vnpy/alpha/strategy/cross_sectional_engine.py`
-- **示例**: `examples/alpha_research/run_backtest.py`
-- **策略文档**: `docs/alpha/stock_screener_strategy.md`
-
----
-
-**最后更新**: 2026-03-01  
-**版本**: 1.0.0
+- 源码：`vnpy/alpha/strategy/cross_sectional_engine.py`
+- 选股策略：`stock_screener_strategy.md`
+- AlphaLab: `alpha_lab.md` (待创建)
