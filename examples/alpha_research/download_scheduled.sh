@@ -1,5 +1,5 @@
 #!/bin/bash
-# 股票数据下载脚本
+# 股票数据定时下载脚本
 # 用于定时任务调用
 
 set -e
@@ -14,6 +14,20 @@ echo "============================================================"
 echo "股票数据定时下载任务"
 echo "执行时间：$(date '+%Y-%m-%d %H:%M:%S')"
 echo "============================================================"
+
+# 加载 TUSHARE_TOKEN 环境变量（如果存在）
+if [ -n "$TUSHARE_TOKEN" ]; then
+    echo -e "${GREEN}✓ TUSHARE_TOKEN 已设置${NC}"
+else
+    # 尝试从 .zshrc 中提取 TUSHARE_TOKEN
+    if [ -f ~/.zshrc ]; then
+        TUSHARE_TOKEN=$(grep -E "^export TUSHARE_TOKEN=" ~/.zshrc 2>/dev/null | cut -d'=' -f2 | tr -d "'" | tr -d '"')
+        if [ -n "$TUSHARE_TOKEN" ]; then
+            export TUSHARE_TOKEN
+            echo -e "${GREEN}✓ 从 ~/.zshrc 加载 TUSHARE_TOKEN${NC}"
+        fi
+    fi
+fi
 
 # 切换目录
 cd ~/projects/vnpy/examples/alpha_research

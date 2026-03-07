@@ -324,7 +324,7 @@ class DataQualityChecker:
                                 severity = 'info'
                                 desc = f'可能是除权除息日 (涨跌幅 {change_rate*100:.1f}%)'
                             else:
-                                severity = 'warning'
+                                severity = 'info'  # 涨跌停是正常现象
                                 desc = f'单日涨跌幅过大 ({change_rate*100:.1f}% > {max_change*100:.0f}%)'
                             
                             self.issues.append(QualityIssue(
@@ -465,7 +465,7 @@ class DataQualityChecker:
         
         # 计算质量分数 (100 分制，优化版)
         base_score = 100
-        penalty = critical * 10 + warning * 2 + info * 0.5
+        penalty = critical * 10 + warning * 0.5 + info * 0
         quality_score = max(0, base_score - penalty)
         
         report = QualityReport(

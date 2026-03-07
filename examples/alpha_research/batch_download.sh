@@ -2,6 +2,20 @@
 # 分批下载股票数据
 # 每批 5 只，批次间隔 30 秒
 
+# 加载 TUSHARE_TOKEN 环境变量（如果存在）
+if [ -n "$TUSHARE_TOKEN" ]; then
+    echo "✓ TUSHARE_TOKEN 已设置"
+else
+    # 尝试从 .zshrc 中提取 TUSHARE_TOKEN
+    if [ -f ~/.zshrc ]; then
+        TUSHARE_TOKEN=$(grep -E "^export TUSHARE_TOKEN=" ~/.zshrc 2>/dev/null | cut -d'=' -f2 | tr -d "'" | tr -d '"')
+        if [ -n "$TUSHARE_TOKEN" ]; then
+            export TUSHARE_TOKEN
+            echo "✓ 从 ~/.zshrc 加载 TUSHARE_TOKEN"
+        fi
+    fi
+fi
+
 cd /Users/rowang/projects/vnpy/examples/alpha_research
 
 echo "======================================================================"
