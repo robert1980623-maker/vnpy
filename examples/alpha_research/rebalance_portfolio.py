@@ -309,7 +309,7 @@ class PortfolioRebalancer:
         
         print(f"✅ 精英选股：{len(elite_stocks['stocks'])} 只")
         for s in elite_stocks['stocks']:
-            print(f"  - {s['symbol']} {s['name']} (评分：{s['final_score']})")
+            print(f"  - {s['symbol']} {s['name']} (评分：{s.get('base_score', s.get('final_score', 'N/A'))})")
         print()
         
         # 分析当前持仓

@@ -23,7 +23,7 @@ class DailyTrading:
     def __init__(self, account: VirtualAccount):
         self.account = account
         self.data_dir = Path('./data/akshare/bars')
-        self.today = datetime.now().strftime('%Y-%m-%d')
+        self.today = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
         
         # 加载股票数据
         self.stock_data: dict = {}
