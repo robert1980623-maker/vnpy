@@ -15,6 +15,7 @@ from pathlib import Path
 from datetime import datetime, timedelta
 from virtual_account import VirtualAccount, Position
 import random
+from logger import TaskLogger
 
 
 class DailyTrading:
@@ -203,28 +204,41 @@ class DailyTrading:
 
 
 def main():
-    print("=" * 70)
-    print(" " * 20 + "每日自动交易")
-    print("=" * 70)
-    print(f"当前时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print()
+    logger = TaskLogger(task_name='daily_trading')
+    start_time = datetime.now()
+    try:
+        logger.task_start()
+        logger.info("任务开始")
+        print("=" * 70)
+        print(" " * 20 + "每日自动交易")
+        print("=" * 70)
+        print(f"当前时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        print()
     
-    # 加载虚拟账户
-    account = VirtualAccount(
-        initial_capital=1000000,
-        account_id="virtual_2026"
-    )
+        # 加载虚拟账户
+        account = VirtualAccount(
+            initial_capital=1000000,
+            account_id="virtual_2026"
+        )
     
-    # 创建每日交易
-    daily_trading = DailyTrading(account)
+        # 创建每日交易
+        daily_trading = DailyTrading(account)
     
-    # 运行每日交易
-    # 可以指定日期，默认今天
-    daily_trading.run_daily()
+        # 运行每日交易
+        # 可以指定日期，默认今天
+        daily_trading.run_daily()
     
-    print()
-    print("✅ 每日交易完成")
-    print()
+        print()
+        print("✅ 每日交易完成")
+        print()
+
+    except Exception as e:
+        logger.task_failed(e)
+        logger.task_end(success=False)
+        raise
+    else:
+        duration = (datetime.now() - start_time).total_seconds()
+        logger.task_end(success=True, duration=duration)
 
 
 if __name__ == '__main__':

@@ -28,6 +28,7 @@ except ImportError:
     print("⚠️ akshare_patch_config 未找到，将使用原始 AKShare")
 
 import akshare as ak
+from logger import TaskLogger
 
 # ==================== Tushare Pro 配置 ====================
 
@@ -250,4 +251,34 @@ def download_all_news(stock_list: list = None):
 
 
 if __name__ == "__main__":
-    download_all_news()
+    from logger import TaskLogger
+    from datetime import datetime
+    
+    logger = TaskLogger(task_name='news_download')
+    start_time = datetime.now()
+    
+    try:
+        logger.task_start()
+        logger.info('任务开始执行')
+        logger = TaskLogger(task_name='news_download')
+        start_time = datetime.now()
+    
+        try:
+            logger.task_start()
+            logger.info("开始下载消息面数据")
+            download_all_news()
+            duration = (datetime.now() - start_time).total_seconds()
+            logger.task_end(success=True, duration=duration)
+            logger.info("消息面数据下载完成")
+        except Exception as e:
+            logger.task_failed(e)
+            logger.task_end(success=False)
+            raise
+
+    except Exception as e:
+        logger.task_failed(e)
+        logger.task_end(success=False)
+        raise
+    else:
+        duration = (datetime.now() - start_time).total_seconds()
+        logger.task_end(success=True, duration=duration)

@@ -5,6 +5,7 @@ import sys
 import json
 from pathlib import Path
 from datetime import datetime, timedelta
+from logger import TaskLogger
 
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -88,4 +89,21 @@ class GeopoliticsDataDownloader:
         print(f"  总计：{summary['total']} 条 (利好：{summary['positive_count']}, 利空：{summary['negative_count']})\n")
 
 if __name__ == '__main__':
-    GeopoliticsDataDownloader().download_all()
+    from logger import TaskLogger
+    from datetime import datetime
+    
+    logger = TaskLogger(task_name='geopolitics_download')
+    start_time = datetime.now()
+    
+    try:
+        logger.task_start()
+        logger.info('任务开始执行')
+        GeopoliticsDataDownloader().download_all()
+
+    except Exception as e:
+        logger.task_failed(e)
+        logger.task_end(success=False)
+        raise
+    else:
+        duration = (datetime.now() - start_time).total_seconds()
+        logger.task_end(success=True, duration=duration)

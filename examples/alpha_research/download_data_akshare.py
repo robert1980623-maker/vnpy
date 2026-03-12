@@ -29,6 +29,7 @@ import random
 import yaml
 import os
 import requests
+from logger import TaskLogger
 
 # ==================== 配置加载 ====================
 
@@ -593,90 +594,102 @@ def download_all_data(
 
 
 def main():
-    """主函数"""
-    import argparse
+    logger = TaskLogger(task_name='data_download')
+    start_time = datetime.now()
+    try:
+        import argparse
     
-    parser = argparse.ArgumentParser(description="下载股票数据（增强版）")
-    parser.add_argument("--index", type=str, default="000300", 
-                       help="指数代码 (默认：000300 沪深 300)")
-    parser.add_argument("--start", type=str, default=(datetime.now() - timedelta(days=30)).strftime("%Y%m%d"), help="开始日期 (默认：30 天前)")
-    parser.add_argument("--end", type=str, default=datetime.now().strftime("%Y%m%d"), help="结束日期 (默认：当天)")
-    parser.add_argument("--max", type=int, default=5,
-                       help="最大下载数量 (默认：5，小批量下载)")
-    parser.add_argument("--symbols", type=str, nargs='+',
-                       help="指定股票代码列表（覆盖 index 和 max 参数）")
-    parser.add_argument("--cache", type=str, default="./cache",
-                       help="缓存目录 (默认：./cache)")
-    parser.add_argument("--no-cache", action="store_true",
-                       help="不使用缓存")
-    parser.add_argument("--night-mode", action="store_true",
-                       help="夜间下载模式 (更长延迟，避免限流)")
+        parser = argparse.ArgumentParser(description="下载股票数据（增强版）")
+        parser.add_argument("--index", type=str, default="000300", 
+                           help="指数代码 (默认：000300 沪深 300)")
+        parser.add_argument("--start", type=str, default=(datetime.now() - timedelta(days=30)).strftime("%Y%m%d"), help="开始日期 (默认：30 天前)")
+        parser.add_argument("--end", type=str, default=datetime.now().strftime("%Y%m%d"), help="结束日期 (默认：当天)")
+        parser.add_argument("--max", type=int, default=5,
+                           help="最大下载数量 (默认：5，小批量下载)")
+        parser.add_argument("--symbols", type=str, nargs='+',
+                           help="指定股票代码列表（覆盖 index 和 max 参数）")
+        parser.add_argument("--cache", type=str, default="./cache",
+                           help="缓存目录 (默认：./cache)")
+        parser.add_argument("--no-cache", action="store_true",
+                           help="不使用缓存")
+        parser.add_argument("--night-mode", action="store_true",
+                           help="夜间下载模式 (更长延迟，避免限流)")
     
-    args = parser.parse_args()
+        args = parser.parse_args()
     
-    print("=" * 60)
-    print("下载股票数据（增强版）")
-    print("=" * 60)
+        logger.task_start()
+        logger.info("任务开始")
+        print("=" * 60)
+        print("下载股票数据（增强版）")
+        print("=" * 60)
     
-    # 设置参数
-    index_code = args.index
-    start_date = args.start
-    end_date = args.end
+        # 设置参数
+        index_code = args.index
+        start_date = args.start
+        end_date = args.end
     
-    # 支持指定股票代码列表
-    if args.symbols:
-        symbols = args.symbols
-        print(f"指定股票：{len(symbols)} 只")
-        print(f"  列表：{', '.join(symbols[:10])}{'...' if len(symbols) > 10 else ''}")
-        max_stocks = len(symbols)
-        components = symbols  # 使用指定的股票列表
+        # 支持指定股票代码列表
+        if args.symbols:
+            symbols = args.symbols
+            print(f"指定股票：{len(symbols)} 只")
+            print(f"  列表：{', '.join(symbols[:10])}{'...' if len(symbols) > 10 else ''}")
+            max_stocks = len(symbols)
+            components = symbols  # 使用指定的股票列表
+        else:
+            max_stocks = args.max
+        use_cache = not args.no_cache
+        cache_dir = args.cache
+        night_mode = args.night_mode
+    
+        if night_mode:
+            print("夜间模式：启用（更长延迟）")
+    
+        # 1. 获取成分股（如果未指定股票列表）
+        if not args.symbols:
+            components = download_index_components(index_code)
+            if not components:
+                print("获取成分股失败，使用示例股票")
+                components = ["000001.SZ", "000002.SZ", "600000.SH", "600036.SH", "600519.SH"]
+        # 如果指定了 symbols，components 已经在上面设置过了
+    
+        # 2. 下载数据
+        bars_dict, fundamental_dict = download_all_data(
+            components=components,
+            start_date=start_date,
+            end_date=end_date,
+            max_stocks=max_stocks,
+            use_cache=use_cache,
+            cache_dir=cache_dir
+        )
+    
+        # 3. 保存数据到输出目录
+        if bars_dict:
+            from pathlib import Path
+            data_dir = Path("./data/akshare")
+            data_dir.mkdir(parents=True, exist_ok=True)
+        
+            # 保存 K 线数据
+            bars_path = data_dir / "bars"
+            bars_path.mkdir(exist_ok=True)
+            for vt_symbol, df in bars_dict.items():
+                filepath = bars_path / f"{vt_symbol.replace('.', '_')}.csv"
+                df.to_csv(filepath, index=False)
+        
+            # 保存财务数据
+            fundamental_path = data_dir / "fundamental.json"
+            with open(fundamental_path, 'w', encoding='utf-8') as f:
+                json.dump(fundamental_dict, f, ensure_ascii=False, indent=2)
+        
+            print(f"\n数据已保存到 {data_dir}")
+            print(f"下一步：python run_backtest.py --data {data_dir}")
+
+    except Exception as e:
+        logger.task_failed(e)
+        logger.task_end(success=False)
+        raise
     else:
-        max_stocks = args.max
-    use_cache = not args.no_cache
-    cache_dir = args.cache
-    night_mode = args.night_mode
-    
-    if night_mode:
-        print("夜间模式：启用（更长延迟）")
-    
-    # 1. 获取成分股（如果未指定股票列表）
-    if not args.symbols:
-        components = download_index_components(index_code)
-        if not components:
-            print("获取成分股失败，使用示例股票")
-            components = ["000001.SZ", "000002.SZ", "600000.SH", "600036.SH", "600519.SH"]
-    # 如果指定了 symbols，components 已经在上面设置过了
-    
-    # 2. 下载数据
-    bars_dict, fundamental_dict = download_all_data(
-        components=components,
-        start_date=start_date,
-        end_date=end_date,
-        max_stocks=max_stocks,
-        use_cache=use_cache,
-        cache_dir=cache_dir
-    )
-    
-    # 3. 保存数据到输出目录
-    if bars_dict:
-        from pathlib import Path
-        data_dir = Path("./data/akshare")
-        data_dir.mkdir(parents=True, exist_ok=True)
-        
-        # 保存 K 线数据
-        bars_path = data_dir / "bars"
-        bars_path.mkdir(exist_ok=True)
-        for vt_symbol, df in bars_dict.items():
-            filepath = bars_path / f"{vt_symbol.replace('.', '_')}.csv"
-            df.to_csv(filepath, index=False)
-        
-        # 保存财务数据
-        fundamental_path = data_dir / "fundamental.json"
-        with open(fundamental_path, 'w', encoding='utf-8') as f:
-            json.dump(fundamental_dict, f, ensure_ascii=False, indent=2)
-        
-        print(f"\n数据已保存到 {data_dir}")
-        print(f"下一步：python run_backtest.py --data {data_dir}")
+        duration = (datetime.now() - start_time).total_seconds()
+        logger.task_end(success=True, duration=duration)
 
 
 if __name__ == "__main__":

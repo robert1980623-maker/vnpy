@@ -165,4 +165,36 @@ def generate_daily_review():
 
 
 if __name__ == '__main__':
-    generate_daily_review()
+    from logger import TaskLogger
+    from datetime import datetime
+    
+    logger = TaskLogger(task_name='daily_review')
+    start_time = datetime.now()
+    
+    try:
+        logger.task_start()
+        logger.info('任务开始执行')
+        from logger import TaskLogger
+        from datetime import datetime
+    
+        logger = TaskLogger(task_name='daily_review')
+        start_time = datetime.now()
+    
+        try:
+            logger.task_start()
+            logger.info("开始生成每日复盘报告")
+            generate_daily_review()
+            duration = (datetime.now() - start_time).total_seconds()
+            logger.task_end(success=True, duration=duration)
+        except Exception as e:
+            logger.task_failed(e)
+            logger.task_end(success=False)
+            raise
+
+    except Exception as e:
+        logger.task_failed(e)
+        logger.task_end(success=False)
+        raise
+    else:
+        duration = (datetime.now() - start_time).total_seconds()
+        logger.task_end(success=True, duration=duration)

@@ -23,6 +23,7 @@ sys.path.insert(0, str(project_root.parent.parent))
 from vnpy.alpha.dataset import StockPool, FundamentalData
 from stock_name_utils import StockNameCache, format_symbol_with_name
 from tushare_fundamental_fetcher import TushareFundamentalFetcher
+from logger import TaskLogger
 
 
 class DailyStockSelector:
@@ -212,41 +213,53 @@ class DailyStockSelector:
 
 def main():
     """主函数"""
-    print("=" * 70)
-    print(" " * 20 + "每日选股系统 v2")
-    print("=" * 70)
+    logger = TaskLogger(task_name='daily_stock_selection')
+    start_time = datetime.now()
     
-    selector = DailyStockSelector()
-    
-    # 步骤 1: 加载股票池
-    symbols = selector.load_stocks()
-    
-    # 步骤 2: 获取财务数据
-    fundamentals = selector.get_real_fundamentals(symbols)
-    
-    # 步骤 3: 多策略选股
-    selector.multi_strategy_selection(symbols, fundamentals, target_count=100)
-    
-    # 步骤 4: 生成交易计划
-    # 模拟当前持仓（实际应从虚拟账户读取）
-    current_holdings = ['600066.SH', '688169.SH', '000975.SZ']
-    selector.generate_trading_plan(current_holdings)
-    
-    # 步骤 5: 保存报告
-    selector.save_reports()
-    
-    print("\n" + "=" * 70)
-    print(" " * 20 + "完成")
-    print("=" * 70)
-    print(f"选股：{len(selector.selected_stocks)} 只")
-    print(f"买入：{len(selector.trading_plan['buy'])} 只")
-    print(f"卖出：{len(selector.trading_plan['sell'])} 只")
-    
-    print("\n下一步:")
-    print("  - 查看选股报告：cat reports/stock_selection_*.json")
-    print("  - 查看交易计划：cat reports/trading_plan_*.json")
-    print("  - 执行交易：python3 execute_trading.py")
+    try:
+        logger.task_start()
+        logger.info("任务开始执行")
+        print("=" * 70)
+        print(" " * 20 + "每日选股系统 v2")
+        print("=" * 70)
 
+        selector = DailyStockSelector()
+
+        # 步骤 1: 加载股票池
+        symbols = selector.load_stocks()
+
+        # 步骤 2: 获取财务数据
+        fundamentals = selector.get_real_fundamentals(symbols)
+
+        # 步骤 3: 多策略选股
+        selector.multi_strategy_selection(symbols, fundamentals, target_count=100)
+
+        # 步骤 4: 生成交易计划
+        # 模拟当前持仓（实际应从虚拟账户读取）
+        current_holdings = ['600066.SH', '688169.SH', '000975.SZ']
+        selector.generate_trading_plan(current_holdings)
+
+        # 步骤 5: 保存报告
+        selector.save_reports()
+
+        print("\n" + "=" * 70)
+        print(" " * 20 + "完成")
+        print("=" * 70)
+        print(f"选股：{len(selector.selected_stocks)} 只")
+        print(f"买入：{len(selector.trading_plan['buy'])} 只")
+        print(f"卖出：{len(selector.trading_plan['sell'])} 只")
+
+        print("\n下一步:")
+        print("  - 查看选股报告：cat reports/stock_selection_*.json")
+        print("  - 查看交易计划：cat reports/trading_plan_*.json")
+        print("  - 执行交易：python3 execute_trading.py")
+    except Exception as e:
+        logger.task_failed(e)
+        logger.task_end(success=False)
+        raise
+    else:
+        duration = (datetime.now() - start_time).total_seconds()
+        logger.task_end(success=True, duration=duration)
 
 if __name__ == '__main__':
     main()

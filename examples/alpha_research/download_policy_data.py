@@ -31,6 +31,7 @@ except ImportError:
     print("⚠️ akshare_patch_config 未找到")
 
 import akshare as ak
+from logger import TaskLogger
 
 
 class PolicyDataDownloader:
@@ -303,9 +304,22 @@ class PolicyDataDownloader:
 
 
 def main():
-    downloader = PolicyDataDownloader()
-    downloader.download_all()
-
+    """主函数"""
+    logger = TaskLogger(task_name='policy_download')
+    start_time = datetime.now()
+    
+    try:
+        logger.task_start()
+        logger.info("任务开始执行")
+        downloader = PolicyDataDownloader()
+        downloader.download_all()
+    except Exception as e:
+        logger.task_failed(e)
+        logger.task_end(success=False)
+        raise
+    else:
+        duration = (datetime.now() - start_time).total_seconds()
+        logger.task_end(success=True, duration=duration)
 
 if __name__ == '__main__':
     main()

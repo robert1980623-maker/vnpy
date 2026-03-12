@@ -17,6 +17,7 @@ import json
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Dict, List, Any
+from logger import TaskLogger
 
 
 class ComprehensiveAnalyzer:
@@ -449,26 +450,39 @@ class ComprehensiveAnalyzer:
 
 
 def main():
-    """测试分析器"""
-    print("=" * 70)
-    print(" " * 18 + "综合消息面分析器")
-    print("=" * 70)
+    logger = TaskLogger(task_name='comprehensive_analysis')
+    start_time = datetime.now()
+    try:
+        """测试分析器"""
+        logger.task_start()
+        logger.info("任务开始")
+        print("=" * 70)
+        print(" " * 18 + "综合消息面分析器")
+        print("=" * 70)
     
-    analyzer = ComprehensiveAnalyzer()
+        analyzer = ComprehensiveAnalyzer()
     
-    # 测试分析几只股票
-    test_stocks = [
-        {'symbol': '300750.SZ', 'fundamentals': {'pe': 19.68, 'roe': 19.94, 'profit_growth': 54.4}},
-        {'symbol': '601456.SH', 'fundamentals': {'pe': 18.5, 'roe': 16.2, 'profit_growth': 35.6}},
-        {'symbol': '600519.SH', 'fundamentals': {'pe': 22.3, 'roe': 28.5, 'profit_growth': 18.2}}
-    ]
+        # 测试分析几只股票
+        test_stocks = [
+            {'symbol': '300750.SZ', 'fundamentals': {'pe': 19.68, 'roe': 19.94, 'profit_growth': 54.4}},
+            {'symbol': '601456.SH', 'fundamentals': {'pe': 18.5, 'roe': 16.2, 'profit_growth': 35.6}},
+            {'symbol': '600519.SH', 'fundamentals': {'pe': 22.3, 'roe': 28.5, 'profit_growth': 18.2}}
+        ]
     
-    results = analyzer.analyze_multiple_stocks(test_stocks)
-    analyzer.save_report(results)
+        results = analyzer.analyze_multiple_stocks(test_stocks)
+        analyzer.save_report(results)
     
-    print("\n" + "=" * 70)
-    print(" " * 20 + "分析完成")
-    print("=" * 70)
+        print("\n" + "=" * 70)
+        print(" " * 20 + "分析完成")
+        print("=" * 70)
+
+    except Exception as e:
+        logger.task_failed(e)
+        logger.task_end(success=False)
+        raise
+    else:
+        duration = (datetime.now() - start_time).total_seconds()
+        logger.task_end(success=True, duration=duration)
 
 
 if __name__ == '__main__':
