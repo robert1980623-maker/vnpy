@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-每日选股和交易计划生成
+每日选股和交易计划生成 (v2 - 使用真实 Tushare 数据)
 
 功能:
-1. 多策略选股 (100 只)
+1. 多策略选股 (使用真实财务数据)
 2. 生成交易计划
 3. 发送钉钉通知
 4. 保存选股报告
@@ -22,6 +22,7 @@ sys.path.insert(0, str(project_root.parent.parent))
 
 from vnpy.alpha.dataset import StockPool, FundamentalData
 from stock_name_utils import StockNameCache, format_symbol_with_name
+from tushare_fundamental_fetcher import TushareFundamentalFetcher
 
 
 class DailyStockSelector:
@@ -38,6 +39,8 @@ class DailyStockSelector:
         }
         # 加载股票名称缓存
         self.name_cache = StockNameCache()
+        # 初始化 Tushare 财务数据获取器
+        self.fundamental_fetcher = TushareFundamentalFetcher()
         
     def load_stocks(self):
         """加载股票池"""
@@ -46,20 +49,13 @@ class DailyStockSelector:
         print(f"✅ 加载股票池：{len(symbols)} 只股票")
         return symbols
         
-    def generate_mock_fundamentals(self, symbols):
-        """生成模拟财务数据 (实际应从数据库获取)"""
-        fundamentals = {}
+    def get_real_fundamentals(self, symbols):
+        """从 Tushare 获取真实财务数据"""
+        print("\n" + "=" * 70)
+        print(" " * 20 + "获取财务数据 (Tushare)")
+        print("=" * 70)
         
-        for symbol in symbols:
-            # 生成合理范围的财务指标
-            fundamentals[symbol] = {
-                'pe': random.uniform(5, 50),
-                'roe': random.uniform(5, 25),
-                'dividend_yield': random.uniform(0.5, 6),
-                'revenue_growth': random.uniform(-10, 50),
-                'profit_growth': random.uniform(-20, 60),
-            }
-        
+        fundamentals = self.fundamental_fetcher.get_batch_fundamentals(symbols)
         return fundamentals
         
     def multi_strategy_selection(self, symbols, fundamentals, target_count=100):
@@ -68,104 +64,111 @@ class DailyStockSelector:
         print(" " * 20 + "多策略选股")
         print("=" * 70)
         
-        selected = {}  # {symbol: {'strategies': [], 'score': 0, 'reasons': []}}
-        
         for symbol in symbols:
             data = fundamentals.get(symbol, {})
+            
+            # 跳过数据不完整的股票
+            if not data.get('pe') or not data.get('roe'):
+                continue
+            
             strategies = []
             reasons = []
-            score = 0
             
             # 策略 1: 价值股 (PE<20, ROE>10%, 股息率>2%)
             if data.get('pe', 100) < 20 and data.get('roe', 0) > 10 and data.get('dividend_yield', 0) > 2:
                 strategies.append('价值')
                 reasons.append(f"PE={data['pe']:.1f}, ROE={data['roe']:.1f}%, 股息率={data['dividend_yield']:.1f}%")
-                score += 3
             
             # 策略 2: 成长股 (营收增长>25%, 利润增长>30%)
             if data.get('revenue_growth', 0) > 25 and data.get('profit_growth', 0) > 30:
                 strategies.append('成长')
                 reasons.append(f"营收增长={data['revenue_growth']:.1f}%, 利润增长={data['profit_growth']:.1f}%")
-                score += 3
             
             # 策略 3: 质量股 (ROE>15%)
             if data.get('roe', 0) > 15:
                 strategies.append('质量')
                 reasons.append(f"ROE={data['roe']:.1f}%")
-                score += 2
             
-            # 策略 4: 高股息 (股息率>3%)
+            # 策略 4: 高息股 (股息率>3%)
             if data.get('dividend_yield', 0) > 3:
                 strategies.append('高息')
                 reasons.append(f"股息率={data['dividend_yield']:.1f}%")
-                score += 2
             
+            # 计算评分
+            score = len(strategies) * 2
+            if len(strategies) >= 3:
+                score += 1
+            if len(strategies) == 4:
+                score += 1
+            
+            # 如果满足至少一个策略，加入候选
             if strategies:
-                selected[symbol] = {
+                self.selected_stocks.append((symbol, {
                     'strategies': strategies,
-                    'score': score,
                     'reasons': reasons,
+                    'score': score,
                     'fundamentals': data
-                }
+                }))
         
-        # 按得分排序，选出 Top 100
-        sorted_stocks = sorted(selected.items(), key=lambda x: x[1]['score'], reverse=True)
-        top_100 = sorted_stocks[:target_count]
+        # 按评分排序
+        self.selected_stocks.sort(key=lambda x: x[1]['score'], reverse=True)
         
-        print(f"\n总匹配：{len(selected)} 只")
-        print(f"选出：{len(top_100)} 只")
-        print()
+        # 限制数量
+        if len(self.selected_stocks) > target_count:
+            self.selected_stocks = self.selected_stocks[:target_count]
         
-        # 统计策略分布
-        strategy_dist = {}
-        for symbol, data in top_100:
-            for s in data['strategies']:
-                strategy_dist[s] = strategy_dist.get(s, 0) + 1
+        print(f"\n✅ 选股完成：{len(self.selected_stocks)} 只")
         
-        print("策略分布:")
-        for strategy, count in sorted(strategy_dist.items()):
-            print(f"  {strategy}: {count} 只")
+        # 显示前 10 只
+        print("\n🏆 Top 10:")
+        for i, (symbol, data) in enumerate(self.selected_stocks[:10], 1):
+            name = self.name_cache.get_name(symbol)
+            strategies_str = '+'.join(data['strategies'])
+            pe = data['fundamentals'].get('pe', 'N/A')
+            roe = data['fundamentals'].get('roe', 'N/A')
+            print(f"  {i}. {symbol} {name} - {strategies_str} (评分：{data['score']}, PE={pe}, ROE={roe}%)")
         
-        self.selected_stocks = top_100
-        return top_100
-        
+        return self.selected_stocks
+    
     def generate_trading_plan(self, current_holdings=None):
         """生成交易计划"""
-        if current_holdings is None:
-            current_holdings = []
-        
         print("\n" + "=" * 70)
         print(" " * 20 + "生成交易计划")
         print("=" * 70)
         
-        # 从 100 只中选出 20-30 只作为目标持仓
-        target_count = min(25, len(self.selected_stocks))
-        target_holdings = [s[0] for s in self.selected_stocks[:target_count]]
+        if current_holdings is None:
+            current_holdings = []
         
-        # 计算买卖信号
-        buy_list = [s for s in target_holdings if s not in current_holdings]
-        sell_list = [s for s in current_holdings if s not in target_holdings]
-        hold_list = [s for s in target_holdings if s in current_holdings]
+        # 目标持仓：选股结果中的股票
+        target_symbols = set([s[0] for s in self.selected_stocks[:20]])  # 前 20 只
         
-        self.trading_plan = {
-            'date': datetime.now().strftime('%Y-%m-%d'),
-            'time': datetime.now().strftime('%H:%M:%S'),
-            'buy': buy_list[:15],  # 最多 15 只
-            'sell': sell_list,
-            'hold': hold_list,
-            'total_selected': len(self.selected_stocks),
-            'target_positions': target_count
-        }
+        # 计算调仓
+        buy_list = [s for s in target_symbols if s not in current_holdings]
+        sell_list = [s for s in current_holdings if s not in target_symbols]
+        hold_list = [s for s in current_holdings if s in target_symbols]
         
-        print(f"\n目标持仓：{target_count} 只")
-        print(f"买入：{len(buy_list)} 只")
-        print(f"卖出：{len(sell_list)} 只")
-        print(f"持有：{len(hold_list)} 只")
+        self.trading_plan['buy'] = list(buy_list)[:10]  # 最多买入 10 只
+        self.trading_plan['sell'] = list(sell_list)[:10]  # 最多卖出 10 只
+        self.trading_plan['hold'] = list(hold_list)
+        
+        print(f"\n买入：{len(self.trading_plan['buy'])} 只")
+        for symbol in self.trading_plan['buy'][:5]:
+            name = self.name_cache.get_name(symbol)
+            print(f"  - {symbol} {name}")
+        if len(self.trading_plan['buy']) > 5:
+            print(f"  ... 还有 {len(self.trading_plan['buy']) - 5} 只")
+        
+        print(f"\n卖出：{len(self.trading_plan['sell'])} 只")
+        for symbol in self.trading_plan['sell'][:5]:
+            name = self.name_cache.get_name(symbol)
+            print(f"  - {symbol} {name}")
+        if len(self.trading_plan['sell']) > 5:
+            print(f"  ... 还有 {len(self.trading_plan['sell']) - 5} 只")
         
         return self.trading_plan
-        
-    def save_report(self, output_dir='reports'):
-        """保存选股报告"""
+    
+    def save_reports(self, output_dir: str = './reports'):
+        """保存选股报告和交易计划"""
         output_path = Path(output_dir)
         output_path.mkdir(parents=True, exist_ok=True)
         
@@ -187,6 +190,8 @@ class DailyStockSelector:
                 'pe': round(data['fundamentals'].get('pe', 0), 2),
                 'roe': round(data['fundamentals'].get('roe', 0), 2),
                 'dividend_yield': round(data['fundamentals'].get('dividend_yield', 0), 2),
+                'revenue_growth': round(data['fundamentals'].get('revenue_growth', 0), 2),
+                'profit_growth': round(data['fundamentals'].get('profit_growth', 0), 2),
             }
             selection_report['stocks'].append(stock_info)
         
@@ -203,95 +208,44 @@ class DailyStockSelector:
         print(f"\n✅ 报告已保存:")
         print(f"   选股报告：{selection_file}")
         print(f"   交易计划：{plan_file}")
-        
-        return selection_file, plan_file
-        
-    def print_top_stocks(self, top_n=10):
-        """打印前 N 只股票 (带名称)"""
-        print("\n" + "=" * 70)
-        print(f" " * 18 + f"Top {top_n} 股票")
-        print("=" * 70)
-        print(f"{'排名':<4} {'代码':<16} {'名称':<12} {'得分':<6} {'策略':<20} {'原因':<40}")
-        print("-" * 70)
-        
-        for i, (symbol, data) in enumerate(self.selected_stocks[:top_n], 1):
-            name = self.name_cache.get_name(symbol) or ''
-            strategies = ', '.join(data['strategies'])
-            reason = data['reasons'][0] if data['reasons'] else ''
-            if len(reason) > 38:
-                reason = reason[:35] + '...'
-            
-            print(f"{i:<4} {symbol:<16} {name:<12} {data['score']:<6} {strategies:<20} {reason:<40}")
 
 
 def main():
+    """主函数"""
     print("=" * 70)
-    print(" " * 15 + "每日选股和交易计划")
+    print(" " * 20 + "每日选股系统 v2")
     print("=" * 70)
-    print(f"日期：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print()
     
-    # 创建选股器
     selector = DailyStockSelector()
     
-    # 1. 加载股票池
-    print("【步骤 1】加载股票池...")
+    # 步骤 1: 加载股票池
     symbols = selector.load_stocks()
     
-    # 2. 生成财务数据
-    print("\n【步骤 2】生成财务数据...")
-    fundamentals = selector.generate_mock_fundamentals(symbols)
+    # 步骤 2: 获取财务数据
+    fundamentals = selector.get_real_fundamentals(symbols)
     
-    # 3. 多策略选股
-    print("\n【步骤 3】多策略选股...")
+    # 步骤 3: 多策略选股
     selector.multi_strategy_selection(symbols, fundamentals, target_count=100)
     
-    # 4. 打印 Top 10 (带名称)
-    selector.print_top_stocks(top_n=10)
+    # 步骤 4: 生成交易计划
+    # 模拟当前持仓（实际应从虚拟账户读取）
+    current_holdings = ['600066.SH', '688169.SH', '000975.SZ']
+    selector.generate_trading_plan(current_holdings)
     
-    # 5. 生成交易计划
-    print("\n【步骤 4】生成交易计划...")
-    # 模拟当前持仓 (实际应从交易系统获取)
-    current_holdings = random.sample([s[0] for s in selector.selected_stocks], min(10, len(selector.selected_stocks)))
-    plan = selector.generate_trading_plan(current_holdings)
+    # 步骤 5: 保存报告
+    selector.save_reports()
     
-    # 6. 打印交易计划 (带名称)
-    print("\n" + "=" * 70)
-    print(" " * 20 + "交易计划")
-    print("=" * 70)
-    
-    print(f"\n买入 ({len(plan['buy'])}只):")
-    for symbol in plan['buy'][:5]:
-        symbol_with_name = format_symbol_with_name(symbol)
-        print(f"  - {symbol_with_name}")
-    if len(plan['buy']) > 5:
-        print(f"  ... 还有 {len(plan['buy']) - 5} 只")
-    
-    print(f"\n卖出 ({len(plan['sell'])}只):")
-    for symbol in plan['sell'][:5]:
-        symbol_with_name = format_symbol_with_name(symbol)
-        print(f"  - {symbol_with_name}")
-    if len(plan['sell']) > 5:
-        print(f"  ... 还有 {len(plan['sell']) - 5} 只")
-    
-    # 7. 保存报告
-    print("\n【步骤 5】保存报告...")
-    selector.save_report()
-    
-    # 8. 总结
     print("\n" + "=" * 70)
     print(" " * 20 + "完成")
     print("=" * 70)
     print(f"选股：{len(selector.selected_stocks)} 只")
-    print(f"买入：{len(plan['buy'])} 只")
-    print(f"卖出：{len(plan['sell'])} 只")
-    print()
-    print("下一步:")
+    print(f"买入：{len(selector.trading_plan['buy'])} 只")
+    print(f"卖出：{len(selector.trading_plan['sell'])} 只")
+    
+    print("\n下一步:")
     print("  - 查看选股报告：cat reports/stock_selection_*.json")
     print("  - 查看交易计划：cat reports/trading_plan_*.json")
-    print("  - 发送通知：python3 send_notification.py")
     print("  - 执行交易：python3 execute_trading.py")
-    print()
 
 
 if __name__ == '__main__':
