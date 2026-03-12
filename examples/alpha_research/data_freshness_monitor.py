@@ -81,13 +81,21 @@ class DataFreshnessMonitor:
         for csv_file in csv_files:
             symbol = csv_file.stem.replace('_', '.')
             
-            # 读取最后一行获取最新日期
-            with open(csv_file, 'r', encoding='utf-8') as f:
-                lines = f.readlines()
-                if len(lines) < 2:
+            # 读取最后一行获取最新日期 (优化：使用 tail 命令)
+            import subprocess
+            try:
+                result = subprocess.run(
+                    ['tail', '-1', str(csv_file)],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                if result.returncode == 0 and result.stdout.strip():
+                    last_line = result.stdout.strip().split(',')
+                else:
                     continue
-                
-                last_line = lines[-1].strip().split(',')
+            except:
+                continue
                 if len(last_line) >= 2:
                     data_date = last_line[1]  # datetime 列
                     
