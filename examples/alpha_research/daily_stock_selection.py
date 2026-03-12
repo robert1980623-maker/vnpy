@@ -76,7 +76,7 @@ class DailyStockSelector:
             reasons = []
             
             # 策略 1: 价值股 (PE<20, ROE>10%, 股息率>2%)
-            if data.get('pe', 100) < 20 and data.get('roe', 0) > 10 and data.get('dividend_yield', 0) > 2:
+            if data.get('pe', 100) < 20 and data.get('roe', 0) > 10 and (data.get('dividend_yield') or 0) > 2:
                 strategies.append('价值')
                 reasons.append(f"PE={data['pe']:.1f}, ROE={data['roe']:.1f}%, 股息率={data['dividend_yield']:.1f}%")
             
@@ -91,7 +91,7 @@ class DailyStockSelector:
                 reasons.append(f"ROE={data['roe']:.1f}%")
             
             # 策略 4: 高息股 (股息率>3%)
-            if data.get('dividend_yield', 0) > 3:
+            if (data.get('dividend_yield') or 0) > 3:
                 strategies.append('高息')
                 reasons.append(f"股息率={data['dividend_yield']:.1f}%")
             

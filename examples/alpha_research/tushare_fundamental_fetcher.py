@@ -107,8 +107,11 @@ class TushareFundamentalFetcher:
             return cached
         
         try:
-            date = trade_date or datetime.now().strftime('%Y%m%d')
-            df = self.pro.daily_basic(ts_code=symbol, trade_date=date)
+            # 不指定日期时获取最新数据
+            if trade_date:
+                df = self.pro.daily_basic(ts_code=symbol, trade_date=trade_date)
+            else:
+                df = self.pro.daily_basic(ts_code=symbol)  # 获取最新数据
             
             if df is not None and len(df) > 0:
                 data = {
