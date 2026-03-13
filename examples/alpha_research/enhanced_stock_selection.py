@@ -131,7 +131,7 @@ class EnhancedStockSelector:
             print(f"⚠️ 综合分析失败：{e}")
             return []
     
-    def multi_strategy_selection(self, symbols, fundamentals, target_count=100):
+    def multi_strategy_selection(self, symbols, fundamentals, target_count=10):
         """多策略选股（整合四大维度）"""
         print("\n" + "="*70)
         print("🏆 多策略选股")
@@ -247,7 +247,7 @@ class EnhancedStockSelector:
         
         return report
     
-    def run(self, target_count=100):
+    def run(self, target_count=10):
         """运行完整选股流程"""
         print("\n" + "="*70)
         print(f"🚀 增强版选股系统 - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -293,4 +293,4 @@ class EnhancedStockSelector:
 
 if __name__ == '__main__':
     selector = EnhancedStockSelector()
-    selector.run(target_count=100)
+    selector.run(target_count=10)

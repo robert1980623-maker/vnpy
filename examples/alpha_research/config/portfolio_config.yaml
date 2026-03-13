@@ -1,0 +1,33 @@
+# 持仓配置
+
+# 目标持仓数量
+target_positions:
+  min: 5          # 最少持仓数
+  max: 10         # 最多持仓数
+  optimal: 8      # 最优持仓数
+
+# 现金比例
+cash_ratio:
+  min: 0.05       # 最少 5%
+  max: 0.10       # 最多 10%
+  optimal: 0.08   # 最优 8%
+
+# 单只股票限制
+single_position:
+  max_percent: 0.25    # 单只最大 25%
+  min_percent: 0.05    # 单只最小 5%
+
+# 行业集中度
+industry_concentration:
+  max_percent: 0.30    # 单行业最大 30%
+
+# 选股策略
+stock_selection:
+  target_count: 10     # 选股数量 (略多于目标持仓，用于筛选)
+  reserve_count: 5     #  reserve 股票数量
+
+# 调仓策略
+rebalancing:
+  enabled: true
+  frequency: daily     # 每日调仓
+  max_turnover: 0.20   # 最大换手率 20%

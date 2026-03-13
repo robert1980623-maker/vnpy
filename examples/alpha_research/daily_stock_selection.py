@@ -59,7 +59,7 @@ class DailyStockSelector:
         fundamentals = self.fundamental_fetcher.get_batch_fundamentals(symbols)
         return fundamentals
         
-    def multi_strategy_selection(self, symbols, fundamentals, target_count=100):
+    def multi_strategy_selection(self, symbols, fundamentals, target_count=10):
         """多策略选股"""
         print("\n" + "=" * 70)
         print(" " * 20 + "多策略选股")
@@ -232,7 +232,7 @@ def main():
         fundamentals = selector.get_real_fundamentals(symbols)
 
         # 步骤 3: 多策略选股
-        selector.multi_strategy_selection(symbols, fundamentals, target_count=100)
+        selector.multi_strategy_selection(symbols, fundamentals, target_count=10)
 
         # 步骤 4: 生成交易计划
         # 模拟当前持仓（实际应从虚拟账户读取）
