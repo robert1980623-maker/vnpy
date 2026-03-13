@@ -1,0 +1,30 @@
+# 性能监控配置
+
+# 告警阈值
+thresholds:
+  max_execution_time: 300      # 最大执行时间 (秒)
+  max_api_latency: 5000        # 最大 API 延迟 (毫秒)
+  max_error_rate: 0.05         # 最大错误率 (5%)
+  min_success_rate: 0.95       # 最小成功率 (95%)
+
+# 监控指标
+metrics:
+  - task_execution_time        # 任务执行时间
+  - api_response_latency       # API 响应延迟
+  - error_rate                 # 错误率
+  - success_rate               # 成功率
+  - memory_usage              # 内存使用
+
+# 报告配置
+report:
+  default_days: 1             # 默认统计天数
+  max_days: 30                # 最大统计天数
+  auto_generate: true         # 自动生成日报
+
+# 告警配置
+alerts:
+  enabled: true               # 启用告警
+  channels:                   # 告警渠道
+    - log                     # 日志文件
+    - console                 # 控制台
+  # - slack                   # Slack (可选)

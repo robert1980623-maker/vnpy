@@ -120,17 +120,27 @@ class DailyTrading:
         
         # 执行卖出
         for trade in sell_list:
-            revenue = trade['price'] * trade['volume']
-            total_revenue += revenue
-            self.account.sell(trade['symbol'], trade['price'], trade['volume'], self.today, trade['reason'])
-            print(f"  卖出 {trade['symbol']} {trade['volume']}股 @ {trade['price']:.2f} ({trade['reason']})")
+            # 检查是否已经卖出
+            if not any(t.symbol == trade['symbol'] and t.direction == 'sell' and t.datetime == self.today 
+                      for t in self.account.trades):
+                revenue = trade['price'] * trade['volume']
+                total_revenue += revenue
+                self.account.sell(trade['symbol'], trade['price'], trade['volume'], self.today, trade['reason'])
+                print(f"  卖出 {trade['symbol']} {trade['volume']}股 @ {trade['price']:.2f} ({trade['reason']})")
+            else:
+                print(f"  ⚠️  {trade['symbol']} 今日已卖出，跳过")
         
         # 执行买入
         for trade in buy_list:
-            cost = trade['price'] * trade['volume']
-            total_cost += cost
-            self.account.buy(trade['symbol'], trade['price'], trade['volume'], self.today, trade['reason'])
-            print(f"  买入 {trade['symbol']} {trade['volume']}股 @ {trade['price']:.2f} ({trade['reason']})")
+            # 检查是否已经买入
+            if not any(t.symbol == trade['symbol'] and t.direction == 'buy' and t.datetime == self.today 
+                      for t in self.account.trades):
+                cost = trade['price'] * trade['volume']
+                total_cost += cost
+                self.account.buy(trade['symbol'], trade['price'], trade['volume'], self.today, trade['reason'])
+                print(f"  买入 {trade['symbol']} {trade['volume']}股 @ {trade['price']:.2f} ({trade['reason']})")
+            else:
+                print(f"  ⚠️  {trade['symbol']} 今日已买入，跳过")
         
         print(f"\n  交易成本: ¥{total_cost:.2f}")
         print(f"  交易收入: ¥{total_revenue:.2f}")

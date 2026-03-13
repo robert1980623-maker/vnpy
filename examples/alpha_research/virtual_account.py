@@ -32,6 +32,7 @@ class Position:
     market_value: float = 0.0
     profit: float = 0.0
     profit_rate: float = 0.0
+    score: float = 0.0
 
 
 @dataclass
