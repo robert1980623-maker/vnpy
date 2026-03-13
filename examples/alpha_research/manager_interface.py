@@ -295,3 +295,105 @@ if __name__ == '__main__':
     # 获取状态
     status = manager.get_status()
     print(f"\nManager 状态：{status}")
+
+    def check_and_process_issues(self):
+        """自动检查并处理问题队列"""
+        print("\n" + "="*70)
+        print(" " * 20 + "Manager 检查问题队列")
+        print("="*70)
+        
+        # 获取待处理问题
+        pending = self.issue_queue.get_pending_issues()
+        
+        if not pending:
+            print("\n✅ 无待处理问题")
+            return
+        
+        print(f"\n发现 {len(pending)} 个待处理问题:")
+        
+        for issue in pending:
+            print(f"\n📌 {issue.id}")
+            print(f"   Agent: {issue.agent}")
+            print(f"   严重性：{issue.severity}")
+            print(f"   类型：{issue.error_type}")
+            print(f"   消息：{issue.error_message[:50]}...")
+            
+            # 分析问题类型并调度
+            if issue.error_type in ['missing', 'stale_data', 'data_quality']:
+                print(f"   → 调度数据更新 Agent")
+                self._dispatch_to_data_agent(issue)
+            elif issue.error_type in ['TypeError', 'KeyError', 'AttributeError']:
+                print(f"   → 调度 Delta 工程师")
+                self._dispatch_to_delta(issue)
+            else:
+                print(f"   → 记录待处理")
+    
+    def _dispatch_to_data_agent(self, issue):
+        """调度数据更新 Agent"""
+        try:
+            # 更新问题状态为处理中
+            self.issue_queue.update_status(
+                issue.id,
+                'processing',
+                assigned_to='data_agent',
+                resolution='已调度数据更新 Agent'
+            )
+            
+            # 触发数据更新脚本
+            import subprocess
+            result = subprocess.run(
+                ['python3', 'stale_data_updater.py', '--auto'],
+                cwd=Path('.'),
+                capture_output=True,
+                text=True,
+                timeout=600
+            )
+            
+            if result.returncode == 0:
+                # 更新问题为已解决
+                self.issue_queue.update_status(
+                    issue.id,
+                    'resolved',
+                    resolution='数据已更新'
+                )
+                print(f"   ✅ 数据更新完成")
+            else:
+                print(f"   ⚠️ 数据更新失败：{result.stderr[:100]}")
+                
+        except Exception as e:
+            print(f"   ❌ 调度失败：{e}")
+    
+    def _dispatch_to_delta(self, issue):
+        """调度 Delta 工程师"""
+        try:
+            # 更新问题状态
+            self.issue_queue.update_status(
+                issue.id,
+                'processing',
+                assigned_to='delta',
+                resolution='已调度 Delta 工程师'
+            )
+            
+            # 写入 Delta 任务队列
+            delta_task_file = Path('./issues/processing/delta_tasks.json')
+            tasks = []
+            if delta_task_file.exists():
+                with open(delta_task_file, 'r', encoding='utf-8') as f:
+                    tasks = json.load(f)
+            
+            tasks.append({
+                'issue_id': issue.id,
+                'error_type': issue.error_type,
+                'error_message': issue.error_message,
+                'priority': 'high' if issue.severity == 'P0' else 'normal',
+                'assigned_at': datetime.now().isoformat(),
+                'status': 'pending'
+            })
+            
+            with open(delta_task_file, 'w', encoding='utf-8') as f:
+                json.dump(tasks, f, ensure_ascii=False, indent=2)
+            
+            print(f"   ✅ 已写入 Delta 任务队列")
+            
+        except Exception as e:
+            print(f"   ❌ 调度失败：{e}")

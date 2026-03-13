@@ -306,7 +306,32 @@ class DataValidator:
         
         # 保存告警
         self._save_alert(alert)
+        
+        # 🔴 严重告警上报 Manager
+        if severity in ['P0', 'P1']:
+            self._report_to_manager(alert)
     
+
+    def _report_to_manager(self, alert: DataQualityAlert):
+        """上报严重告警到 Manager"""
+        try:
+            from issue_queue import IssueQueue
+            queue = IssueQueue()
+            
+            # 创建问题
+            issue = queue.create_issue(
+                agent='data_validator',
+                severity=alert.severity,
+                error_type=alert.alert_type,
+                error_message=f"{alert.symbol}: {alert.message}"
+            )
+            issue_id = queue.write_issue(issue)
+            
+            print(f"✅ 已上报 Manager: {alert.symbol} - {alert.message} (Issue: {issue_id})")
+            
+        except Exception as e:
+            print(f"⚠️ 上报 Manager 失败：{e}")
+
     def _save_alert(self, alert: DataQualityAlert):
         """保存告警"""
         alert_file = self.alert_dir / f'alerts_{datetime.now().strftime("%Y-%m-%d")}.jsonl'
@@ -403,3 +428,62 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+
+# 选股前验证模式
+def validate_pre_stock_selection():
+    """选股前验证"""
+    print("\n" + "="*70)
+    print(" " * 20 + "选股前数据验证")
+    print("="*70)
+    
+    # 验证所有持仓
+    report = validate_all_positions()
+    
+    # 判断是否可以通过
+    summary = report['summary']
+    
+    print(f"\n{'='*70}")
+    print(" 验证结果:")
+    print(f"{'='*70}")
+    
+    if summary['error'] > 0:
+        print(f"❌ 发现 {summary['error']} 只股票数据错误")
+        print("⚠️  建议：暂停选股，先修复数据问题")
+        return False
+    
+    elif summary['warning'] > 0:
+        print(f"⚠️  发现 {summary['warning']} 只股票数据警告")
+        if summary['warning'] > len(summary) * 0.3:  # 超过 30% 有警告
+            print("⚠️  警告比例过高，建议延迟选股")
+            return False
+        else:
+            print("✅  警告在可接受范围内，可以继续选股")
+            return True
+    
+    else:
+        print(f"✅ 所有 {summary['ok']} 只股票数据正常")
+        print("✅ 可以通过选股验证")
+        return True
+
+
+if __name__ == '__main__':
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='数据验证器')
+    parser.add_argument('--validate', action='store_true', help='验证持仓数据')
+    parser.add_argument('--pre-stock', action='store_true', help='选股前验证模式')
+    parser.add_argument('--symbol', type=str, help='验证指定股票')
+    parser.add_argument('--report', action='store_true', help='生成报告')
+    
+    args = parser.parse_args()
+    
+    validator = DataValidator()
+    
+    if args.validate and args.pre_stock:
+        # 选股前验证模式
+        success = validate_pre_stock_selection()
+        exit(0 if success else 1)
+    elif args.validate:
+        validator.validate_all_positions()
+    # ... 其他参数处理
