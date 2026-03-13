@@ -20,6 +20,20 @@ import requests
 
 
 class RealtimeMonitor:
+    @staticmethod
+    def parse_date(date_str):
+        """解析日期，支持多种格式"""
+        if not date_str:
+            return None
+        # Try common formats
+        for fmt in ['%Y-%m-%d', '%Y%m%d', '%Y/%m/%d']:
+            try:
+                return datetime.strptime(date_str, fmt)
+            except ValueError:
+                continue
+        # If all fail, return None
+        return None
+
     """实时监控系统"""
     
     def __init__(self, account_file: str = './accounts/virtual_2026_account.json'):
@@ -57,14 +71,34 @@ class RealtimeMonitor:
                     lines = f.readlines()
                     if len(lines) > 1:
                         last_line = lines[-1].strip().split(',')
+                        # Handle different CSV formats
+                        # Format 1: vt_symbol,datetime,open,high,low,close,volume,turnover
+                        # Format 2: date,open,high,low,close,volume
                         if len(last_line) >= 5:
-                            price_date = last_line[1]
-                            price = float(last_line[4])
-                            prices[symbol] = {
-                                'price': price,
-                                'date': price_date,
-                                'is_latest': price_date == today
-                            }
+                            # Try to find the date field (could be at index 0 or 1)
+                            price_date = None
+                            for i in range(min(2, len(last_line))):
+                                # Check if this field looks like a date
+                                try:
+                                    # Try parsing as date
+                                    datetime.strptime(last_line[i], '%Y-%m-%d')
+                                    price_date = last_line[i]
+                                    break
+                                except ValueError:
+                                    try:
+                                        datetime.strptime(last_line[i], '%Y%m%d')
+                                        price_date = last_line[i]
+                                        break
+                                    except ValueError:
+                                        continue
+                            
+                            if price_date:
+                                price = float(last_line[4])
+                                prices[symbol] = {
+                                    'price': price,
+                                    'date': price_date,
+                                    'is_latest': price_date == today
+                                }
         
         return prices
     
@@ -82,9 +116,9 @@ class RealtimeMonitor:
                 stale_data.append({
                     'symbol': symbol,
                     'last_date': data['date'],
-                    'days_old': (datetime.now() - datetime.strptime(data['date'], '%Y-%m-%d')).days
+                    'days_old': (datetime.now() - RealtimeMonitor.parse_date(data['date'])).days
                 })
-                print(f"  ⚠️ {symbol}: 数据滞后 {data['date']} ({(datetime.now() - datetime.strptime(data['date'], '%Y-%m-%d')).days} 天)")
+                print(f"  ⚠️ {symbol}: 数据滞后 {data['date']} ({(datetime.now() - RealtimeMonitor.parse_date(data['date'])).days} 天)")
         
         if not stale_data:
             print(f"  ✅ 所有数据均为最新 ({today})")
