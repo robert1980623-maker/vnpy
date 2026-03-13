@@ -26,18 +26,25 @@ class AgentHealthChecker:
         self.health_dir.mkdir(parents=True, exist_ok=True)
         
         # 关键 Agent 列表
-        self.critical_agents = [
-            '每日选股',
-            '虚拟账户 - 每日自动交易',
-            '每日复盘',
-            '数据下载',
-            '首席风险官 (CRO)',
-            '止盈止损执行 Agent',
-        ]
+        self.critical_agents_keywords = {
+            '每日选股': ['每日选股', '选股'],
+            '虚拟账户交易': ['虚拟账户', '自动交易', '每日交易'],
+            '每日复盘': ['每日复盘', '复盘'],
+            '数据下载': ['数据下载', '下载'],
+            '首席风险官': ['首席风险官', 'CRO', '风险官'],
+            '止盈止损执行': ['止盈止损执行', '止损执行'],
+        }
         
         # 健康阈值
         self.max_consecutive_errors = 3
         self.max_delay_minutes = 60
+    
+    def _is_critical_agent(self, name: str) -> bool:
+        """检查是否是关键 Agent (使用关键词模糊匹配)"""
+        for keywords in self.critical_agents_keywords.values():
+            if any(kw in name for kw in keywords):
+                return True
+        return False
     
     def get_cron_status(self) -> List[Dict]:
         """获取 cron 任务状态"""
@@ -112,12 +119,12 @@ class AgentHealthChecker:
                 'status': status,
                 'last_run': last_run,
                 'last_run_dt': last_run_dt.isoformat() if last_run_dt else None,
-                'is_critical': name in self.critical_agents
+                'is_critical': self._is_critical_agent(name)
             }
             
             # 检查状态
             if status == 'error':
-                if name in self.critical_agents:
+                if self._is_critical_agent(name):
                     critical_issues.append(f"❌ 关键 Agent 错误：{name}")
                 else:
                     warnings.append(f"⚠️ Agent 错误：{name}")
@@ -128,7 +135,7 @@ class AgentHealthChecker:
                 if last_run_dt:
                     delay = (now - last_run_dt).total_seconds() / 60
                     if delay > self.max_delay_minutes:
-                        if name in self.critical_agents:
+                        if self._is_critical_agent(name):
                             critical_issues.append(f"❌ 关键 Agent 超时：{name} ({delay:.0f}分钟未运行)")
                         else:
                             warnings.append(f"⚠️ Agent 超时：{name} ({delay:.0f}分钟未运行)")
@@ -147,10 +154,15 @@ class AgentHealthChecker:
             agents_status[name] = agent_info
         
         # 检查关键 Agent 是否都在线
-        critical_agents_found = [name for name in self.critical_agents 
-                                if any(t['name'] == name for t in tasks)]
-        missing_critical = [name for name in self.critical_agents 
-                          if name not in critical_agents_found]
+        critical_agents_found = {}
+        for task in tasks:
+            task_name = task['name']
+            for key, keywords in self.critical_agents_keywords.items():
+                if any(kw in task_name for kw in keywords):
+                    critical_agents_found[key] = task_name
+                    break
+        missing_critical = [key for key in self.critical_agents_keywords 
+                          if key not in critical_agents_found]
         
         for missing in missing_critical:
             critical_issues.append(f"❌ 关键 Agent 缺失：{missing}")
@@ -161,7 +173,7 @@ class AgentHealthChecker:
             'warnings': warnings,
             'agents_status': agents_status,
             'total_agents': len(tasks),
-            'critical_agents_count': len(self.critical_agents),
+            'critical_agents_count': len(self.critical_agents_keywords),
             'timestamp': now.isoformat()
         }
     
