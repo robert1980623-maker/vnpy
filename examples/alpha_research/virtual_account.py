@@ -64,7 +64,7 @@ class DailyAccount:
     positions: List[Dict] = field(default_factory=list)
     
     def __init__(self, **kwargs):
-        """处理旧格式数据"""
+        """处理旧格式数据 - 完全兼容所有历史版本"""
         # 兼容旧版本的字段名
         if 'position_count' in kwargs:
             kwargs['positions_count'] = kwargs.pop('position_count')
@@ -72,13 +72,12 @@ class DailyAccount:
             kwargs['total_value'] = kwargs.pop('total_assets')
         if 'total_market_value' in kwargs:
             kwargs['market_value'] = kwargs.pop('total_market_value')
-        # Call the dataclass __init__ manually
-        object.__setattr__(self, 'date', kwargs['date'])
-        object.__setattr__(self, 'cash', kwargs['cash'])
-        object.__setattr__(self, 'total_value', kwargs['total_value'])
-        object.__setattr__(self, 'market_value', kwargs.get('market_value', 0))
-        object.__setattr__(self, 'daily_return', kwargs.get('daily_return', 0))
-        # 所有字段都使用 .get() 提供默认值
+        # 所有字段都使用 .get() 提供默认值，避免 KeyError
+        object.__setattr__(self, 'date', kwargs.get('date', datetime.now().strftime('%Y-%m-%d')))
+        object.__setattr__(self, 'cash', kwargs.get('cash', 0.0))
+        object.__setattr__(self, 'total_value', kwargs.get('total_value', 0.0))
+        object.__setattr__(self, 'market_value', kwargs.get('market_value', 0.0))
+        object.__setattr__(self, 'daily_return', kwargs.get('daily_return', 0.0))
         object.__setattr__(self, 'daily_return_rate', kwargs.get('daily_return_rate', 0.0))
         object.__setattr__(self, 'positions_count', kwargs.get('positions_count', 0))
         object.__setattr__(self, 'buy_count', kwargs.get('buy_count', 0))
