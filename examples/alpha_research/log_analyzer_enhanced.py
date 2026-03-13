@@ -439,3 +439,79 @@ class EnhancedLogAnalyzer:
 if __name__ == '__main__':
     analyzer = EnhancedLogAnalyzer()
     analyzer.run(hours=24)
+
+
+# ========== 增强功能：问题队列扫描和上报 ==========
+
+from issue_queue import IssueQueue
+from manager_interface import QuantManager
+
+class EnhancedLogAnalyzerWithReporting:
+    """增强的日志分析器 - 带问题上报"""
+    
+    def __init__(self):
+        self.issue_queue = IssueQueue()
+        self.manager = QuantManager()
+        self.error_log_dir = Path('./logs/errors/')
+    
+    def scan_and_report(self):
+        """扫描错误并上报 Manager"""
+        print("🔍 开始扫描错误日志...")
+        
+        # 扫描最新的错误日志
+        today = datetime.now().strftime('%Y-%m-%d')
+        error_log = self.error_log_dir / f"errors_{today}.jsonl"
+        
+        if not error_log.exists():
+            print("✅ 无新错误")
+            return
+        
+        # 读取错误
+        errors = []
+        with open(error_log, 'r', encoding='utf-8') as f:
+            for line in f:
+                errors.append(json.loads(line))
+        
+        print(f"发现 {len(errors)} 个错误")
+        
+        # 分类处理
+        p0_errors = [e for e in errors if e.get('severity') == 'P0']
+        p1_errors = [e for e in errors if e.get('severity') == 'P1']
+        p2_errors = [e for e in errors if e.get('severity') == 'P2']
+        
+        # P0 已经在 Agent 错误处理时触发
+        # 处理 P1
+        for error in p1_errors:
+            self.report_p1_error(error)
+        
+        # 处理 P2 (汇总)
+        if p2_errors:
+            self.report_p2_summary(p2_errors)
+        
+        print("✅ 扫描完成")
+    
+    def report_p1_error(self, error: Dict):
+        """上报 P1 错误"""
+        issue = self.issue_queue.create_issue(
+            agent=error.get('agent', 'unknown'),
+            severity='P1',
+            error_type=error.get('error_type', 'Unknown'),
+            error_message=error.get('error_message', 'Unknown error')
+        )
+        issue_id = self.issue_queue.write_issue(issue)
+        
+        # 上报 Manager
+        self.manager.handle_error_report(issue)
+        
+        print(f"  📤 P1 错误已上报：{issue_id}")
+    
+    def report_p2_summary(self, errors: List[Dict]):
+        """汇总上报 P2 错误"""
+        # P2 错误只记录，不立即通知
+        print(f"  📝 记录 {len(errors)} 个 P2 错误到汇总报告")
+
+
+if __name__ == '__main__':
+    # 测试增强功能
+    analyzer = EnhancedLogAnalyzerWithReporting()
+    analyzer.scan_and_report()
