@@ -121,7 +121,7 @@ class EnhancedStockSelector:
                     continue
                 
                 # 获取综合分析
-                analysis = self.comprehensive_analyzer.analyze_single(symbol, data)
+                analysis = self.comprehensive_analyzer.analyze_stock(symbol, data)
                 if analysis:
                     results.append(analysis)
                     print(f"[{i}/20] ✅ {symbol} - 综合评分：{analysis.get('comprehensive_score', 0):.1f}")
