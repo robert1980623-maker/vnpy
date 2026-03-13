@@ -449,3 +449,40 @@ class SystemArchitectAgent:
 if __name__ == '__main__':
     agent = SystemArchitectAgent()
     agent.run()
+
+
+def trigger_delta_review():
+    """触发 Delta Agent 进行 Review"""
+    print("\n" + "="*70)
+    print("🤖 触发 Delta Agent Review")
+    print("="*70)
+    
+    try:
+        import subprocess
+        result = subprocess.run(
+            ['python3', 'delta_architect_review.py'],
+            cwd=Path(__file__).parent,
+            capture_output=True,
+            text=True,
+            timeout=1800
+        )
+        
+        if result.returncode == 0:
+            print("✅ Delta Review 成功")
+            # 显示 Delta 的输出
+            print(result.stdout[-1000:])  # 显示最后 1000 字符
+        else:
+            print(f"⚠️ Delta Review 失败：{result.stderr[:200]}")
+    except subprocess.TimeoutExpired:
+        print("⚠️ Delta Review 超时")
+    except Exception as e:
+        print(f"⚠️ 触发 Delta 失败：{e}")
+
+
+if __name__ == '__main__':
+    agent = SystemArchitectAgent()
+    report = agent.run()
+    
+    # 架构师审查完成后，自动触发 Delta
+    if report:
+        trigger_delta_review()
