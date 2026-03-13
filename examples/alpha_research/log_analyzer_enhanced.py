@@ -45,6 +45,9 @@ class EnhancedLogAnalyzer:
             'medium': '中',      # 需要处理
             'low': '低'          # 可以稍后处理
         }
+        # Manager 集成
+        self.manager = None
+        self.manager_enabled = True
     
     def analyze_logs(self, hours: int = 24) -> Dict:
         """分析最近 N 小时的日志"""
@@ -69,14 +72,25 @@ class EnhancedLogAnalyzer:
             file_issues = self._analyze_single_log(log_file)
             issues.extend(file_issues)
         
+
+        
+        # 去重和分类
+        unique_issues = self._deduplicate_issues(issues)
+
+        # 上报严重问题到 Manager
+        if self.manager_enabled and unique_issues:
+            self._report_to_manager(unique_issues)
+            self._report_to_manager(unique_issues)
+        
         # 去重和分类
         unique_issues = self._deduplicate_issues(issues)
         
         # 统计
         stats = self._generate_stats(unique_issues)
         
-        print(f"\n发现问题：{len(unique_issues)} 个")
+        print(f"发现问题：{len(unique_issues)} 个")
         print(f"严重：{stats['critical']} | 高：{stats['high']} | 中：{stats['medium']} | 低：{stats['low']}")
+
         
         return {
             'analysis_time': datetime.now().isoformat(),
@@ -227,6 +241,66 @@ class EnhancedLogAnalyzer:
         
         return unique
     
+
+    def _report_to_manager(self, issues: List[Dict]):
+        """上报问题到 Manager 问题队列"""
+        try:
+            from manager_interface import QuantManager
+            from issue_queue import Issue
+            
+            self.manager = QuantManager()
+            
+            critical_count = 0
+            high_count = 0
+            
+            for issue in issues:
+                severity = issue.get('severity', 'medium')
+                
+                # 只上报严重和高优先级问题
+                if severity not in ['critical', 'high']:
+                    continue
+                
+                # 创建 Issue
+                error_type = issue.get('category', 'unknown')
+                error_msg = issue.get('description', 'Unknown error')
+                
+                # 尝试从 raw_line 提取真实错误类型
+                raw_line = issue.get('raw_line', '')
+                if 'TypeError' in raw_line:
+                    error_type = 'TypeError'
+                elif 'KeyError' in raw_line:
+                    error_type = 'KeyError'
+                elif 'AttributeError' in raw_line:
+                    error_type = 'AttributeError'
+                elif 'Timeout' in raw_line or 'timeout' in raw_line:
+                    error_type = 'TimeoutError'
+                
+                # 创建并上报
+                new_issue = self.manager.issue_queue.create_issue(
+                    agent=issue.get('source', 'log_analyzer'),
+                    severity='P0' if severity == 'critical' else 'P1',
+                    error_type=error_type,
+                    error_message=error_msg
+                )
+                
+                issue_id = self.manager.issue_queue.write_issue(new_issue)
+                
+                if severity == 'critical':
+                    critical_count += 1
+                else:
+                    high_count += 1
+                
+                print(f"  ✅ 已上报问题到 Manager: {issue_id} ({severity})")
+            
+            if critical_count + high_count > 0:
+                print(f"📊 共上报 {critical_count + high_count} 个问题到 Manager 队列")
+                print(f"   P0 (严重): {critical_count}")
+                print(f"   P1 (高优): {high_count}")
+                
+        except Exception as e:
+            print(f"  ⚠️ 上报 Manager 失败：{e}")
+            self.manager_enabled = False
+
     def _generate_stats(self, issues: List[Dict]) -> Dict:
         """生成统计信息"""
         stats = defaultdict(int)
