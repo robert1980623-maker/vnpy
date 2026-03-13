@@ -1,0 +1,82 @@
+# 数据源配置
+
+# 数据源列表
+sources:
+  # 主力数据源
+  tushare:
+    name: Tushare Pro
+    type: official
+    priority: 1
+    enabled: true
+    token_env: TUSHARE_TOKEN
+    rate_limit: 100  # 每分钟请求数
+    timeout: 30  # 秒
+    
+  # 备用数据源 1
+  akshare:
+    name: AKShare
+    type: opensource
+    priority: 2
+    enabled: true
+    rate_limit: 60
+    timeout: 30
+    
+  # 备用数据源 2
+  sina:
+    name: 新浪财经
+    type: web
+    priority: 3
+    enabled: true
+    rate_limit: 30
+    timeout: 10
+
+# 验证配置
+validation:
+  # 自动验证
+  auto_validate: true
+  
+  # 验证频率
+  validate_frequency: daily  # daily/hourly
+  
+  # 验证时间
+  validate_time: "02:30"  # 每天凌晨 2:30
+  
+  # 告警阈值
+  thresholds:
+    price_diff: 0.05      # 价格差异 5%
+    volume_diff: 0.50     # 成交量差异 50%
+    missing_days: 1       # 缺失 1 天
+    price_anomaly: 0.10   # 价格异常 10%
+
+# 告警配置
+alerts:
+  enabled: true
+  
+  # 告警渠道
+  channels:
+    - log       # 日志文件
+    - console   # 控制台
+    # - slack   # Slack (可选)
+  
+  # 告警级别
+  levels:
+    P0:
+      description: 严重错误
+      action: immediate  # 立即处理
+      notify: true
+    P1:
+      description: 重要警告
+      action: today      # 今日内处理
+      notify: true
+    P2:
+      description: 一般警告
+      action: review     # 定期审查
+      notify: false
+
+# 数据备份
+backup:
+  enabled: true
+  frequency: weekly  # weekly/daily
+  backup_time: "03:00"  # 每周日 3:00
+  keep_days: 30  # 保留 30 天
+  backup_dir: ./data/backups
