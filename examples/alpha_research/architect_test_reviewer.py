@@ -214,6 +214,113 @@ class ArchitectTestReviewer:
         print(f"状态：{review_report['overall_status']}")
         print(f"通过：{review_report['summary']['passed_cases']}/{review_report['summary']['total_cases']}")
         
+        # 步骤 6: 更新原始测试计划状态
+        if review_report['overall_status'] == 'approved':
+            self.update_test_plan_status(review_request)
+        
+        return review_report
+    
+    def update_test_plan_status(self, review_request: Dict):
+        """更新测试计划状态并触发测试执行"""
+        print("\n" + "="*70)
+        print("📝 更新测试计划状态")
+        print("="*70)
+        
+        test_plan = review_request.get('test_plan', {})
+        plan_id = test_plan.get('plan_id', '')
+        
+        # 查找原始测试计划文件
+        test_case_dir = Path('./reports/test_cases')
+        plan_files = list(test_case_dir.glob(f'test_plan_*{plan_id.split("-")[-1]}.json'))
+        
+        if plan_files:
+            plan_file = plan_files[0]
+            with open(plan_file, 'r', encoding='utf-8') as f:
+                plan = json.load(f)
+            
+            # 更新状态
+            plan['status'] = 'approved'
+            plan['review_history'].append({
+                'review_id': review_request.get('review_id', ''),
+                'reviewed_at': review_request.get('reviewed_at', ''),
+                'result': 'approved',
+                'passed_cases': review_request.get('review_report', {}).get('summary', {}).get('passed_cases', 0),
+                'total_cases': review_request.get('review_report', {}).get('summary', {}).get('total_cases', 0)
+            })
+            
+            # 更新每个套件状态
+            for i, suite in enumerate(plan.get('test_suites', [])):
+                suite['status'] = 'approved'
+            
+            # 添加审核历史 (如果不存在则创建)
+            if 'review_history' not in plan:
+                plan['review_history'] = []
+            
+            plan['review_history'].append({
+                'review_id': review_request.get('review_id', ''),
+                'reviewed_at': review_request.get('reviewed_at', ''),
+                'result': 'approved',
+                'passed_cases': review_request.get('review_report', {}).get('summary', {}).get('passed_cases', 0),
+                'total_cases': review_request.get('review_report', {}).get('summary', {}).get('total_cases', 0)
+            })
+            
+            # 保存更新
+            with open(plan_file, 'w', encoding='utf-8') as f:
+                json.dump(plan, f, ensure_ascii=False, indent=2)
+            
+            print(f"✅ 测试计划状态已更新：{plan_file.name}")
+            print(f"   状态：approved")
+            print(f"   套件：{len(plan.get('test_suites', []))} 个全部通过")
+            
+            # 触发测试执行
+            self.trigger_test_execution(plan)
+        else:
+            print(f"⚠️ 未找到测试计划文件：{plan_id}")
+    
+    def trigger_test_execution(self, plan: Dict):
+        """触发自动化测试执行"""
+        print("\n" + "="*70)
+        print("🧪 触发自动化测试执行")
+        print("="*70)
+        
+        try:
+            import subprocess
+            
+            # 运行集成测试
+            result = subprocess.run(
+                ['python3', '-m', 'pytest', 'tests/integration/', '-v', '--tb=short'],
+                cwd=Path('.'),
+                capture_output=True,
+                text=True,
+                timeout=1800
+            )
+            
+            print(result.stdout[-2000:])
+            
+            if result.returncode == 0:
+                print("\n✅ 所有测试通过！")
+                # 通知 Manager 关闭问题
+                self.notify_manager_success(plan)
+            else:
+                print(f"\n❌ 测试失败：{result.stderr[:500]}")
+                # 上报问题给 Manager
+                self.report_test_failures(plan, result)
+        
+        except Exception as e:
+            print(f"⚠️ 测试执行失败：{e}")
+    
+    def notify_manager_success(self, plan: Dict):
+        """通知 Manager 测试通过"""
+        print("\n📬 通知 Manager 测试通过")
+        # TODO: 实现 Manager 通知逻辑
+        print("   (待实现：调用 Manager API 关闭问题)")
+    
+    def report_test_failures(self, plan: Dict, test_result):
+        """上报测试失败给 Manager"""
+        print("\n📬 上报测试失败给 Manager")
+        # TODO: 实现 Manager 上报逻辑
+        print("   (待实现：创建 Issue 并上报 Manager)")
+        
         return review_report
 
 
