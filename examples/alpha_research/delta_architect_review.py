@@ -199,3 +199,37 @@ class DeltaArchitectReviewer:
 if __name__ == '__main__':
     reviewer = DeltaArchitectReviewer()
     reviewer.run()
+
+
+def trigger_qa_review():
+    """触发 QA-Architect 审核流程"""
+    print("\n" + "="*70)
+    print("🚀 触发 QA-Architect 审核流程")
+    print("="*70)
+    
+    try:
+        import subprocess
+        result = subprocess.run(
+            ['python3', 'trigger_qa_loop.py'],
+            cwd=Path(__file__).parent,
+            capture_output=True,
+            text=True,
+            timeout=1800
+        )
+        
+        if result.returncode == 0:
+            print("✅ QA-Architect 流程成功完成")
+            print(result.stdout[-1000:])
+        else:
+            print(f"⚠️ QA-Architect 流程异常：{result.stderr[:200]}")
+    except Exception as e:
+        print(f"⚠️ 触发 QA 失败：{e}")
+
+
+if __name__ == '__main__':
+    reviewer = DeltaArchitectReviewer()
+    plan = reviewer.run()
+    
+    # Delta 完成后，自动触发 QA-Architect 审核
+    if plan:
+        trigger_qa_review()
