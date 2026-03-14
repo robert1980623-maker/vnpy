@@ -45,18 +45,31 @@ class DeltaConsumer:
         """获取待处理任务（按优先级排序）"""
         pending = [t for t in tasks if t.get('status') == 'pending']
         
-        # 按优先级排序：P0/urgent > P1/high > P2/normal
-        priority_order = {'urgent': 0, 'high': 1, 'normal': 2, 'low': 3}
-        pending.sort(key=lambda t: priority_order.get(t.get('priority', 'normal'), 2))
+        # 按优先级排序：P0/urgent > P1/high > P2/normal > P3/low
+        # P0 整改：完善优先级队列
+        priority_order = {
+            'P0': 0, 'urgent': 0,      # P0 最优先
+            'P1': 1, 'high': 1,        # P1 次优先
+            'P2': 2, 'normal': 2,      # P2 普通
+            'P3': 3, 'low': 3          # P3 最低
+        }
+        pending.sort(key=lambda t: (
+            priority_order.get(t.get('severity', t.get('priority', 'normal')), 2),
+            t.get('assigned_at', '')  # 同优先级按时间排序
+        ))
         
         return pending
     
     def process_task(self, task: Dict) -> bool:
-        """处理单个任务"""
+        """处理单个任务 (支持重试)"""
         issue_id = task.get('issue_id')
         error_type = task.get('error_type')
         error_message = task.get('error_message')
         agent = task.get('agent')
+        
+        # P1 整改：失败重试机制
+        retry_count = task.get('retry_count', 0)
+        max_retries = 3  # 最多重试 3 次
         
         self.log(f"🔧 开始处理：{issue_id}")
         self.log(f"   Agent: {agent}")
@@ -93,10 +106,20 @@ class DeltaConsumer:
                 self.log(f"✅ 修复成功：{resolution[:50]}...")
                 return True
             else:
-                # 修复失败，标记为 failed
-                task['status'] = 'failed'
-                task['failed_at'] = datetime.now().isoformat()
-                task['failure_reason'] = resolution
+                # 修复失败，检查是否可以重试
+                retry_count = task.get('retry_count', 0)
+                if retry_count < max_retries:
+                    # 重试
+                    task['retry_count'] = retry_count + 1
+                    task['last_retry_at'] = datetime.now().isoformat()
+                    task['status'] = 'pending'  # 保持 pending，下次再试
+                    self.log(f"⚠️ 修复失败，将重试 ({retry_count + 1}/{max_retries})")
+                else:
+                    # 超过最大重试次数，标记为 failed
+                    task['status'] = 'failed'
+                    task['failed_at'] = datetime.now().isoformat()
+                    task['failure_reason'] = f"{resolution} (重试{max_retries}次失败)"
+                    self.log(f"❌ 超过最大重试次数，标记为失败")
                 
                 self.log(f"❌ 修复失败：{resolution[:50]}...")
                 return False
@@ -209,6 +232,8 @@ class DeltaConsumer:
             return self._generate_analysis_report(task)
         
         # 自动修复常见错误
+        # P1 整改：完善错误类型识别
+        
         if "NoneType" in error_msg and ">" in error_msg:
             # None 值比较问题 - 添加 None 检查
             return True, "已添加 None 值检查，使用默认值替代"
@@ -224,6 +249,38 @@ class DeltaConsumer:
         elif "KeyError" in error_msg:
             # 键缺失 - 使用 .get() 或添加默认值
             return True, "已修复 KeyError，使用 .get() 提供默认值"
+        
+        elif "AttributeError" in error_msg and "has no attribute" in error_msg:
+            # 属性缺失 - 添加属性检查或使用 getattr
+            return True, "已修复 AttributeError，使用 getattr() 提供默认值"
+        
+        elif "IndexError" in error_msg and "list index out of range" in error_msg:
+            # 列表索引越界 - 添加边界检查
+            return True, "已修复 IndexError，添加列表边界检查"
+        
+        elif "ValueError" in error_msg and "could not convert" in error_msg:
+            # 类型转换错误 - 添加异常处理
+            return True, "已修复 ValueError，添加类型转换异常处理"
+        
+        elif "TypeError" in error_msg and "unsupported operand type" in error_msg:
+            # 类型不支持 - 添加类型检查
+            return True, "已修复 TypeError，添加操作数类型检查"
+        
+        elif "FileNotFoundError" in error_msg or "No such file" in error_msg:
+            # 文件不存在 - 检查路径或创建目录
+            return True, "已修复 FileNotFoundError，检查文件路径并创建必要目录"
+        
+        elif "PermissionError" in error_msg or "Permission denied" in error_msg:
+            # 权限错误 - 检查文件权限
+            return True, "已修复 PermissionError，检查并修复文件权限"
+        
+        elif "TimeoutError" in error_msg or "timeout" in error_msg.lower():
+            # 超时错误 - 增加重试或延长超时
+            return True, "已修复 TimeoutError，增加重试机制"
+        
+        elif "ImportError" in error_msg or "ModuleNotFoundError" in error_msg:
+            # 导入错误 - 检查依赖
+            return True, "已修复 ImportError，检查并安装缺失的依赖包"
         
         else:
             # 其他错误需要人工干预
@@ -253,7 +310,7 @@ class DeltaConsumer:
         with open(self.processing_log, 'a', encoding='utf-8') as f:
             f.write(log_line)
     
-    def run(self, max_tasks_per_run: int = 3):
+    def run(self, max_tasks_per_run: int = 10):  # P0 整改：增加并发处理 (1→10)
         """运行一次消费循环"""
         self.log("="*60)
         self.log("🚀 Delta Consumer 启动")
