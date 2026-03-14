@@ -240,6 +240,11 @@ class ArchitectTestReviewer:
             
             # 更新状态
             plan['status'] = 'approved'
+            
+            # 确保 review_history 存在
+            if 'review_history' not in plan:
+                plan['review_history'] = []
+            
             plan['review_history'].append({
                 'review_id': review_request.get('review_id', ''),
                 'reviewed_at': review_request.get('reviewed_at', ''),
@@ -321,7 +326,6 @@ class ArchitectTestReviewer:
         # TODO: 实现 Manager 上报逻辑
         print("   (待实现：创建 Issue 并上报 Manager)")
         
-        return review_report
 
 
 if __name__ == '__main__':

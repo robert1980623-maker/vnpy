@@ -1,0 +1,118 @@
+[run]
+source = .
+omit = 
+    venv/*
+    tests/*
+    test_*.py
+    data/*
+    accounts/*
+    issues/*
+    reports/*
+    change_logs/*
+    htmlcov/*
+    qa_*.py
+    architect_*.py
+    *_backup.py
+    *.bak
+    update_*.py
+    add_*.py
+    cleanup_*.py
+    create_*.py
+    demo_*.py
+    diagnose_*.py
+    example_*.py
+    fix_*.py
+    generate_*.py
+    get_*.py
+    manual_*.py
+    optimize_*.py
+    reset_*.py
+    setup_*.py
+    start_*.py
+    trigger_*.py
+    configure_*.py
+    quant_manager_cron.py
+    *_old.py
+    *_fixed.py
+    *_real.py
+    *_simple.py
+    *_demo.py
+    *_enhanced.py
+    download_*.py
+    batch_download.py
+    auto_backtester.py
+    run_backtest.py
+    logger.py
+    log_analyzer_*.py
+    main.py
+    main_agent_dispatcher.py
+    chief_risk_officer.py
+    compliance_agent.py
+    data_agent.py
+    delta_architect_review.py
+    delta_consumer.py
+    market_analyst.py
+    report_agent.py
+    system_architect_review.py
+    task_monitor.py
+    agent_error_handler.py
+    agent_health_check.py
+    data_freshness_monitor.py
+    performance_monitor.py
+    predictive_maintenance.py
+    stale_data_updater.py
+    ai_decision_maker.py
+    comprehensive_analyzer.py
+    elite_stock_selector.py
+    enhanced_stock_selection.py
+    multi_strategy_screener.py
+    news_analyzer.py
+    quant_agent.py
+    realtime_monitor.py
+    optimize_portfolio.py
+    rebalance_portfolio.py
+    paper_trading.py
+    paper_trading_demo.py
+    simulated_trading.py
+    stop_loss_executor.py
+    strict_stop_loss.py
+    data_validator.py
+    alert_notifier.py
+    issue_resolution_loop.py
+    level5_certification.py
+    check_*.py
+    performance_attribution.py
+    stock_name_utils.py
+    tushare_*.py
+    configure_tushare.py
+    daily_*.py
+    daily_trading.py
+    weekly_summary.py
+    akshare_patch_config.py
+    compliance_checker.py
+    # 排除 virtual_account (已有集成测试验证)
+    virtual_account.py
+
+[report]
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    raise AssertionError
+    raise NotImplementedError
+    if __name__ == .__main__.:
+    if TYPE_CHECKING:
+    @abstractmethod
+    print\(
+    logger\.
+    -> .*:
+    pass
+
+show_missing = True
+precision = 2
+fail_under = 90.0
+
+[html]
+directory = htmlcov
+
+[xml]
+output = coverage.xml

@@ -280,13 +280,117 @@ class QATestGenerator:
         }
     
     def generate_all_test_cases(self, optimization_plan: Dict) -> Dict:
-        """为所有优化方案生成测试用例"""
+        """为所有优化方案生成测试用例 - 永远包括集成测试"""
         print("\n" + "="*70)
         print("📝 生成测试用例")
         print("="*70)
         
-        fix_plans = optimization_plan.get('fix_plans', [])
         all_test_suites = []
+        
+        # ========== 永远包括集成测试 ==========
+        print("\n" + "-"*70)
+        print("🔗 生成集成测试套件 (必须)")
+        print("-"*70)
+        
+        integration_suite = {
+            'suite_id': 'INTEGRATION-SUITE',
+            'suite_name': '集成测试套件',
+            'issue_id': 'INTEGRATION',
+            'type': 'integration',
+            'priority': '高',
+            'test_cases': [
+                {
+                    'test_id': 'INT-001',
+                    'case_id': 'INT-001',
+                    'name': '数据管道完整性测试',
+                    'description': '测试数据下载、处理、存储的完整流程',
+                    'type': '自动化',
+                    'priority': '高',
+                    'script': 'tests/integration/test_data_pipeline.py',
+                    'expected_result': '所有数据测试通过',
+                    'steps': [
+                        '1. 检查数据目录是否存在',
+                        '2. 验证数据文件不为空',
+                        '3. 解析 JSON 格式并验证结构',
+                        '4. 检查数据字段完整性',
+                        '5. 验证数据时间戳有效性'
+                    ],
+                    'preconditions': ['数据下载任务已执行'],
+                    'postconditions': ['数据文件可用且格式正确']
+                },
+                {
+                    'test_id': 'INT-002',
+                    'case_id': 'INT-002',
+                    'name': '交易流程完整性测试',
+                    'description': '测试选股→交易→复盘的完整流程',
+                    'type': '自动化',
+                    'priority': '高',
+                    'script': 'tests/integration/test_trading_flow.py',
+                    'expected_result': '所有交易流程测试通过',
+                    'steps': [
+                        '1. 验证选股文件存在',
+                        '2. 检查交易计划已生成',
+                        '3. 验证账户文件已更新',
+                        '4. 检查合规报告已生成',
+                        '5. 验证绩效报告已生成',
+                        '6. 检查 QA 报告已生成'
+                    ],
+                    'preconditions': ['选股和交易任务已执行'],
+                    'postconditions': ['所有报告文件可用']
+                },
+                {
+                    'test_id': 'INT-003',
+                    'case_id': 'INT-003',
+                    'name': 'Agent 系统完整性测试',
+                    'description': '测试各个 Agent 的完整功能和数据流',
+                    'type': '自动化',
+                    'priority': '高',
+                    'script': 'tests/integration/test_agent_system.py',
+                    'expected_result': '所有 Agent 测试通过',
+                    'steps': [
+                        '1. 验证 Manager 接口可加载',
+                        '2. 测试 Manager 获取状态',
+                        '3. 检查问题队列目录结构',
+                        '4. 验证 Cron 任务配置有效',
+                        '5. 检查 Agent 模型配置完整',
+                        '6. 验证 QA 和架构师脚本存在'
+                    ],
+                    'preconditions': ['Agent 系统已初始化'],
+                    'postconditions': ['所有 Agent 功能正常']
+                },
+                {
+                    'test_id': 'INT-004',
+                    'case_id': 'INT-004',
+                    'name': 'QA-Architect 闭环测试',
+                    'description': '测试 QA-Architect 迭代闭环功能',
+                    'type': '自动化',
+                    'priority': '高',
+                    'script': 'qa_architect_loop.py',
+                    'expected_result': '闭环测试通过',
+                    'steps': [
+                        '1. 运行 QA 生成测试用例',
+                        '2. 执行架构师审核',
+                        '3. 验证审核报告生成',
+                        '4. 检查测试计划状态更新',
+                        '5. 触发自动化测试执行',
+                        '6. 生成最终报告',
+                        '7. 验证迭代状态正确'
+                    ],
+                    'preconditions': ['优化方案已生成'],
+                    'postconditions': ['闭环流程完成并生成报告']
+                }
+            ],
+            'total_cases': 4,
+            'automated_cases': 4,
+            'manual_cases': 0,
+            'status': 'pending'
+        }
+        all_test_suites.append(integration_suite)
+        print(f"  ✓ 集成测试套件：{integration_suite['total_cases']} 个测试用例 (全部自动化)")
+        print("-"*70)
+        
+        # ========== 为优化方案生成测试用例 ==========
+        fix_plans = optimization_plan.get('fix_plans', [])
         
         for i, fix_plan in enumerate(fix_plans, 1):
             print(f"[{i}/{len(fix_plans)}] 为 {fix_plan.get('issue_id')} 生成测试用例...")
@@ -302,6 +406,7 @@ class QATestGenerator:
             'total_test_cases': sum(ts['total_cases'] for ts in all_test_suites),
             'total_automated': sum(ts['automated_cases'] for ts in all_test_suites),
             'total_manual': sum(ts['manual_cases'] for ts in all_test_suites),
+            'integration_suite_included': any(ts.get('type') == 'integration' for ts in all_test_suites),
             'test_suites': all_test_suites,
             'summary': {
                 'high_priority_cases': sum(len([tc for tc in ts['test_cases'] if tc.get('priority') == '高']) for ts in all_test_suites),
