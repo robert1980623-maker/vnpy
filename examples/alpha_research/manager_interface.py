@@ -16,6 +16,7 @@ from datetime import datetime
 from typing import Dict, List, Optional
 from issue_queue import IssueQueue, Issue
 from alert_notifier import AlertNotifier, Alert
+from glm_error_analyzer import GLMErrorAnalyzer
 
 
 class QuantManager:
@@ -26,6 +27,7 @@ class QuantManager:
         self.notifier = AlertNotifier()
         self.active_tasks: Dict[str, Dict] = {}
         self.agent_mapping = {
+        self.glm_analyzer = GLMErrorAnalyzer()  # GLM 错误分析器
             'engineering': 'delta',
             'qa': 'qa',
             'trading': 'trading-agent',
@@ -75,33 +77,65 @@ class QuantManager:
         return task
     
     def analyze_error(self, issue: Issue) -> str:
-        """分析错误类型"""
+        """分析错误类型 (GLM 增强版)
+        
+        流程:
+        1. 先用规则判断 (快速、准确)
+        2. 规则不确定时用 GLM 分析 (智能、灵活)
+        3. GLM 失败时 fallback 到默认规则
+        """
         error_type = issue.error_type.lower()
         error_msg = issue.error_message.lower()
         
-        # 工程类错误 (代码 bug)
+        # 步骤 1: 规则判断 (高置信度直接返回)
+        rule_result = self._analyze_by_rules(error_type, error_msg)
+        if rule_result['confidence'] >= 0.9:
+            return rule_result['task_type']
+        
+        # 步骤 2: GLM 分析 (规则不确定时)
+        try:
+            glm_result = self.glm_analyzer.analyze(
+                error_type=issue.error_type,
+                error_message=issue.error_message,
+                context=None  # 可以添加更多上下文
+            )
+            
+            # GLM 置信度高则采用
+            if glm_result['confidence'] >= 0.7:
+                print(f"🤖 GLM 分析：{rule_result['task_type']} → {glm_result['task_type']} "
+                      f"(置信度：{glm_result['confidence']:.2f})")
+                return glm_result['task_type']
+        except Exception as e:
+            print(f"⚠️  GLM 分析失败：{e}, 使用规则判断")
+        
+        # 步骤 3: Fallback 到规则结果
+        return rule_result['task_type']
+    
+    def _analyze_by_rules(self, error_type: str, error_msg: str) -> Dict:
+        """规则判断 (带置信度)"""
+        # 工程类错误 (代码 bug) - 高置信度
         if error_type in ['typeerror', 'keyerror', 'indexerror', 'attributeerror',
                          'nameerror', 'importerror', 'moduleNotFoundError']:
-            return 'engineering'
+            return {'task_type': 'engineering', 'confidence': 0.95}
         
         # QA 类错误 (测试失败)
         if 'test' in error_msg or 'assert' in error_msg:
-            return 'qa'
+            return {'task_type': 'qa', 'confidence': 0.9}
         
         # 交易类错误
-        if 'trade' in error_msg or 'order' in error_msg or 'position' in error_msg:
-            return 'trading'
+        if any(kw in error_msg for kw in ['trade', 'order', 'position', 'buy', 'sell']):
+            return {'task_type': 'trading', 'confidence': 0.85}
         
         # 风控类错误
-        if 'risk' in error_msg or 'limit' in error_msg or 'stop' in error_msg:
-            return 'risk'
+        if any(kw in error_msg for kw in ['risk', 'limit', 'stop', 'loss']):
+            return {'task_type': 'risk', 'confidence': 0.85}
         
         # 数据类错误
-        if 'data' in error_msg or 'download' in error_msg or 'timeout' in error_msg:
-            return 'data'
+        if any(kw in error_msg for kw in ['data', 'download', 'timeout', 'fetch']):
+            return {'task_type': 'data', 'confidence': 0.85}
         
-        # 默认工程类
-        return 'engineering'
+        # 默认工程类 - 低置信度
+        return {'task_type': 'engineering', 'confidence': 0.5}
     
     def select_agent(self, task_type: str) -> str:
         """选择合适的 Agent"""
