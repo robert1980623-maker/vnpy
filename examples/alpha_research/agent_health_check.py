@@ -133,13 +133,30 @@ class AgentHealthChecker:
             if status == 'error':
                 is_status_abnormal = True
             elif status == '0':
-                # status=0 表示 Agent 未运行或失败
+                # status=0 可能是正常的（cron 调度，未到运行时间）
+                # 检查 last_run 是否为 "cron"
+                if last_run == 'cron':
+                    # cron 调度中，正常
+                    agent_info['health'] = 'healthy'
+                    agents_status[name] = agent_info
+                    continue
+                # 否则可能是失败
                 is_status_abnormal = True
             elif status in ['the', 'Status', 'add', 'Last']:
-                # 这些是解析错误，表示 cron list 输出解析失败
-                is_status_abnormal = True
+                # 这些是解析错误（表头行），跳过不报告
+                # is_status_abnormal = True
+                agent_info['health'] = 'skip'
+                agents_status[name] = agent_info
+                continue
             elif status == '*' and name in ['首席风险官', '止盈止损执行', '每日选股', '虚拟账户', '每日复盘']:
-                # 关键 Agent 显示 * 表示状态未知
+                # 关键 Agent 显示 * 可能是正常的（cron 调度，未到运行时间）
+                # 检查 last_run 是否为 "cron" 或数字
+                if last_run == 'cron' or (last_run.isdigit() and int(last_run) < 60):
+                    # 正常运行中或最近运行过
+                    agent_info['health'] = 'healthy'
+                    agents_status[name] = agent_info
+                    continue
+                # 否则标记为异常
                 is_status_abnormal = True
             
             if is_status_abnormal:
