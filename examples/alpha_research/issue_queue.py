@@ -14,28 +14,42 @@ import uuid
 from pathlib import Path
 from datetime import datetime
 from typing import List, Dict, Optional
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 
 
 @dataclass
 class Issue:
     """问题定义"""
     id: str
-    agent: str
-    severity: str  # P0/P1/P2/P3
-    error_type: str
-    error_message: str
-    timestamp: str
+    agent: str = ""
+    severity: str = "P2"  # P0/P1/P2/P3
+    error_type: str = ""
+    error_message: str = ""
+    timestamp: str = ""
     status: str = "pending"  # pending/processing/resolved/archived
     assigned_to: Optional[str] = None
     resolved_at: Optional[str] = None
     resolution: Optional[str] = None
+    # 兼容 QA report 格式
+    type: Optional[str] = None
+    title: Optional[str] = None
+    description: Optional[str] = None
+    details: Optional[Dict] = field(default_factory=dict)
+    report_file: Optional[str] = None
+    requires_action: Optional[bool] = None
+    action_items: Optional[List[str]] = field(default_factory=list)
     
     def __post_init__(self):
         if not self.id:
             self.id = f"issue_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
         if not self.timestamp:
             self.timestamp = datetime.now().isoformat()
+        # 如果没有 error_type，从 type 字段复制
+        if not self.error_type and self.type:
+            self.error_type = self.type
+        # 如果没有 error_message，从 description 复制
+        if not self.error_message and self.description:
+            self.error_message = self.description[:200]
 
 
 class IssueQueue:
@@ -90,9 +104,12 @@ class IssueQueue:
         """获取所有待处理问题"""
         issues = []
         for file_path in self.pending_dir.glob("*.json"):
-            with open(file_path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                issues.append(Issue(**data))
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    issues.append(Issue(**data))
+            except Exception as e:
+                print(f"读取问题 {file_path.name} 失败：{e}")
         return issues
     
     def update_status(self, issue_id: str, new_status: str, 
@@ -170,22 +187,12 @@ if __name__ == '__main__':
     # 测试
     queue = IssueQueue()
     
-    # 创建测试问题
-    issue = queue.create_issue(
-        agent='daily_stock_selection',
-        severity='P1',
-        error_type='TypeError',
-        error_message=" '>' not supported between instances of 'NoneType' and 'int'"
-    )
-    
-    # 写入队列
-    issue_id = queue.write_issue(issue)
-    print(f"✅ 问题已创建：{issue_id}")
-    
-    # 读取问题
-    retrieved = queue.read_issue(issue_id)
-    print(f"✅ 问题已读取：{retrieved.agent} - {retrieved.error_message}")
-    
     # 获取待处理问题
     pending = queue.get_pending_issues()
-    print(f"✅ 待处理问题数：{len(pending)}")
+    print(f"待处理问题数：{len(pending)}")
+    
+    for issue in pending[:3]:
+        print(f"\n问题：{issue.id}")
+        print(f"  严重性：{issue.severity}")
+        print(f"  类型：{issue.error_type or issue.type}")
+        print(f"  状态：{issue.status}")

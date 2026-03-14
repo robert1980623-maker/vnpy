@@ -16,6 +16,9 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 import sys
 
+# Manager 集成
+MANAGER_ENABLED = True
+
 
 class AgentHealthChecker:
     """Agent 健康检查器"""
@@ -123,12 +126,28 @@ class AgentHealthChecker:
             }
             
             # 检查状态
+            # 正常状态值：'ok', 'idle', 'running', '1', '5', '17', '35' 等数字
+            # 异常状态值：'error', '0', 'the', 'Status', '*', 或其他非预期值
+            is_status_abnormal = False
+            
             if status == 'error':
+                is_status_abnormal = True
+            elif status == '0':
+                # status=0 表示 Agent 未运行或失败
+                is_status_abnormal = True
+            elif status in ['the', 'Status', 'add', 'Last']:
+                # 这些是解析错误，表示 cron list 输出解析失败
+                is_status_abnormal = True
+            elif status == '*' and name in ['首席风险官', '止盈止损执行', '每日选股', '虚拟账户', '每日复盘']:
+                # 关键 Agent 显示 * 表示状态未知
+                is_status_abnormal = True
+            
+            if is_status_abnormal:
                 if self._is_critical_agent(name):
-                    critical_issues.append(f"❌ 关键 Agent 错误：{name}")
+                    critical_issues.append(f"❌ 关键 Agent 异常：{name} (status={status})")
                 else:
-                    warnings.append(f"⚠️ Agent 错误：{name}")
-                agent_info['health'] = 'error'
+                    warnings.append(f"⚠️ Agent 异常：{name} (status={status})")
+                agent_info['health'] = 'abnormal'
             
             elif status == 'idle':
                 # 检查是否长时间未运行
@@ -304,6 +323,79 @@ class AgentHealthChecker:
         
         return report
 
+    def _report_to_manager(self, health: Dict):
+        """上报健康问题到 Manager 问题队列"""
+        if not MANAGER_ENABLED:
+            print("  ℹ️ Manager 集成已禁用")
+            return
+        
+        try:
+            from manager_interface import QuantManager
+            from issue_queue import Issue
+            
+            critical_issues = health.get('critical_issues', [])
+            warnings = health.get('warnings', [])
+            
+            if not critical_issues and not warnings:
+                print("  ✅ 无健康问题需要上报")
+                return
+            
+            manager = QuantManager()
+            reported_count = 0
+            
+            # 上报关键问题
+            for issue_text in critical_issues:
+                # 提取 Agent 名称
+                agent_name = "unknown"
+                if "关键 Agent" in issue_text:
+                    agent_name = issue_text.split("：")[-1].strip()
+                
+                new_issue = manager.issue_queue.create_issue(
+                    agent="health_check",
+                    severity="P0",
+                    error_type="agent_health",
+                    error_message=issue_text
+                )
+                
+                issue_id = manager.issue_queue.write_issue(new_issue)
+                print(f"  ✅ 已上报 P0 问题：{issue_id} - {issue_text[:50]}...")
+                reported_count += 1
+            
+            # 上报警告
+            for warning_text in warnings:
+                agent_name = "unknown"
+                if "Agent" in warning_text:
+                    agent_name = warning_text.split("：")[-1].strip()
+                
+                new_issue = manager.issue_queue.create_issue(
+                    agent="health_check",
+                    severity="P1",
+                    error_type="agent_health",
+                    error_message=warning_text
+                )
+                
+                issue_id = manager.issue_queue.write_issue(new_issue)
+                print(f"  ✅ 已上报 P1 问题：{issue_id} - {warning_text[:50]}...")
+                reported_count += 1
+            
+            if reported_count > 0:
+                print(f"  📊 共上报 {reported_count} 个健康问题到 Manager 队列")
+                
+                # 自动触发 Manager 处理
+                print("  🔄 触发 Manager 自动处理...")
+                pending = manager.issue_queue.get_pending_issues()
+                for issue in pending[-reported_count:]:
+                    try:
+                        task = manager.handle_error_report(issue)
+                        print(f"    → 已调度给：{task['agent']} ({task['type']})")
+                    except Exception as e:
+                        print(f"    ⚠️ 调度失败：{e}")
+                
+        except Exception as e:
+            print(f"  ⚠️ 上报 Manager 失败：{e}")
+            import traceback
+            traceback.print_exc()
+
 
 def main():
     """主函数"""
@@ -312,9 +404,15 @@ def main():
     print(report)
     checker.save_report()
     
-    # 自动重启失败的 Agent
+    # 获取健康状态
     tasks = checker.get_cron_status()
     health = checker.check_agent_health(tasks)
+    
+    # 上报健康问题到 Manager
+    print("\n📋 检查健康问题...")
+    checker._report_to_manager(health)
+    
+    # 自动重启失败的 Agent
     if not health['healthy']:
         print("\n🔄 执行自动修复...")
         checker.auto_restart_failed_agents(health)
