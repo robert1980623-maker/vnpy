@@ -1,0 +1,191 @@
+# 监控告警配置
+
+# 监控指标
+metrics:
+  system:
+    - cpu_usage
+    - memory_usage
+    - disk_usage
+    - network_io
+  
+  application:
+    - request_rate
+    - error_rate
+    - response_time
+    - throughput
+  
+  database:
+    - neo4j_connections
+    - neo4j_query_time
+    - redis_memory
+    - redis_operations
+  
+  business:
+    - data_sync_count
+    - event_count
+    - alert_count
+    - agent_health_score
+
+# 告警规则
+alert_rules:
+  # 系统级告警
+  - name: "高 CPU 使用率"
+    metric: "cpu_usage"
+    condition: "> 80"
+    duration: "5m"
+    level: "warning"
+    message: "CPU 使用率超过 80%"
+  
+  - name: "CPU 使用率严重"
+    metric: "cpu_usage"
+    condition: "> 95"
+    duration: "2m"
+    level: "critical"
+    message: "CPU 使用率超过 95%，系统可能过载"
+  
+  - name: "高内存使用率"
+    metric: "memory_usage"
+    condition: "> 85"
+    duration: "5m"
+    level: "warning"
+    message: "内存使用率超过 85%"
+  
+  - name: "内存使用率严重"
+    metric: "memory_usage"
+    condition: "> 95"
+    duration: "2m"
+    level: "critical"
+    message: "内存使用率超过 95%，系统可能崩溃"
+  
+  - name: "磁盘空间不足"
+    metric: "disk_usage"
+    condition: "> 85"
+    duration: "10m"
+    level: "warning"
+    message: "磁盘使用率超过 85%"
+  
+  - name: "磁盘空间严重不足"
+    metric: "disk_usage"
+    condition: "> 95"
+    duration: "5m"
+    level: "critical"
+    message: "磁盘使用率超过 95%，立即清理"
+  
+  # 应用级告警
+  - name: "高错误率"
+    metric: "error_rate"
+    condition: "> 5"
+    duration: "5m"
+    level: "warning"
+    message: "错误率超过 5%"
+  
+  - name: "错误率严重"
+    metric: "error_rate"
+    condition: "> 10"
+    duration: "2m"
+    level: "critical"
+    message: "错误率超过 10%，系统异常"
+  
+  - name: "响应时间过长"
+    metric: "response_time"
+    condition: "> 5000"
+    duration: "5m"
+    level: "warning"
+    message: "平均响应时间超过 5 秒"
+  
+  - name: "响应时间严重过长"
+    metric: "response_time"
+    condition: "> 10000"
+    duration: "2m"
+    level: "critical"
+    message: "平均响应时间超过 10 秒，系统严重延迟"
+  
+  # 数据库告警
+  - name: "Neo4j 连接池耗尽"
+    metric: "neo4j_connections"
+    condition: "> 45"
+    duration: "2m"
+    level: "warning"
+    message: "Neo4j 连接池使用率超过 90%"
+  
+  - name: "Redis 内存过高"
+    metric: "redis_memory"
+    condition: "> 80"
+    duration: "5m"
+    level: "warning"
+    message: "Redis 内存使用率超过 80%"
+  
+  # 业务告警
+  - name: "数据同步失败"
+    metric: "data_sync_count"
+    condition: "== 0"
+    duration: "30m"
+    level: "warning"
+    message: "30 分钟内无数据同步"
+  
+  - name: "Agent 健康度过低"
+    metric: "agent_health_score"
+    condition: "< 60"
+    duration: "5m"
+    level: "warning"
+    message: "Agent 平均健康度低于 60"
+  
+  - name: "Agent 健康度严重过低"
+    metric: "agent_health_score"
+    condition: "< 40"
+    duration: "2m"
+    level: "critical"
+    message: "Agent 平均健康度低于 40，系统严重异常"
+
+# 告警升级策略
+escalation:
+  enabled: true
+  
+  levels:
+    - name: "L1 - 自动处理"
+      delay: 0
+      actions:
+        - log
+        - auto_heal
+    
+    - name: "L2 - 通知值班人员"
+      delay: 5m
+      actions:
+        - notify_oncall
+        - create_ticket
+    
+    - name: "L3 - 通知团队"
+      delay: 15m
+      actions:
+        - notify_team
+        - escalate_to_manager
+    
+    - name: "L4 - 紧急响应"
+      delay: 30m
+      actions:
+        - notify_all
+        - emergency_response
+
+# 告警静默
+silence:
+  enabled: true
+  
+  rules:
+    - name: "维护窗口"
+      schedule: "0 2 * * *"  # 每天 2 点
+      duration: 1h
+      match:
+        level: ["warning", "medium"]
+    
+    - name: "已知问题"
+      match:
+        name: ["已知问题 1", "已知问题 2"]
+      duration: 24h
+
+# 告警聚合
+aggregation:
+  enabled: true
+  window: 5m
+  group_by:
+    - metric
+    - level
