@@ -15,6 +15,7 @@ import sys
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Dict, List
+from agent_report import create_report
 from non_interactive_helper import setup_non_interactive_mode, is_non_interactive
 
 class ChiefRiskOfficer:

@@ -15,6 +15,7 @@ from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Optional
 from issue_queue import IssueQueue, Issue
+from human_report import human_manager_report
 from alert_notifier import AlertNotifier, Alert
 from glm_error_analyzer import GLMErrorAnalyzer
 

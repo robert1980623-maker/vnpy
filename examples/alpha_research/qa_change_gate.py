@@ -18,6 +18,7 @@ import hashlib
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Optional
+from human_report import human_qa_report
 
 
 class QAChangeGate:

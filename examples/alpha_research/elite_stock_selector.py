@@ -11,6 +11,7 @@
 import sys
 import json
 from pathlib import Path
+from agent_report import create_report
 from datetime import datetime
 import time
 from non_interactive_helper import setup_non_interactive_mode, is_non_interactive

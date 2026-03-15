@@ -12,6 +12,8 @@ Agent 健康检查系统
 import json
 import subprocess
 from pathlib import Path
+from agent_report import create_report
+from report_templates import create_monitoring_report
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 import sys

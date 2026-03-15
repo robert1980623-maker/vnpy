@@ -14,6 +14,8 @@ import json
 import csv
 import os
 from pathlib import Path
+from agent_report import create_report
+from report_templates import create_monitoring_report
 from datetime import datetime, timedelta
 import time
 import requests

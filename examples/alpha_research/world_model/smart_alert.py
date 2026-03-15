@@ -17,12 +17,14 @@
 """
 
 import sys
+import os
 import json
 import logging
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 from enum import Enum
+import requests
 
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -85,6 +87,16 @@ class SmartAlertSystem:
             'by_level': {},
             'by_type': {}
         }
+        
+        # Stream 模式告警聚合缓存
+        self.alert_cache = {}
+        self.aggregation_window = int(os.environ.get('SLACK_AGGREGATION_WINDOW', 300))  # 默认 5 分钟
+        self.max_alerts_per_window = int(os.environ.get('SLACK_MAX_ALERTS_PER_WINDOW', 5))
+        self.stream_mode = os.environ.get('SLACK_STREAM_MODE', '0') == '1'
+        
+        # 告警摘要配置
+        self.digest_enabled = os.environ.get('SLACK_DIGEST_ENABLED', '1') == '1'
+        self.digest_recipients = []  # 摘要接收者列表
         
         logger.info("✅ 智能告警系统初始化完成")
     
@@ -164,8 +176,77 @@ class SmartAlertSystem:
     
     def _send_slack(self, alert: Dict):
         """发送 Slack 通知"""
-        # TODO: 集成 Slack API
-        logger.info(f"📱 Slack 通知：{alert['title']}")
+        try:
+            # Slack Webhook URL (从环境变量读取)
+            webhook_url = os.environ.get('SLACK_WEBHOOK_URL')
+            if not webhook_url:
+                logger.warning("⚠️ SLACK_WEBHOOK_URL 未配置，跳过 Slack 通知")
+                return
+            
+            # 根据告警级别设置颜色
+            color_map = {
+                'critical': 'danger',
+                'high': 'warning',
+                'medium': '#FFA500',
+                'low': 'good'
+            }
+            color = color_map.get(alert['level'], '#808080')
+            
+            # 根据告警级别设置 emoji
+            emoji_map = {
+                'critical': '🚨',
+                'high': '⚠️',
+                'medium': '⚡',
+                'low': 'ℹ️'
+            }
+            emoji = emoji_map.get(alert['level'], '📢')
+            
+            # 构建 Slack 消息
+            payload = {
+                "text": f"{emoji} {alert['title']}",
+                "attachments": [{
+                    "color": color,
+                    "fields": [
+                        {
+                            "title": "告警类型",
+                            "value": alert['alert_type'],
+                            "short": True
+                        },
+                        {
+                            "title": "级别",
+                            "value": alert['level'].upper(),
+                            "short": True
+                        },
+                        {
+                            "title": "详情",
+                            "value": alert['message'],
+                            "short": False
+                        }
+                    ],
+                    "footer": alert.get('source', 'vnpy-agent'),
+                    "ts": int(datetime.now().timestamp())
+                }]
+            }
+            
+            # 添加元数据（如果有）
+            if alert.get('metadata'):
+                metadata_text = "\n".join([f"• {k}: {v}" for k, v in alert['metadata'].items()])
+                payload["attachments"][0]["fields"].append({
+                    "title": "元数据",
+                    "value": metadata_text,
+                    "short": False
+                })
+            
+            # 发送请求
+            response = requests.post(webhook_url, json=payload, timeout=10)
+            
+            if response.status_code == 200:
+                logger.info(f"✅ Slack 通知已发送：{alert['title']}")
+            else:
+                logger.error(f"❌ Slack 通知失败：{response.status_code} - {response.text}")
+        
+        except Exception as e:
+            logger.error(f"❌ 发送 Slack 通知异常：{e}")
     
     def _send_email(self, alert: Dict):
         """发送邮件通知"""
@@ -458,3 +539,67 @@ if __name__ == "__main__":
     
     alert.close()
     print("\n✅ 测试完成")
+
+    def _should_send_alert(self, alert: Dict) -> bool:
+        """
+        Stream 模式：判断告警是否应该发送
+        
+        规则:
+        - CRITICAL/HIGH: 立即发送
+        - MEDIUM: 聚合发送（同类型 5 分钟内最多 1 条）
+        - LOW: 不发送
+        """
+        if not self.stream_mode:
+            return True
+        
+        level = alert.get('level', 'low')
+        alert_type = alert.get('alert_type', 'unknown')
+        
+        # CRITICAL 和 HIGH 立即发送
+        if level in ['critical', 'high']:
+            return True
+        
+        # MEDIUM 聚合发送
+        if level == 'medium':
+            cache_key = f"medium:{alert_type}"
+            now = datetime.now().timestamp()
+            
+            # 检查缓存
+            if cache_key in self.alert_cache:
+                last_sent = self.alert_cache[cache_key]
+                if now - last_sent < self.aggregation_window:
+                    logger.debug(f"⏸️ 告警聚合中，跳过：{alert['title']}")
+                    return False
+            
+            # 更新缓存
+            self.alert_cache[cache_key] = now
+            return True
+        
+        # LOW 不发送
+        return False
+    
+    def _cleanup_alert_cache(self):
+        """清理过期的告警缓存"""
+        now = datetime.now().timestamp()
+        expired_keys = []
+        
+        for key, timestamp in self.alert_cache.items():
+            if now - timestamp > self.aggregation_window:
+                expired_keys.append(key)
+        
+        for key in expired_keys:
+            del self.alert_cache[key]
+        
+        logger.debug(f"🧹 清理 {len(expired_keys)} 个过期告警缓存")
+    
+    def send_aggregated_alerts(self):
+        """
+        发送聚合告警摘要
+        
+        调用时机：每个聚合窗口结束时
+        """
+        if not self.stream_mode:
+            return
+        
+        # TODO: 实现聚合告警摘要逻辑
+        logger.info("📊 发送聚合告警摘要...")

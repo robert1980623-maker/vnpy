@@ -8,6 +8,7 @@
 import json
 from pathlib import Path
 from datetime import datetime
+from human_report import human_manager_report
 
 def create_manager_cron():
     """创建量化 Manager cron 任务"""

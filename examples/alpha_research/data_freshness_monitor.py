@@ -6,6 +6,8 @@ import subprocess
 import os
 import sys
 from pathlib import Path
+from agent_report import create_report
+from report_templates import create_monitoring_report
 from datetime import datetime, timedelta
 
 class DataFreshnessMonitor:

@@ -23,6 +23,8 @@ from typing import List, Dict, Optional
 from tushare_pro_downloader import TushareProDownloader
 from tushare_fundamental_fetcher import TushareFundamentalFetcher
 from non_interactive_helper import setup_non_interactive_mode, is_non_interactive
+from agent_report import create_report
+from human_report import HumanReporter
 
 
 class UnifiedDataAgent:
@@ -49,11 +51,15 @@ class UnifiedDataAgent:
     
     def run_all(self, symbols: List[str] = None):
         """运行所有数据下载任务"""
+        reporter = create_report("统一数据下载 Agent")
+        
         print("="*70)
         print(" " * 20 + "统一数据下载 Agent")
         print("="*70)
         print(f"开始时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         print()
+        
+        all_results = []
         
         # 1. 下载日线数据
         print("【1/4】下载日线数据...")
@@ -76,7 +82,14 @@ class UnifiedDataAgent:
         print()
         
         # 生成报告
-        self.generate_report()
+        reporter.add_section("下载结果", all_results, 'table')
+        reporter.update_metric('items_processed', len(all_results))
+        reporter.update_metric('items_success', len([r for r in all_results if r.get('status') == 'success']))
+        reporter.update_metric('items_failed', len([r for r in all_results if r.get('status') == 'failed']))
+        
+        result = reporter.finish('success')
+        print(f"
+📄 报告已保存：{result['filepath']}")
         
         print("="*70)
         print(" " * 25 + "完成")
