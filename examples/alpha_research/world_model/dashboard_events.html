@@ -1,0 +1,48 @@
+<!-- 交易事件时间线模板 -->
+<div class="card" style="margin-top: 20px;">
+    <h3>⚡ 交易事件时间线</h3>
+    <table>
+        <tr><th>时间</th><th>事件类型</th><th>详情</th></tr>
+        {% for event in events %}
+        <tr>
+            <td>{{ event.timestamp[11:19] }}</td>
+            <td>
+                <span class="tag tag-p{{ event.priority }}">
+                    {{ event.type.replace('Event', '') }}
+                </span>
+            </td>
+            <td>
+                {% if event.payload.symbol %}
+                    📈 {{ event.payload.symbol }}
+                {% endif %}
+                {% if event.payload.side %}
+                    {{ '🟢' if event.payload.side == 'buy' else '🔴' }} {{ event.payload.side }}
+                {% endif %}
+                {% if event.payload.price %}
+                    @ ¥{{ event.payload.price }}
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+</div>
+
+<!-- 数据新鲜度监控 -->
+<div class="card" style="margin-top: 20px;">
+    <h3>📊 数据新鲜度监控</h3>
+    <table>
+        <tr><th>数据类型</th><th>最后更新</th><th>状态</th><th>距今</th></tr>
+        {% for data in freshness %}
+        <tr>
+            <td>{{ data.type }}</td>
+            <td>{{ data.last_update[11:19] if data.last_update != 'N/A' else 'N/A' }}</td>
+            <td>
+                <span style="color: {{ 'green' if data.status == 'fresh' else 'orange' if data.status == 'stale' else 'red' }}">
+                    {{ data.status|upper }}
+                </span>
+            </td>
+            <td>{{ data.hours_ago }} 小时前</td>
+        </tr>
+        {% endfor %}
+    </table>
+</div>

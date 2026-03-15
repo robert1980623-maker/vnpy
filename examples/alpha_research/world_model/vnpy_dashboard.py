@@ -338,3 +338,97 @@ if __name__ == "__main__":
     print("=" * 60)
     
     app.run(host='0.0.0.0', port=5001, debug=False)
+
+
+def get_trade_events(limit=10):
+    """获取交易事件时间线"""
+    if not REDIS_AVAILABLE:
+        return []
+    
+    try:
+        events = []
+        for event_type in ['TradeExecutedEvent', 'OrderPlacedEvent', 'PositionChangedEvent']:
+            stream_key = f"events:{event_type}"
+            messages = redis_client.xrevrange(stream_key, count=limit)
+            
+            for msg_id, msg_data in messages:
+                events.append({
+                    'type': msg_data.get('event_type', event_type),
+                    'timestamp': msg_data.get('timestamp', ''),
+                    'payload': json.loads(msg_data.get('payload', '{}')),
+                    'priority': 1 if 'Trade' in event_type else 2
+                })
+        
+        # 按时间排序
+        events.sort(key=lambda x: x['timestamp'], reverse=True)
+        return events[:limit]
+    except:
+        return []
+
+
+def get_data_freshness():
+    """获取数据新鲜度监控"""
+    freshness = []
+    
+    # 检查各类数据最后更新时间
+    data_types = [
+        ('股票数据', 'StockPrice', 'symbol'),
+        ('持仓数据', 'PortfolioState', 'account'),
+        ('市场数据', 'MarketState', 'symbol')
+    ]
+    
+    if NEO4J_AVAILABLE:
+        try:
+            with neo4j_driver.session() as session:
+                for data_type, label, field in data_types:
+                    result = session.run(f"""
+                    MATCH (ws:{label})
+                    WHERE ws.timestamp IS NOT NULL
+                    WITH ws ORDER BY ws.timestamp DESC LIMIT 1
+                    RETURN ws.timestamp as timestamp
+                    """)
+                    record = result.single()
+                    
+                    if record and record['timestamp']:
+                        last_update = record['timestamp']
+                        # 计算时间差
+                        now = datetime.now()
+                        try:
+                            if isinstance(last_update, str):
+                                last_time = datetime.fromisoformat(last_update.replace('Z', '+00:00'))
+                            else:
+                                last_time = last_update
+                            
+                            diff_hours = (now - last_time).total_seconds() / 3600
+                            
+                            if diff_hours < 1:
+                                status = 'fresh'
+                            elif diff_hours < 24:
+                                status = 'stale'
+                            else:
+                                status = 'critical'
+                        except:
+                            status = 'unknown'
+                            diff_hours = 0
+                        
+                        freshness.append({
+                            'type': data_type,
+                            'last_update': last_update.isoformat() if hasattr(last_update, 'isoformat') else str(last_update),
+                            'status': status,
+                            'hours_ago': round(diff_hours, 1)
+                        })
+                    else:
+                        freshness.append({
+                            'type': data_type,
+                            'last_update': 'N/A',
+                            'status': 'critical',
+                            'hours_ago': 999
+                        })
+        except Exception as e:
+            logger.error(f"获取数据新鲜度失败：{e}")
+    
+    return freshness if freshness else [
+        {'type': '股票数据', 'last_update': 'N/A', 'status': 'unknown', 'hours_ago': 0},
+        {'type': '持仓数据', 'last_update': 'N/A', 'status': 'unknown', 'hours_ago': 0},
+        {'type': '市场数据', 'last_update': 'N/A', 'status': 'unknown', 'hours_ago': 0}
+    ]
