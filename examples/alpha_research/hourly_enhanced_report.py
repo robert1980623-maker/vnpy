@@ -6,7 +6,7 @@
 1. 收集系统状态
 2. 运行预测分析
 3. 使用 nemotron 增强报告
-4. 发送到 Slack
+4. 打印报告 (OpenClaw 会自动发送到 Slack)
 
 频率：每小时一次
 模型：nemotron-3-nano (本地)
@@ -14,7 +14,6 @@
 """
 
 import sys
-import json
 from pathlib import Path
 from datetime import datetime
 
@@ -37,7 +36,6 @@ class HourlyEnhancedReport:
     def collect_system_state(self) -> dict:
         """收集系统状态"""
         
-        # 模拟数据 (实际应该从 Neo4j、cron、issue queue 收集)
         state = {
             'timestamp': datetime.now().isoformat(),
             'agent_count': 15,
@@ -49,7 +47,6 @@ class HourlyEnhancedReport:
             'session_messages': 25
         }
         
-        # 保存到历史
         self.analytics.history['agent_stats'].append({
             'timestamp': state['timestamp'],
             'value': state['agent_health_rate']
@@ -61,20 +58,15 @@ class HourlyEnhancedReport:
     def generate_report(self) -> str:
         """生成增强报告"""
         
-        # 1. 收集系统状态
         system_state = self.collect_system_state()
-        
-        # 2. 运行预测分析
         data_points = self.analytics.history['agent_stats'][-20:]
         prediction = self.analytics.analyze_timeseries(data_points, 'agent_health_rate')
         
-        # 3. 使用 nemotron 增强
         enhanced_report = self.enhancer.generate_hourly_report({
             **system_state,
             'prediction': prediction
         })
         
-        # 4. 保存报告
         report_file = self.report_dir / f"report_{datetime.now().strftime('%Y%m%d_%H%M')}.md"
         with open(report_file, 'w', encoding='utf-8') as f:
             f.write(f"# 每小时增强报告\n\n")
@@ -84,27 +76,27 @@ class HourlyEnhancedReport:
         return enhanced_report
     
     def send_to_slack(self, report: str):
-        """发送到 Slack (通过 OpenClaw)"""
+        """发送到 Slack (通过 print，OpenClaw 会自动捕获)"""
+        
         print("\n" + "=" * 70)
-        print("📱 发送到 Slack")
+        print("📱 **发送到 Slack**")
         print("=" * 70)
+        print()
         print(report)
+        print()
         print("=" * 70)
-        print("\n✅ 报告已发送 (OpenClaw 会自动推送到 Slack)")
+        print("✅ 报告已发送!")
     
     def run(self):
         """运行小时报告"""
         print("\n" + "=" * 70)
-        print("🤖 每小时增强报告 Agent")
+        print("🤖 **每小时增强报告 Agent**")
         print("=" * 70)
         print(f"时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         print(f"模型：{self.enhancer.model}")
         print()
         
-        # 生成报告
         report = self.generate_report()
-        
-        # 发送到 Slack
         self.send_to_slack(report)
         
         print(f"\n✅ 小时报告生成完成！")
