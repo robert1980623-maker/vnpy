@@ -16,6 +16,7 @@ import json
 import subprocess
 import hashlib
 from pathlib import Path
+from issue_queue import IssueQueue
 from datetime import datetime
 from typing import Dict, List, Optional
 from human_report import human_qa_report
@@ -155,6 +156,17 @@ class QAChangeGate:
             print("="*70)
             print(report_result.stdout)
             
+            # 提取覆盖率值
+            coverage_value = 0
+            for line in report_result.stdout.split('\n'):
+                if 'TOTAL' in line:
+                    parts = line.split()
+                    if len(parts) > 1:
+                        try:
+                            coverage_value = float(parts[1].replace('%', ''))
+                        except:
+                            pass
+            
             if report_result.returncode == 0:
                 print(f"\n✅ 代码覆盖率 ≥ {self.coverage_threshold}%")
                 
@@ -170,6 +182,7 @@ class QAChangeGate:
                 return True
             else:
                 print(f"\n❌ 代码覆盖率 < {self.coverage_threshold}%")
+                print(f"   实际覆盖率：{coverage_value}%")
                 print(report_result.stderr[:500])
                 
                 # 生成详细报告
@@ -180,6 +193,32 @@ class QAChangeGate:
                     timeout=60
                 )
                 print(f"📄 详细报告：htmlcov/index.html")
+                
+                # 🆕 上报到 Manager
+                print(f"\n📋 上报问题到 Manager...")
+                try:
+                    queue = IssueQueue()
+                    issue = queue.create_issue(
+                        agent="qa-gate",
+                        severity="P1",
+                        error_type="coverage_low",
+                        error_message=f"代码覆盖率 {coverage_value}% < 阈值 {self.coverage_threshold}%"
+                    )
+                    issue.details = {
+                        'coverage_value': coverage_value,
+                        'coverage_threshold': self.coverage_threshold,
+                        'report_file': 'htmlcov/index.html'
+                    }
+                    issue_id = queue.write_issue(issue)
+                    print(f"✅ 问题已上报：{issue_id}")
+                    
+                    # 通知 Manager 处理
+                    from manager_interface import QuantManager
+                    manager = QuantManager()
+                    manager.handle_error_report(issue)
+                    print(f"✅ Manager 已接收并处理")
+                except Exception as e:
+                    print(f"⚠️  上报失败：{e}")
                 
                 return False
         
@@ -289,6 +328,33 @@ class QAChangeGate:
         
         if not qa_passed:
             print("\n❌ QA 闭环测试失败，禁止提交")
+            
+            # 🆕 上报到 Manager
+            print(f"\n📋 上报 QA 失败问题到 Manager...")
+            try:
+                queue = IssueQueue()
+                issue = queue.create_issue(
+                    agent="qa-gate",
+                    severity="P1",
+                    error_type="qa_loop_failed",
+                    error_message="QA 闭环测试失败"
+                )
+                issue.details = {
+                    'qa_loop_passed': False,
+                    'coverage_passed': coverage_passed,
+                    'report_file': 'quality_report_*.json'
+                }
+                issue_id = queue.write_issue(issue)
+                print(f"✅ QA 失败问题已上报：{issue_id}")
+                
+                # 通知 Manager 处理
+                from manager_interface import QuantManager
+                manager = QuantManager()
+                manager.handle_error_report(issue)
+                print(f"✅ Manager 已接收并处理")
+            except Exception as e:
+                print(f"⚠️  上报失败：{e}")
+            
             self.generate_quality_report(changes, qa_passed, coverage_passed, 90)
             return False
         
