@@ -28,7 +28,7 @@ class QAChangeGate:
         self.qa_state_file = self.project_root / '.qa_state.json'
         self.change_log_dir = self.project_root / 'change_logs'
         self.change_log_dir.mkdir(parents=True, exist_ok=True)
-        self.coverage_threshold = 65.0  # 覆盖率阈值
+        self.coverage_threshold = 85.0  # 覆盖率阈值
     
     def get_file_hash(self, filepath: Path) -> str:
         """获取文件哈希值"""
