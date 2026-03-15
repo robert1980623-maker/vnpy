@@ -17,6 +17,7 @@ except:
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 class EventSourcing:
     def __init__(self, redis_host='localhost', redis_port=6379):
         if not REDIS_AVAILABLE:
@@ -67,6 +68,12 @@ class EventSourcing:
             except:
                 stats['streams'][et] = {'count': 0}
         return stats
+    
+    def close(self):
+        """关闭连接"""
+        if self.redis:
+            self.redis.close()
+
 
 if __name__ == "__main__":
     print("=" * 60)
@@ -91,4 +98,5 @@ if __name__ == "__main__":
     event_stats = sourcing.get_stats()
     print(f"   总事件：{event_stats['total_streams']}")
     
+    sourcing.close()
     print("\n✅ 测试完成")

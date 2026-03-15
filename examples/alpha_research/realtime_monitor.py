@@ -38,7 +38,7 @@ class RealtimeMonitor:
     
     def __init__(self, account_file: str = './accounts/virtual_2026_account.json'):
         self.account_file = Path(account_file)
-        self.data_dir = Path('./data/akshare/bars')
+        self.data_dir = Path("./cache")
         self.cache_dir = Path('./cache/monitor')
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         
