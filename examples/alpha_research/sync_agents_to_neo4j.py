@@ -2,19 +2,18 @@
 """
 Agent 注册同步到 Neo4j
 
-功能:
-- 扫描项目中的所有 Agent
-- 自动注册到 Neo4j
-- 更新 Agent 状态
-- 生成同步报告
+⚠️  重要：必须在 venv 环境中执行！
 
 用法:
+    source /Users/rowang/projects/vnpy/venv/bin/activate
     python3 sync_agents_to_neo4j.py --auto
-    python3 sync_agents_to_neo4j.py --scan
-    python3 sync_agents_to_neo4j.py --report
+
+或者:
+    /Users/rowang/projects/vnpy/venv/bin/python3 sync_agents_to_neo4j.py --auto
 """
 
 import sys
+import os
 import json
 import argparse
 from pathlib import Path
@@ -141,6 +140,14 @@ class AgentSyncToNeo4j:
 
 
 def main():
+    # ⚠️  检查是否在 venv 中运行
+    if not hasattr(sys, 'real_prefix') and not (hasattr(sys, 'base_prefix') and sys.base_prefix != sys.prefix):
+        print("⚠️  警告：当前不在 venv 环境中运行！")
+        print("  请使用以下方式之一运行：")
+        print("    1. source /Users/rowang/projects/vnpy/venv/bin/activate")
+        print("    2. /Users/rowang/projects/vnpy/venv/bin/python3 sync_agents_to_neo4j.py --auto")
+        print("")
+    
     parser = argparse.ArgumentParser(description='Agent Neo4j 同步工具')
     parser.add_argument('--auto', action='store_true', help='自动模式')
     parser.add_argument('--scan', action='store_true', help='只扫描')
