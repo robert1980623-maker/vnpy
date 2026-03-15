@@ -101,7 +101,7 @@ python3 manager_monitor.py --action all
 | **名称** | Manager 问题队列监控 |
 | **频率** | 每小时 40 分 |
 | **命令** | `python3 manager_monitor.py --action check` |
-| **模型** | nemotron-3-nano (本地) |
+| **模型** | glm-4.7-flash (本地) |
 | **功能** | 检查队列状态，生成 Human 报告 |
 
 ### 任务 2: Manager 问题自动处理
@@ -111,7 +111,7 @@ python3 manager_monitor.py --action all
 | **名称** | Manager 问题自动处理 |
 | **频率** | 每小时 50 分 |
 | **命令** | `python3 manager_monitor.py --action process` |
-| **模型** | nemotron-3-nano (本地) |
+| **模型** | glm-4.7-flash (本地) |
 | **功能** | 自动分配问题给对应 Agent |
 
 ---

@@ -90,7 +90,7 @@ cd /Users/rowang/projects/vnpy/examples/alpha_research
 
 | 项目 | 成本 |
 |------|------|
-| 模型 | ¥0 (本地 nemotron-3-nano) |
+| 模型 | ¥0 (本地 glm-4.7-flash) |
 | 单次执行 | ~¥0.01 (电力) |
 | 每小时 | ~¥0.01 |
 | 每天 (24 次) | ~¥0.24 |

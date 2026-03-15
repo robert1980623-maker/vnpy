@@ -115,7 +115,7 @@ openclaw cron runs <job_id>
 
 ---
 由 每小时增强报告 Agent 自动生成
-模型：nemotron-3-nano (本地) | 成本：¥0
+模型：glm-4.7-flash (本地) | 成本：¥0
 ```
 
 ---

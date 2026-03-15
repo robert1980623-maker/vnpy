@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-使用 nemotron-3-nano 增强预测分析结果
+使用 glm-4.7-flash 增强预测分析结果
 
 功能:
 - 解释统计结果
@@ -8,7 +8,7 @@
 - 优化告警文案
 - 提供深度洞察
 
-模型：lmstudio/nvidia/nemotron-3-nano (本地)
+模型：lmstudio/zai-org/glm-4.7-flash (本地)
 成本：¥0
 """
 
@@ -18,10 +18,10 @@ from pathlib import Path
 from datetime import datetime
 
 class NemotronEnhancer:
-    """nemotron-3-nano 增强器"""
+    """glm-4.7-flash 增强器"""
     
     def __init__(self):
-        self.model = "lmstudio/nvidia/nemotron-3-nano"
+        self.model = "lmstudio/zai-org/glm-4.7-flash"
         self.api_url = "http://localhost:1234/v1/chat/completions"
         self.project_dir = Path(__file__).parent.parent
     
@@ -114,7 +114,7 @@ class NemotronEnhancer:
         return self._call_nemotron(prompt)
     
     def _call_nemotron(self, prompt: str) -> str:
-        """调用 nemotron-3-nano"""
+        """调用 glm-4.7-flash"""
         
         try:
             cmd = f'''

@@ -4,7 +4,7 @@
 2026-03-15 22:30
 
 ## 问题描述
-配置文件中有 12 处 `glm-4.7-flash` 的遗留引用，但实际运行时所有任务都使用 `nemotron-3-nano`，造成配置与实际不一致。
+配置文件中有 12 处 `glm-4.7-flash` 的遗留引用，但实际运行时所有任务都使用 `glm-4.7-flash`，造成配置与实际不一致。
 
 ## 清理结果
 
@@ -12,11 +12,11 @@
 
 | 文件 | 替换数量 | 变更 |
 |------|---------|------|
-| `config/data_agent_cron.json` | 4 | glm-4.7-flash → nemotron-3-nano |
-| `config/cron_jobs_to_add.json` | 3 | glm-4.7-flash → nemotron-3-nano |
-| `config/data_freshness_cron.json` | 2 | glm-4.7-flash → nemotron-3-nano |
-| `config/compliance_cron.json` | 2 | glm-4.7-flash → nemotron-3-nano |
-| `config/delta_consumer_cron.json` | 1 | glm-4.7-flash → nemotron-3-nano |
+| `config/data_agent_cron.json` | 4 | glm-4.7-flash → glm-4.7-flash |
+| `config/cron_jobs_to_add.json` | 3 | glm-4.7-flash → glm-4.7-flash |
+| `config/data_freshness_cron.json` | 2 | glm-4.7-flash → glm-4.7-flash |
+| `config/compliance_cron.json` | 2 | glm-4.7-flash → glm-4.7-flash |
+| `config/delta_consumer_cron.json` | 1 | glm-4.7-flash → glm-4.7-flash |
 
 **总计**: 12 处模型引用已更新
 
@@ -37,7 +37,7 @@ $ grep -r "glm-4.7-flash" config/*.json | wc -l
 ## 当前模型配置
 
 所有配置文件现在使用正确的模型：
-- **本地模型**: `lmstudio/nvidia/nemotron-3-nano`
+- **本地模型**: `lmstudio/zai-org/glm-4.7-flash`
 - **云端模型**: `bailian/qwen3-max-2026-01-23`, `bailian/qwen3-coder-plus`
 
 ## 注意事项

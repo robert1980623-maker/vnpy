@@ -27,7 +27,7 @@ def create_manager_monitor_task():
         "payload": {
             "kind": "agentTurn",
             "message": "cd /Users/rowang/projects/vnpy/examples/alpha_research && source /Users/rowang/projects/vnpy/venv/bin/activate && python3 manager_monitor.py --action check --non-interactive",
-            "model": "lmstudio/nvidia/nemotron-3-nano"
+            "model": "lmstudio/zai-org/glm-4.7-flash"
         },
         "delivery": {
             "mode": "announce",
@@ -58,7 +58,7 @@ def create_manager_process_task():
         "payload": {
             "kind": "agentTurn",
             "message": "cd /Users/rowang/projects/vnpy/examples/alpha_research && source /Users/rowang/projects/vnpy/venv/bin/activate && python3 manager_monitor.py --action process --non-interactive",
-            "model": "lmstudio/nvidia/nemotron-3-nano"
+            "model": "lmstudio/zai-org/glm-4.7-flash"
         },
         "delivery": {
             "mode": "announce",
@@ -84,14 +84,14 @@ if __name__ == '__main__':
     print("【任务 1: Manager 问题队列监控】")
     print(f"  时间：每小时 40 分")
     print(f"  命令：python3 manager_monitor.py --action check")
-    print(f"  模型：nemotron-3-nano (本地)")
+    print(f"  模型：glm-4.7-flash (本地)")
     print(f"  功能：检查队列状态，生成 Human 风格报告")
     print()
     
     print("【任务 2: Manager 问题自动处理】")
     print(f"  时间：每小时 50 分")
     print(f"  命令：python3 manager_monitor.py --action process")
-    print(f"  模型：nemotron-3-nano (本地)")
+    print(f"  模型：glm-4.7-flash (本地)")
     print(f"  功能：自动分配问题给对应 Agent")
     print()
     

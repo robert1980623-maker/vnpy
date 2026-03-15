@@ -9,7 +9,7 @@
 4. 打印报告 (OpenClaw 会自动发送到 Slack)
 
 频率：每小时一次
-模型：nemotron-3-nano (本地)
+模型：glm-4.7-flash (本地)
 成本：¥0
 """
 
