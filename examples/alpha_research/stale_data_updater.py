@@ -15,6 +15,7 @@ import sys
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import List, Dict
+from non_interactive_helper import setup_non_interactive_mode, is_non_interactive
 
 
 class StaleDataUpdater:
@@ -288,8 +289,12 @@ def main():
     parser.add_argument('--auto', action='store_true', help='自动模式')
     parser.add_argument('--threshold', type=int, default=2, help='陈旧阈值（天）')
     parser.add_argument('--check-only', action='store_true', help='只检查不更新')
+    parser.add_argument('--non-interactive', action='store_true', help='无人值守模式：禁用所有交互式提示')
     
     args = parser.parse_args()
+    
+    # 设置无人值守模式
+    setup_non_interactive_mode(args.non_interactive)
     
     updater = StaleDataUpdater(stale_threshold_days=args.threshold)
     

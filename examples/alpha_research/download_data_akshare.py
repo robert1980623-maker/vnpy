@@ -30,6 +30,7 @@ import yaml
 import os
 import requests
 from logger import TaskLogger
+from non_interactive_helper import setup_non_interactive_mode, is_non_interactive
 
 # ==================== 配置加载 ====================
 
@@ -614,6 +615,8 @@ def main():
                            help="不使用缓存")
         parser.add_argument("--night-mode", action="store_true",
                            help="夜间下载模式 (更长延迟，避免限流)")
+        parser.add_argument("--non-interactive", action="store_true",
+                           help="无人值守模式：禁用所有交互式提示")
     
         args = parser.parse_args()
     

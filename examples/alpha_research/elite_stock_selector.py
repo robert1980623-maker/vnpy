@@ -13,6 +13,7 @@ import json
 from pathlib import Path
 from datetime import datetime
 import time
+from non_interactive_helper import setup_non_interactive_mode, is_non_interactive
 
 # 添加项目路径
 project_root = Path(__file__).parent

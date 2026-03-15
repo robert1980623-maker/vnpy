@@ -22,6 +22,7 @@ from typing import List, Dict, Optional
 # 导入各下载器
 from tushare_pro_downloader import TushareProDownloader
 from tushare_fundamental_fetcher import TushareFundamentalFetcher
+from non_interactive_helper import setup_non_interactive_mode, is_non_interactive
 
 
 class UnifiedDataAgent:
@@ -194,6 +195,7 @@ def main():
     parser.add_argument('--policy', action='store_true', help='只下载政策数据')
     parser.add_argument('--news', action='store_true', help='只下载新闻数据')
     parser.add_argument('--fundamental', action='store_true', help='只下载财务数据')
+    parser.add_argument('--non-interactive', action='store_true', help='无人值守模式：禁用所有交互式提示')
     
     args = parser.parse_args()
     

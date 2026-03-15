@@ -15,6 +15,7 @@ import json
 from pathlib import Path
 from datetime import datetime
 import random
+from non_interactive_helper import setup_non_interactive_mode, is_non_interactive
 
 # 导入股票名称工具
 from stock_name_utils import StockNameCache

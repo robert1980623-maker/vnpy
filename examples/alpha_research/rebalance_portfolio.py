@@ -12,6 +12,7 @@
 import json
 from pathlib import Path
 from datetime import datetime
+from non_interactive_helper import setup_non_interactive_mode, is_non_interactive
 
 
 class PortfolioRebalancer:

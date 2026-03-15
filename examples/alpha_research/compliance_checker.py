@@ -15,6 +15,7 @@ from pathlib import Path
 from datetime import datetime
 from typing import List, Dict, Tuple, Optional
 import sys
+from non_interactive_helper import setup_non_interactive_mode, is_non_interactive
 
 # 添加项目路径
 sys.path.insert(0, str(Path(__file__).parent))

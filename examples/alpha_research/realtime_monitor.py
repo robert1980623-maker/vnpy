@@ -17,6 +17,7 @@ from pathlib import Path
 from datetime import datetime, timedelta
 import time
 import requests
+from non_interactive_helper import setup_non_interactive_mode, is_non_interactive
 
 
 class RealtimeMonitor:
@@ -398,6 +399,9 @@ def main():
     parser.add_argument('--once', action='store_true', help='只执行一次检查')
     parser.add_argument('--interval', type=int, default=3600, help='检查间隔（秒），默认 3600 秒')
     args = parser.parse_args()
+    
+    # 设置无人值守模式
+    setup_non_interactive_mode(args.non_interactive)
     
     monitor = RealtimeMonitor()
     
