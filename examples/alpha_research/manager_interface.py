@@ -1,18 +1,19 @@
 #!/usr/bin/env python3
 """
-Manager 接口
+Manager 接口 (P0-2 增强版 - 状态追踪)
 
 功能:
 - 接收错误上报
 - 分析错误类型
 - 调度对应 Agent 修复
-- 跟踪修复进度
+- 跟踪修复进度 (P0-2 新增)
 - 生成最终报告
 """
 
 import json
+import time
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 from issue_queue import IssueQueue, Issue
 from human_report import human_manager_report
@@ -21,20 +22,7 @@ from glm_error_analyzer import GLMErrorAnalyzer
 
 
 class QuantManager:
-    def __init__(self, base_dir: str = "./issues"):
-        self.base_dir = base_dir
-        self.issue_queue = IssueQueue(base_dir)
-        self.notifier = AlertNotifier()
-        self.active_tasks: Dict[str, Dict] = {}
-        self.agent_mapping = {
-            "qa": "qa",
-            "trading": "trading-agent",
-            "risk": "cro",
-            "data": "data-agent",
-            "general": "delta",
-        }
-        self.glm_analyzer = GLMErrorAnalyzer()
-    """量化 Manager - 协调调度中心"""
+    """量化 Manager - 协调调度中心 (P0-2 增强版)"""
     
     def __init__(self, base_dir: str = "./issues"):
         self.base_dir = Path(base_dir)
@@ -50,6 +38,9 @@ class QuantManager:
             'engineering': 'delta',
             'general': 'delta',
         }
+        # P0-2 新增：超时配置
+        self.default_timeout_minutes = 30
+        self.max_retries = 3
     
     def handle_error_report(self, issue: Issue):
         """处理错误上报"""
@@ -58,16 +49,26 @@ class QuantManager:
         task_type = self.analyze_error(issue)
         agent = self.select_agent(task_type)
         
+        assigned_at = datetime.now().isoformat()
+        
         task = {
             'issue_id': issue.id,
             'agent': agent,
             'type': task_type,
             'severity': severity,
             'status': 'assigned',
-            'assigned_at': datetime.now().isoformat(),
+            'assigned_at': assigned_at,
         }
         
-        self.issue_queue.update_status(issue.id, 'processing', assigned_to=agent)
+        # P0-2 修复：更新 Issue 状态时添加追踪字段
+        self.issue_queue.update_status(
+            issue.id, 
+            'processing', 
+            assigned_to=agent,
+            assigned_agent=agent,
+            assigned_at=assigned_at,
+            timeout_minutes=self.default_timeout_minutes
+        )
         self.active_tasks[issue.id] = task
         
         if severity == 'P0':
@@ -235,6 +236,180 @@ class QuantManager:
         with open(retry_file, 'w', encoding='utf-8') as f:
             json.dump(retries, f, ensure_ascii=False, indent=2)
     
+    # ========== P0-2 新增方法 ==========
+    
+    def complete_issue(self, issue_id: str, result: Dict = None):
+        """
+        P0-2 新增：完成 Issue
+        
+        由 Agent 修复完成后调用，更新状态为 resolved，记录完成时间
+        
+        Args:
+            issue_id: Issue ID
+            result: 修复结果（可选）
+        """
+        completed_at = datetime.now().isoformat()
+        
+        resolution = result.get('resolution', '修复完成') if result else '修复完成'
+        success = result.get('success', True) if result else True
+        
+        self.issue_queue.update_status(
+            issue_id,
+            'resolved' if success else 'failed',
+            resolution=resolution,
+            completed_at=completed_at
+        )
+        
+        # 从活跃任务中移除
+        if issue_id in self.active_tasks:
+            del self.active_tasks[issue_id]
+        
+        print(f"✅ Issue {issue_id} 已标记为完成")
+        
+        # 生成完成报告
+        if success:
+            self.generate_completion_report(issue_id, resolution)
+        
+        return success
+    
+    def retry_issue(self, issue_id: str):
+        """
+        P0-2 新增：重试 Issue
+        
+        超时或失败时重新分配，超过 3 次重试升级为 escalated
+        
+        Args:
+            issue_id: Issue ID
+        """
+        issue = self.issue_queue.read_issue(issue_id)
+        if not issue:
+            print(f"❌ Issue {issue_id} 不存在")
+            return False
+        
+        retry_count = issue.retry_count + 1
+        print(f"🔄 重试 Issue {issue_id} (第 {retry_count}/{self.max_retries} 次)")
+        
+        if retry_count >= self.max_retries:
+            # 超过最大重试次数，升级
+            self.issue_queue.update_status(
+                issue_id,
+                'escalated',
+                retry_count=retry_count,
+                escalation_level=issue.escalation_level + 1
+            )
+            print(f"🚨 Issue {issue_id} 已升级，需要人工介入")
+            
+            # 发送升级通知
+            self.notifier.send_alert(
+                self.notifier.create_alert(
+                    severity='P0',
+                    agent=issue.agent,
+                    error=f'Issue {issue_id} 重试 {retry_count} 次失败',
+                    action_taken='已升级，需要人工介入',
+                    estimated_fix=''
+                )
+            )
+        else:
+            # 重新分配
+            self.issue_queue.update_status(
+                issue_id,
+                'processing',
+                retry_count=retry_count,
+                assigned_at=datetime.now().isoformat()
+            )
+            
+            # 重新调度
+            task_type = self.analyze_error(issue)
+            agent = self.select_agent(task_type)
+            self.dispatch_to_delta(issue, priority='high' if retry_count > 1 else 'normal')
+            
+            print(f"✅ Issue {issue_id} 已重新分配给 {agent}")
+        
+        return True
+    
+    def check_timeout(self):
+        """
+        P0-2 新增：检查超时 Issue
+        
+        定期检查 processing 状态的 Issue，超时后标记为 timeout，触发重试或升级
+        """
+        print("\n" + "="*70)
+        print(" " * 20 + "检查超时 Issue")
+        print("="*70)
+        
+        processing_issues = self.issue_queue.get_processing_issues()
+        now = datetime.now()
+        timeout_count = 0
+        
+        for issue in processing_issues:
+            if not issue.assigned_at:
+                continue
+            
+            assigned_at = datetime.fromisoformat(issue.assigned_at)
+            timeout_minutes = issue.timeout_minutes or self.default_timeout_minutes
+            elapsed = (now - assigned_at).total_seconds() / 60
+            
+            if elapsed > timeout_minutes:
+                print(f"  ⏰ 超时：{issue.id} (已耗时 {elapsed:.0f} 分钟，上限 {timeout_minutes} 分钟)")
+                timeout_count += 1
+                
+                # 标记为 timeout
+                self.issue_queue.update_status(
+                    issue.id,
+                    'timeout',
+                    resolution=f'执行超时 ({elapsed:.0f} 分钟)'
+                )
+                
+                # 触发重试
+                self.retry_issue(issue.id)
+        
+        if timeout_count == 0:
+            print("  ✅ 无超时 Issue")
+        else:
+            print(f"\n📊 统计：{timeout_count} 个 Issue 超时")
+        
+        return timeout_count
+    
+    def track_agent_execution(self, issue_id: str, agent: str, timeout: int = 300) -> Dict:
+        """
+        P0-2 新增：追踪 Agent 执行结果
+        
+        Args:
+            issue_id: Issue ID
+            agent: 执行的 Agent 名称
+            timeout: 超时时间（秒）
+        
+        Returns:
+            {'status': 'success'/'failed'/'timeout', 'result': ...}
+        """
+        start_time = time.time()
+        
+        # 轮询检查 Issue 状态
+        while time.time() - start_time < timeout:
+            issue = self.issue_queue.read_issue(issue_id)
+            
+            # 检查 Agent 是否完成
+            result_file = Path(f'./reports/agent_results/{issue_id}.json')
+            if result_file.exists():
+                with open(result_file, 'r') as f:
+                    result = json.load(f)
+                
+                # 更新 Issue 状态
+                if result.get('status') == 'success':
+                    self.complete_issue(issue_id, result)
+                else:
+                    self.retry_issue(issue_id)
+                
+                return result
+            
+            time.sleep(5)  # 每 5 秒检查一次
+        
+        # 超时
+        self.retry_issue(issue_id)
+        return {'status': 'timeout'}
+    
+    # ========== 原有方法 ==========
+    
     def complete_task(self, issue_id: str, resolution: str, success: bool = True):
         """完成任务"""
         if issue_id not in self.active_tasks:
@@ -313,6 +488,9 @@ class QuantManager:
         print(" " * 20 + "Manager 检查问题队列")
         print("="*70)
         
+        # 先检查超时
+        self.check_timeout()
+        
         pending = self.issue_queue.get_pending_issues()
         
         if not pending:
@@ -330,10 +508,12 @@ class QuantManager:
     def get_status(self) -> Dict:
         """获取状态"""
         pending = self.issue_queue.get_pending_issues()
+        processing = self.issue_queue.get_processing_issues()
         
         return {
             'active_tasks': len(self.active_tasks),
             'pending_issues': len(pending),
+            'processing_issues': len(processing),
             'p0_count': len([i for i in pending if i.severity == 'P0']),
             'p1_count': len([i for i in pending if i.severity == 'P1']),
             'p2_count': len([i for i in pending if i.severity == 'P2']),
@@ -352,3 +532,6 @@ if __name__ == '__main__':
     
     status = manager.get_status()
     print(f"Manager 状态：{status}")
+    
+    # 检查超时
+    manager.check_timeout()

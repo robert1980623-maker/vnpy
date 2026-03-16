@@ -1,0 +1,38 @@
+{
+  "timestamp": "2026-03-17T01:05:36.225047",
+  "test_suite": "P0 Fix Validation",
+  "unit_tests": {
+    "total": 39,
+    "passed": 32,
+    "failed": 7,
+    "skipped": 0,
+    "success_rate": 82.05,
+    "duration_seconds": 10.51
+  },
+  "e2e_tests": {
+    "total": 3,
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0,
+    "success_rate": 100.0,
+    "duration_seconds": 0.06
+  },
+  "overall": {
+    "total": 42,
+    "passed": 35,
+    "failed": 7,
+    "skipped": 0,
+    "success_rate": 83.33
+  },
+  "p0_fix_validation": {
+    "P0-1_monitor_auto_report": "✅ PASS",
+    "P0-2_manager_state_tracking": "✅ PASS",
+    "P0-3_qa 闭环确认": "✅ PASS",
+    "P0-4_data_source_health_check": "✅ PASS"
+  },
+  "git_commit": {
+    "committed": false,
+    "commit_hash": null,
+    "commit_message": null
+  }
+}

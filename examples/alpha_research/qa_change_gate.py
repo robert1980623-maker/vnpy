@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 代码变更 QA 门禁系统 (增强版 - 包含覆盖率检查)
+P0-3 修复：测试通过后通知 Manager 关闭 Issue
 
 功能:
 - 检测代码变更
@@ -8,6 +9,7 @@
 - 代码覆盖率检查 (必须≥90%)
 - 验证通过后才允许提交
 - 生成质量报告
+- P0-3: 测试通过/失败时通知 Manager
 """
 
 import os
@@ -23,7 +25,7 @@ from human_report import human_qa_report
 
 
 class QAChangeGate:
-    """代码变更 QA 门禁"""
+    """代码变更 QA 门禁 (P0-3 增强版)"""
     
     def __init__(self):
         self.project_root = Path('/Users/rowang/projects/vnpy/examples/alpha_research')
@@ -31,6 +33,71 @@ class QAChangeGate:
         self.change_log_dir = self.project_root / 'change_logs'
         self.change_log_dir.mkdir(parents=True, exist_ok=True)
         self.coverage_threshold = 85.0  # 覆盖率阈值
+        
+        # P0-3 修复：Issue 追踪
+        self.current_issue_id = None
+        self.manager = None
+    
+    def _get_manager(self):
+        """懒加载 Manager 实例"""
+        if self.manager is None:
+            try:
+                from manager_interface import QuantManager
+                self.manager = QuantManager()
+                print("✅ Manager 接口已初始化")
+            except Exception as e:
+                print(f"⚠️  Manager 初始化失败：{e}")
+                self.manager = False
+        return self.manager if self.manager else None
+    
+    def _notify_manager_success(self, issue_id: str, test_report: Dict):
+        """
+        P0-3 修复：通知 Manager 测试通过
+        
+        Args:
+            issue_id: 关联的 Issue ID
+            test_report: 测试报告
+        """
+        manager = self._get_manager()
+        if not manager:
+            print(f"  ⚠️  Manager 不可用，跳过通知")
+            return
+        
+        try:
+            coverage = test_report.get('coverage', 0)
+            resolution = f"修复已通过 QA 验证，测试覆盖率 {coverage}%"
+            
+            manager.complete_issue(issue_id, {
+                'success': True,
+                'resolution': resolution,
+                'test_report': test_report
+            })
+            
+            print(f"  ✅ 已通知 Manager 关闭 Issue: {issue_id}")
+            
+        except Exception as e:
+            print(f"  ❌ 通知 Manager 失败：{e}")
+    
+    def _notify_manager_failure(self, issue_id: str, test_report: Dict):
+        """
+        P0-3 修复：通知 Manager 测试失败
+        
+        Args:
+            issue_id: 关联的 Issue ID
+            test_report: 测试报告
+        """
+        manager = self._get_manager()
+        if not manager:
+            print(f"  ⚠️  Manager 不可用，跳过通知")
+            return
+        
+        try:
+            # 触发重试
+            manager.retry_issue(issue_id)
+            print(f"  🔄 已通知 Manager 重试 Issue: {issue_id}")
+            
+        except Exception as e:
+            print(f"  ❌ 通知 Manager 失败：{e}")
     
     def get_file_hash(self, filepath: Path) -> str:
         """获取文件哈希值"""
@@ -213,10 +280,10 @@ class QAChangeGate:
                     print(f"✅ 问题已上报：{issue_id}")
                     
                     # 通知 Manager 处理
-                    from manager_interface import QuantManager
-                    manager = QuantManager()
-                    manager.handle_error_report(issue)
-                    print(f"✅ Manager 已接收并处理")
+                    manager = self._get_manager()
+                    if manager:
+                        manager.handle_error_report(issue)
+                        print(f"✅ Manager 已接收并处理")
                 except Exception as e:
                     print(f"⚠️  上报失败：{e}")
                 
@@ -329,7 +396,7 @@ class QAChangeGate:
         if not qa_passed:
             print("\n❌ QA 闭环测试失败，禁止提交")
             
-            # 🆕 上报到 Manager
+            # 🆕 P0-3 修复：上报 QA 失败到 Manager
             print(f"\n📋 上报 QA 失败问题到 Manager...")
             try:
                 queue = IssueQueue()
@@ -348,10 +415,13 @@ class QAChangeGate:
                 print(f"✅ QA 失败问题已上报：{issue_id}")
                 
                 # 通知 Manager 处理
-                from manager_interface import QuantManager
-                manager = QuantManager()
-                manager.handle_error_report(issue)
-                print(f"✅ Manager 已接收并处理")
+                manager = self._get_manager()
+                if manager:
+                    manager.handle_error_report(issue)
+                    print(f"✅ Manager 已接收并处理")
+                    
+                    # 保存 issue_id 供后续使用
+                    self.current_issue_id = issue_id
             except Exception as e:
                 print(f"⚠️  上报失败：{e}")
             
@@ -360,6 +430,16 @@ class QAChangeGate:
         
         # 步骤 4: 生成质量报告
         report_file = self.generate_quality_report(changes, qa_passed, coverage_passed, 90)
+        
+        # P0-3 修复：如果有 Issue 正在追踪，通知 Manager 关闭
+        if self.current_issue_id:
+            print(f"\n📋 通知 Manager 关闭 Issue {self.current_issue_id}...")
+            self._notify_manager_success(self.current_issue_id, {
+                'coverage': coverage_passed,
+                'qa_passed': qa_passed,
+                'report_file': report_file
+            })
+            self.current_issue_id = None
         
         print("\n" + "="*70)
         print("✅ 所有质量检查通过，允许提交")

@@ -8,6 +8,7 @@
 3. 检查仓位比例
 4. 发送告警通知
 5. 确保数据最新
+6. 自动上报 Issue 到 Manager (P0-1 修复)
 """
 
 import json
@@ -57,6 +58,106 @@ class RealtimeMonitor:
         self.enable_dingtalk = False  # 配置钉钉 webhook
         self.enable_email = False  # 配置邮件
         
+        # P0-1 修复：Manager 接口和去重机制
+        self.manager = None
+        self.reported_issues = {}  # 用于去重：{issue_key: last_reported_time}
+        self.dedup_window = 1800  # 30 分钟内不重复上报
+    
+    def _get_manager(self):
+        """懒加载 Manager 实例"""
+        if self.manager is None:
+            try:
+                from manager_interface import QuantManager
+                self.manager = QuantManager()
+                print("✅ Manager 接口已初始化")
+            except Exception as e:
+                print(f"⚠️  Manager 初始化失败：{e}")
+                self.manager = False  # 标记为失败，避免重复尝试
+        return self.manager if self.manager else None
+    
+    def _get_issue_key(self, issue_type: str, context: dict) -> str:
+        """生成 Issue 去重键"""
+        # 根据问题类型和关键上下文生成唯一键
+        if issue_type == 'data_quality':
+            stock_code = context.get('stock_code', '')
+            return f"data_quality:{stock_code}"
+        elif issue_type == 'trading_error':
+            stock_code = context.get('stock_code', '')
+            return f"trading_error:{stock_code}"
+        elif issue_type == 'system_alert':
+            return f"system_alert:{context.get('title', '')}"
+        return f"{issue_type}:{json.dumps(context, sort_keys=True)}"
+    
+    def _should_report(self, issue_key: str) -> bool:
+        """检查是否应该上报（去重检查）"""
+        now = time.time()
+        if issue_key in self.reported_issues:
+            last_reported = self.reported_issues[issue_key]
+            if now - last_reported < self.dedup_window:
+                return False
+        self.reported_issues[issue_key] = now
+        return True
+    
+    def report_to_manager(self, issue_type: str, severity: str, title: str,
+                         description: str, context: dict = None):
+        """
+        P0-1 修复：上报问题到 Manager
+        
+        Args:
+            issue_type: data_quality | trading_error | system_alert
+            severity: critical | high | medium | low
+            title: 简洁描述
+            description: 详细信息
+            context: 上下文信息
+        """
+        # 去重检查
+        issue_key = self._get_issue_key(issue_type, context or {})
+        if not self._should_report(issue_key):
+            print(f"  ⏭️  跳过重复上报：{title}")
+            return None
+        
+        manager = self._get_manager()
+        if not manager:
+            print(f"  ⚠️  Manager 不可用，跳过上报：{title}")
+            return None
+        
+        try:
+            # 构建 Issue 数据结构
+            issue_data = {
+                "type": issue_type,
+                "severity": severity,
+                "title": title,
+                "description": description,
+                "source": "realtime_monitor",
+                "timestamp": datetime.now().isoformat(),
+                "context": context or {}
+            }
+            
+            # 创建 Issue
+            from issue_queue import Issue
+            issue = Issue(
+                id="",
+                agent="realtime_monitor",
+                severity=severity.upper() if severity in ['critical', 'high', 'medium', 'low'] else "P2",
+                error_type=issue_type,
+                error_message=description[:200],
+                details=issue_data
+            )
+            
+            # 上报到 Manager
+            task = manager.handle_error_report(issue)
+            issue_id = task.get('issue_id', 'unknown')
+            
+            print(f"  ✅ 已上报 Issue 到 Manager: {issue_id}")
+            print(f"     类型：{issue_type}, 严重性：{severity}")
+            print(f"     标题：{title}")
+            
+            return issue_id
+            
+        except Exception as e:
+            print(f"  ❌ 上报失败：{e}")
+            return None
+            
     def load_account(self):
         """加载账户"""
         with open(self.account_file, 'r', encoding='utf-8') as f:
@@ -116,12 +217,28 @@ class RealtimeMonitor:
         
         for symbol, data in prices.items():
             if not data['is_latest']:
+                days_old = (datetime.now() - RealtimeMonitor.parse_date(data['date'])).days
                 stale_data.append({
                     'symbol': symbol,
                     'last_date': data['date'],
-                    'days_old': (datetime.now() - RealtimeMonitor.parse_date(data['date'])).days
+                    'days_old': days_old
                 })
-                print(f"  ⚠️ {symbol}: 数据滞后 {data['date']} ({(datetime.now() - RealtimeMonitor.parse_date(data['date'])).days} 天)")
+                print(f"  ⚠️ {symbol}: 数据滞后 {data['date']} ({days_old} 天)")
+                
+                # P0-1 修复：数据滞后超过 2 天时自动上报
+                if days_old >= 2:
+                    self.report_to_manager(
+                        issue_type='data_quality',
+                        severity='high' if days_old >= 5 else 'medium',
+                        title=f'{symbol} 数据滞后 {days_old} 天',
+                        description=f'{symbol} 最新数据日期为 {data["date"]}，已滞后 {days_old} 天，可能影响交易决策',
+                        context={
+                            'stock_code': symbol,
+                            'last_date': data['date'],
+                            'days_old': days_old,
+                            'expected': today
+                        }
+                    )
         
         if not stale_data:
             print(f"  ✅ 所有数据均为最新 ({today})")
@@ -168,6 +285,21 @@ class RealtimeMonitor:
                     'action': '立即止损卖出'
                 })
                 print(f"  🔴 止损：{symbol} {profit_rate*100:.1f}% (¥{cost_price:.2f}→¥{current_price:.2f})")
+                
+                # P0-1 修复：止损触发时自动上报
+                self.report_to_manager(
+                    issue_type='trading_error',
+                    severity='critical',
+                    title=f'{symbol} 触发止损',
+                    description=f'{symbol} 当前跌幅 {profit_rate*100:.1f}%，已触及止损线 {self.stop_loss_threshold*100:.0f}%，建议立即卖出',
+                    context={
+                        'stock_code': symbol,
+                        'profit_rate': profit_rate,
+                        'current_price': current_price,
+                        'cost_price': cost_price,
+                        'stop_loss_threshold': self.stop_loss_threshold
+                    }
+                )
             
             elif profit_rate >= self.take_profit_threshold:
                 alerts['take_profit'].append({
@@ -177,6 +309,20 @@ class RealtimeMonitor:
                     'action': '建议止盈'
                 })
                 print(f"  🟢 止盈：{symbol} {profit_rate*100:.1f}%")
+                
+                # P0-1 修复：止盈触发时自动上报
+                self.report_to_manager(
+                    issue_type='trading_error',
+                    severity='high',
+                    title=f'{symbol} 触发止盈',
+                    description=f'{symbol} 当前涨幅 {profit_rate*100:.1f}%，已触及止盈线 {self.take_profit_threshold*100:.0f}%，建议考虑止盈',
+                    context={
+                        'stock_code': symbol,
+                        'profit_rate': profit_rate,
+                        'current_price': current_price,
+                        'take_profit_threshold': self.take_profit_threshold
+                    }
+                )
             
             elif profit_rate <= self.warning_threshold:
                 alerts['warning'].append({
@@ -195,6 +341,20 @@ class RealtimeMonitor:
                     'excess': (position_ratio - self.max_position_ratio) * 100
                 })
                 print(f"  ⚠️ 超配：{symbol} {position_ratio*100:.1f}% (上限 15%，超 {position_ratio*100 - 15:.1f}%)")
+                
+                # P0-1 修复：仓位超配时自动上报
+                self.report_to_manager(
+                    issue_type='system_alert',
+                    severity='medium',
+                    title=f'{symbol} 仓位超配',
+                    description=f'{symbol} 当前仓位 {position_ratio*100:.1f}%，超过上限 {self.max_position_ratio*100:.0f}%',
+                    context={
+                        'stock_code': symbol,
+                        'position_ratio': position_ratio,
+                        'max_ratio': self.max_position_ratio,
+                        'market_value': market_value
+                    }
+                )
         
         # 现金比例检查
         cash_ratio = account['cash'] / total_assets if total_assets > 0 else 0
@@ -205,6 +365,19 @@ class RealtimeMonitor:
                 'min_required': total_assets * self.min_cash_ratio
             })
             print(f"  ⚠️ 现金不足：{cash_ratio*100:.1f}% (建议≥5%)")
+            
+            # P0-1 修复：现金不足时自动上报
+            self.report_to_manager(
+                issue_type='system_alert',
+                severity='medium',
+                title='现金比例不足',
+                description=f'当前现金比例 {cash_ratio*100:.1f}%，低于最低要求 {self.min_cash_ratio*100:.0f}%',
+                context={
+                    'cash_ratio': cash_ratio,
+                    'cash': account['cash'],
+                    'min_required': self.min_cash_ratio
+                }
+            )
         
         print(f"\n📊 统计:")
         print(f"  止损：{len(alerts['stop_loss'])} 只")
@@ -400,6 +573,7 @@ def main():
     parser = argparse.ArgumentParser(description='实时监控系统')
     parser.add_argument('--once', action='store_true', help='只执行一次检查')
     parser.add_argument('--interval', type=int, default=3600, help='检查间隔（秒），默认 3600 秒')
+    parser.add_argument('--non-interactive', action='store_true', help='无人值守模式：禁用所有交互式提示，使用默认值')
     args = parser.parse_args()
     
     # 设置无人值守模式
