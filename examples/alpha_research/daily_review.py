@@ -23,6 +23,9 @@ from non_interactive_helper import setup_non_interactive_mode, is_non_interactiv
 # 导入股票名称工具
 from stock_name_utils import StockNameCache
 
+# 通知工具
+from notification_utils import TaskNotifier, notify_task_start, notify_task_complete, notify_task_error
+
 
 def generate_daily_review():
     """生成每日复盘报告"""

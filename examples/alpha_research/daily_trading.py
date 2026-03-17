@@ -17,6 +17,9 @@ from virtual_account import VirtualAccount, Position
 import random
 from logger import TaskLogger
 
+# 通知工具
+from notification_utils import TaskNotifier, notify_task_start, notify_task_complete, notify_task_error
+
 
 class DailyTrading:
     """每日交易"""
@@ -173,6 +176,12 @@ class DailyTrading:
 
 
 def main():
+    # 发送开始通知
+    notify_task_start("自动交易", {
+        "日期": datetime.now().strftime('%Y-%m-%d'),
+        "模式": "盘中交易"
+    })
+
     """主函数"""
     print("=" * 50)
     print("                    每日自动交易")

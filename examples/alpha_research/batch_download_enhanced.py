@@ -26,6 +26,9 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
+# 通知工具
+from notification_utils import TaskNotifier, notify_task_start, notify_task_complete, notify_task_error
+
 # 添加 world_model 模块路径
 sys.path.insert(0, str(Path(__file__).parent / 'world_model'))
 
@@ -320,6 +323,12 @@ def download_batch(batch_num, stocks):
 
 
 def main():
+    # 发送开始通知
+    notify_task_start("数据下载", {
+        "模式": "批量下载",
+        "时间": datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    })
+
     """主函数"""
     logger.info("=" * 60)
     logger.info("批量下载股票（增强版 - Tushare 主 + Akshare 备）")

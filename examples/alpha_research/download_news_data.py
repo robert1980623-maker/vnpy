@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# 通知工具
+from notification_utils import notify_task_start, notify_task_complete, notify_task_error
+
 """
 消息面数据下载器
 
@@ -247,6 +250,12 @@ def download_all_news(stock_list: list = None):
     print(f"✅ 消息面数据下载完成")
     print(f"{'='*60}\n")
     
+    # 发送完成通知
+    notify_task_complete("消息面数据下载", {
+        "股票数量": str(summary.get("stocks_count", 0)),
+        "新闻数量": str(summary.get("news_count", 0))
+    })
+    
     return summary
 
 
@@ -255,6 +264,14 @@ if __name__ == "__main__":
     from datetime import datetime
     
     logger = TaskLogger(task_name='news_download')
+    
+    # 发送开始通知
+    notify_task_start("消息面数据下载", {
+        "日期": datetime.now().strftime("%Y-%m-%d"),
+        "类型": "新闻/研报"
+    })
+    
+    try:
     start_time = datetime.now()
     
     try:

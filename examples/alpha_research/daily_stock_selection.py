@@ -7,6 +7,12 @@
 2. 生成交易计划
 3. 发送钉钉通知
 4. 保存选股报告
+
+        # 发送完成通知
+        notify_task_complete("每日选股", {
+            "选股数量": str(len(self.selected_stocks)),
+            "报告文件": "reports/stock_selection_" + datetime.now().strftime('%Y-%m-%d') + ".json"
+        })
 5. 显示股票名称
 """
 
@@ -24,6 +30,9 @@ from vnpy.alpha.dataset import StockPool, FundamentalData
 from stock_name_utils import StockNameCache, format_symbol_with_name
 from tushare_fundamental_fetcher import TushareFundamentalFetcher
 from logger import TaskLogger
+
+# 通知工具
+from notification_utils import TaskNotifier, notify_task_start, notify_task_complete, notify_task_error
 
 
 class DailyStockSelector:
@@ -46,8 +55,24 @@ class DailyStockSelector:
     def load_stocks(self):
         """加载股票池"""
         csv_files = list(self.data_dir.glob('*.csv'))
-        symbols = [f.stem.replace('_', '.') for f in csv_files]
-        print(f"✅ 加载股票池：{len(symbols)} 只股票")
+        symbols = []
+        for f in csv_files:
+            symbol = f.stem
+            # Handle different naming conventions
+            if symbol.endswith('_SZ'):
+                symbol = symbol.replace('_SZ', '.SZ').replace('_sz', '.SZ')
+            elif symbol.endswith('_SH'):
+                symbol = symbol.replace('_SH', '.SH').replace('_sh', '.SH')
+            elif symbol.endswith('_sz'):
+                symbol = symbol.replace('_SZ', '.SZ').replace('_sz', '.SZ')
+            elif symbol.endswith('_sh'):
+                symbol = symbol.replace('_SH', '.SH').replace('_sh', '.SH')
+            elif symbol.endswith('_z'):
+                symbol = symbol.replace('_z', '.SZ')
+            elif symbol.endswith('_s'):
+                symbol = symbol.replace('_s', '.SH')
+            symbols.append(symbol)
+            print(f"✅ 加载股票池：{len(symbols)} 只股票")
         return symbols
         
     def get_real_fundamentals(self, symbols):
@@ -144,18 +169,30 @@ class DailyStockSelector:
         target_symbols = set([s[0] for s in self.selected_stocks[:20]])  # 前 20 只
         
         # 计算调仓
-        buy_list = [s for s in target_symbols if s not in current_holdings]
-        sell_list = [s for s in current_holdings if s not in target_symbols]
+        buy_symbols = [s for s in target_symbols if s not in current_holdings]
+        sell_symbols = [s for s in current_holdings if s not in target_symbols]
         hold_list = [s for s in current_holdings if s in target_symbols]
         
-        self.trading_plan['buy'] = list(buy_list)[:10]  # 最多买入 10 只
-        self.trading_plan['sell'] = list(sell_list)[:10]  # 最多卖出 10 只
+        # 生成详细的买入列表（包含股票信息）
+        buy_list = []
+        for symbol in buy_symbols[:10]:  # 最多买入 10 只
+            stock_data = next((s[1] for s in self.selected_stocks if s[0] == symbol), {})
+            buy_list.append({
+                'symbol': symbol,
+                'name': self.name_cache.get_name(symbol),
+                'reason': '+'.join(stock_data.get('strategies', [])),
+                'score': stock_data.get('score', 0),
+                'pe': stock_data.get('fundamentals', {}).get('pe', 0),
+                'roe': stock_data.get('fundamentals', {}).get('roe', 0)
+            })
+        
+        self.trading_plan['buy'] = buy_list
+        self.trading_plan['sell'] = list(sell_symbols)[:10]  # 最多卖出 10 只
         self.trading_plan['hold'] = list(hold_list)
         
         print(f"\n买入：{len(self.trading_plan['buy'])} 只")
-        for symbol in self.trading_plan['buy'][:5]:
-            name = self.name_cache.get_name(symbol)
-            print(f"  - {symbol} {name}")
+        for stock in self.trading_plan['buy'][:5]:
+            print(f"  - {stock['symbol']} {stock['name']} ({stock['reason']})")
         if len(self.trading_plan['buy']) > 5:
             print(f"  ... 还有 {len(self.trading_plan['buy']) - 5} 只")
         
@@ -188,11 +225,11 @@ class DailyStockSelector:
                 'strategies': data['strategies'],
                 'score': data['score'],
                 'reasons': data['reasons'],
-                'pe': round(data['fundamentals'].get('pe', 0), 2),
-                'roe': round(data['fundamentals'].get('roe', 0), 2),
-                'dividend_yield': round(data['fundamentals'].get('dividend_yield', 0), 2),
-                'revenue_growth': round(data['fundamentals'].get('revenue_growth', 0), 2),
-                'profit_growth': round(data['fundamentals'].get('profit_growth', 0), 2),
+                'pe': round(data['fundamentals'].get('pe') or 0, 2),
+                'roe': round(data['fundamentals'].get('roe') or 0, 2),
+                'dividend_yield': round(data['fundamentals'].get('dividend_yield') or 0, 2),
+                'revenue_growth': round(data['fundamentals'].get('revenue_growth') or 0, 2),
+                'profit_growth': round(data['fundamentals'].get('profit_growth') or 0, 2),
             }
             selection_report['stocks'].append(stock_info)
         
@@ -209,6 +246,34 @@ class DailyStockSelector:
         print(f"\n✅ 报告已保存:")
         print(f"   选股报告：{selection_file}")
         print(f"   交易计划：{plan_file}")
+
+
+def load_current_holdings_from_account(account_file: str = './accounts/virtual_2026_account.json'):
+    """从虚拟账户文件读取当前持仓"""
+    account_path = Path(account_file)
+    
+    if not account_path.exists():
+        print(f"⚠️  警告：账户文件不存在 {account_file}，使用空持仓")
+        return []
+    
+    try:
+        with open(account_path, 'r', encoding='utf-8') as f:
+            account = json.load(f)
+        
+        # 从 positions 数组中提取股票代码
+        current_holdings = [pos['symbol'] for pos in account.get('positions', [])]
+        
+        print(f"\n✅ 从虚拟账户读取持仓：{len(current_holdings)} 只股票")
+        for symbol in current_holdings[:5]:
+            name = StockNameCache().get_name(symbol)
+            print(f"  - {symbol} {name}")
+        if len(current_holdings) > 5:
+            print(f"  ... 还有 {len(current_holdings) - 5} 只")
+        
+        return current_holdings
+    except Exception as e:
+        print(f"⚠️  警告：读取账户文件失败 {e}，使用空持仓")
+        return []
 
 
 def main():
@@ -234,12 +299,13 @@ def main():
         # 步骤 3: 多策略选股
         selector.multi_strategy_selection(symbols, fundamentals, target_count=10)
 
-        # 步骤 4: 生成交易计划
-        # 模拟当前持仓（实际应从虚拟账户读取）
-        current_holdings = ['600066.SH', '688169.SH', '000975.SZ']
+        # 步骤 4: 从虚拟账户读取真实持仓
+        current_holdings = load_current_holdings_from_account('./accounts/virtual_2026_account.json')
+
+        # 步骤 5: 生成交易计划（使用真实持仓）
         selector.generate_trading_plan(current_holdings)
 
-        # 步骤 5: 保存报告
+        # 步骤 6: 保存报告
         selector.save_reports()
 
         print("\n" + "=" * 70)
