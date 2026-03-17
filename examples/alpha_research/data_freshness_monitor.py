@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# 通知工具
+from notification_utils import notify_task_start, notify_task_complete, notify_task_error
+
 """数据新鲜度监控 Agent - 修复版"""
 
 import json
@@ -136,4 +139,18 @@ def main():
     monitor.save_report()
 
 if __name__ == '__main__':
-    main()
+    # 发送开始通知
+    notify_task_start("数据新鲜度监控", {
+        "时间": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    })
+    
+    try:
+        main()
+        
+        # 发送完成通知
+        notify_task_complete("数据新鲜度监控", {
+            "状态": "完成"
+        })
+    except Exception as e:
+        notify_task_error("数据新鲜度监控", str(e))
+        raise

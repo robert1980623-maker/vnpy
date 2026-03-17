@@ -10,6 +10,7 @@
 """
 
 import os
+from notification_utils import notify_task_start, notify_task_complete, notify_task_error
 import sys
 import json
 from pathlib import Path
@@ -329,5 +330,22 @@ class ArchitectTestReviewer:
 
 
 if __name__ == '__main__':
+
+    # 发送通知
+    try:
+        notify_task_start("架构师代码审查", {
+            "时间": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "类型": "代码审查"
+        })
+        
+        result = main()
+        
+        notify_task_complete("架构师代码审查", {
+            "状态": "完成"
+        })
+    except Exception as e:
+        notify_task_error("架构师代码审查", str(e))
+        raise
+
     reviewer = ArchitectTestReviewer()
     reviewer.run()

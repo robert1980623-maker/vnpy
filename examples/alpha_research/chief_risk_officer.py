@@ -11,6 +11,7 @@
 """
 
 import json
+from notification_utils import notify_task_start, notify_task_complete, notify_task_error
 import sys
 from pathlib import Path
 from datetime import datetime, timedelta
@@ -258,5 +259,28 @@ class ChiefRiskOfficer:
 
 
 if __name__ == '__main__':
+
+    # 发送通知
+    try:
+        notify_task_start("首席风险官", {
+            "时间": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "类型": "风险评估"
+        })
+        
+        result = main()
+        
+        # 检查是否有风险
+        if result and isinstance(result, dict) and result.get('risks'):
+            notify_task_error("首席风险官", f"发现{len(result['risks'])}个风险", {
+                "风险数量": str(len(result['risks']))
+            })
+        else:
+            notify_task_complete("首席风险官", {
+                "状态": "无风险"
+            })
+    except Exception as e:
+        notify_task_error("首席风险官", str(e))
+        raise
+
     cro = ChiefRiskOfficer()
     cro.run()
