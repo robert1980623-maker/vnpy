@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 """
-通知工具模块 v3 - 基于 OpenClaw message send 命令
+通知工具模块 v4 - 基于 OpenClaw message send 命令（飞书集成）
 
 功能:
-1. 使用 openclaw message send 发送消息到企业微信群
+1. 使用 openclaw message send 发送消息到飞书群
 2. 支持任务开始/完成/错误通知
 3. 自动格式化消息内容
 4. 无需 Webhook，直接使用 OpenClaw 渠道
+
+版本更新:
+- v4: 从企业微信迁移到飞书 (2026-03-21)
 """
 
 import subprocess
@@ -14,12 +17,12 @@ import json
 from pathlib import Path
 from datetime import datetime
 
-# 当前企业微信群 ID
-WECOM_CHAT_ID = "wrQuLeEAAAOjgxc51Z3_P5DtrQ1LBtcQ"
+# 飞书群 ID
+FEISHU_CHAT_ID = "oc_21ccc3d7355ceabbdfb1e027af5441e5"
 
 
 class TaskNotifier:
-    """任务通知器（v3 - 使用 openclaw message send）"""
+    """任务通知器（v4 - 使用 openclaw message send 发送到飞书）"""
     
     def __init__(self, task_name: str, chat_id: str = None):
         """
@@ -27,10 +30,10 @@ class TaskNotifier:
         
         Args:
             task_name: 任务名称
-            chat_id: 企业微信群 ID
+            chat_id: 飞书群 ID
         """
         self.task_name = task_name
-        self.chat_id = chat_id or WECOM_CHAT_ID
+        self.chat_id = chat_id or FEISHU_CHAT_ID
         self.messages = []
     
     def send(self, status: str, title: str = None, content: str = None, 
@@ -93,7 +96,7 @@ class TaskNotifier:
         })
         
         # 发送消息
-        print(f"\n📤 发送通知到企业微信群:")
+        print(f"\n📤 发送通知到飞书群:")
         print("-" * 60)
         print(message)
         print("-" * 60)
@@ -107,7 +110,7 @@ class TaskNotifier:
                 'openclaw',
                 'message',
                 'send',
-                '--channel', 'wecom',
+                '--channel', 'feishu',
                 '--target', self.chat_id,
                 '--message', message
             ]
@@ -180,7 +183,7 @@ def send_to_group(message: str, chat_id: str = None):
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("  通知工具模块 v3 测试（openclaw message send）")
+    print("  通知工具模块 v4 测试（openclaw message send - 飞书）")
     print("=" * 60)
     
     # 测试 1: 任务开始
@@ -191,13 +194,13 @@ if __name__ == "__main__":
     
     # 测试 3: 自定义消息
     send_to_group("""
-🧪 **通知系统测试 v3**
+🧪 **通知系统测试 v4**
 
-使用 openclaw message send 发送消息。
+使用 openclaw message send 发送消息到飞书群。
 
 ✅ 测试项目:
 · OpenClaw 命令调用
-· 企业微信群发送
+· 飞书群发送
 · Markdown 格式
 
 ---

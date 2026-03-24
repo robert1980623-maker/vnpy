@@ -31,8 +31,12 @@
     "P0-4_data_source_health_check": "✅ PASS"
   },
   "git_commit": {
-    "committed": false,
-    "commit_hash": null,
-    "commit_message": null
+    "committed": true,
+    "commit_hash": "a4182c95",
+    "commit_message": "feat: P0 紧急修复 - 闭环断点修复完成",
+    "commit_date": "2026-03-17T01:06:42+08:00",
+    "files_changed": 77,
+    "insertions": 15347,
+    "deletions": 103
   }
 }

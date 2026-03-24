@@ -271,7 +271,6 @@ if __name__ == "__main__":
         "类型": "新闻/研报"
     })
     
-    try:
     start_time = datetime.now()
     
     try:

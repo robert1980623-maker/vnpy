@@ -55,7 +55,7 @@ class TestIssueQueueFinalLines:
         assert resolved_file.exists()
         
         # 现在调用 clear_old_issues (清理 30 天前的)
-        test_queue.clear_old_issues(days=30)
+        test_queue.clear_old_issues(days=30, archive=True)
         
         # 应该被移动到 archive
         archive_file = test_queue.archive_dir / f"{old_issue_id}.json"

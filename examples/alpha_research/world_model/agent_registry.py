@@ -37,7 +37,7 @@ class AgentRegistry:
     def scan_agents(self, project_dir: str) -> List[Dict]:
         project_path = Path(project_dir)
         agents = []
-        patterns = ['*agent*.py', '*officer*.py', '*decision*.py']
+        patterns = ['*agent*.py', '*officer*.py', '*decision*.py', '*qa*.py', '*gate*.py', '*manager*.py']
         
         for pattern in patterns:
             for file in project_path.glob(pattern):

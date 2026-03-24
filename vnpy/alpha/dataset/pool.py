@@ -383,3 +383,228 @@ class StockPool:
 def create_pool(pool_path: Optional[str] = None) -> StockPool:
     """创建股票池实例"""
     return StockPool(pool_path)
+
+
+class IndexStockPool:
+    """
+    指数成分股股票池
+    
+    自动获取和维护指数成分股
+    """
+    
+    # 常见指数代码映射
+    INDEX_MAP = {
+        "000300.SH": "沪深 300",
+        "000016.SH": "上证 50",
+        "000905.SH": "中证 500",
+        "000852.SH": "中证 1000",
+        "399006.SZ": "创业板指",
+        "000001.SH": "上证指数",
+        "399001.SZ": "深证成指",
+    }
+    
+    def __init__(self, index_code: str, name: Optional[str] = None):
+        """
+        初始化指数成分股股票池
+        
+        Args:
+            index_code: 指数代码，如 "000300.SH"
+            name: 股票池名称（可选，默认使用指数名称）
+        """
+        if name is None:
+            name = self.INDEX_MAP.get(index_code, index_code)
+        self.name = name
+        self.index_code = index_code
+        self._stocks: set = set()
+        self._metadata = {
+            "type": "index",
+            "index_code": index_code,
+            "index_name": self.INDEX_MAP.get(index_code, "未知指数"),
+            "created_at": datetime.now().isoformat(),
+            "updated_at": datetime.now().isoformat(),
+        }
+    
+    def add(self, vt_symbol) -> None:
+        """添加股票到股票池"""
+        if isinstance(vt_symbol, str):
+            self._stocks.add(vt_symbol)
+        else:
+            self._stocks.update(vt_symbol)
+        self._metadata["updated_at"] = datetime.now().isoformat()
+    
+    def remove(self, vt_symbol) -> None:
+        """从股票池移除股票"""
+        if isinstance(vt_symbol, str):
+            self._stocks.discard(vt_symbol)
+        else:
+            self._stocks.difference_update(vt_symbol)
+        self._metadata["updated_at"] = datetime.now().isoformat()
+    
+    def clear(self) -> None:
+        """清空股票池"""
+        self._stocks.clear()
+        self._metadata["updated_at"] = datetime.now().isoformat()
+    
+    def contains(self, vt_symbol: str) -> bool:
+        """检查股票是否在股票池中"""
+        return vt_symbol in self._stocks
+    
+    def get_stocks(self) -> list:
+        """获取股票池中的所有股票"""
+        return sorted(list(self._stocks))
+    
+    def count(self) -> int:
+        """获取股票池中的股票数量"""
+        return len(self._stocks)
+    
+    def update_components(self, components: list) -> None:
+        """更新指数成分股"""
+        self.clear()
+        self.add(components)
+        self._metadata["last_updated"] = datetime.now().isoformat()
+    
+    def get_index_info(self) -> dict:
+        """获取指数信息"""
+        return {
+            "index_code": self.index_code,
+            "index_name": self._metadata.get("index_name", ""),
+            "component_count": self.count(),
+            "last_updated": self._metadata.get("last_updated", "")
+        }
+    
+    def __len__(self) -> int:
+        return self.count()
+    
+    def __iter__(self):
+        return iter(self.get_stocks())
+    
+    def __contains__(self, vt_symbol: str) -> bool:
+        return self.contains(vt_symbol)
+    
+    def __repr__(self) -> str:
+        return f"IndexStockPool(index_code='{self.index_code}', name='{self.name}', count={self.count()})"
+
+
+class CustomStockPool:
+    """
+    自定义股票池
+    
+    支持灵活的股票池组合运算
+    """
+    
+    def __init__(self, name: str = "custom"):
+        """
+        初始化自定义股票池
+        
+        Args:
+            name: 股票池名称
+        """
+        self.name = name
+        self._stocks: set = set()
+        self._metadata = {
+            "type": "custom",
+            "created_at": datetime.now().isoformat(),
+            "updated_at": datetime.now().isoformat(),
+        }
+        self._sub_pools: dict = {}
+    
+    def add(self, vt_symbol) -> None:
+        """添加股票到股票池"""
+        if isinstance(vt_symbol, str):
+            self._stocks.add(vt_symbol)
+        else:
+            self._stocks.update(vt_symbol)
+        self._metadata["updated_at"] = datetime.now().isoformat()
+    
+    def remove(self, vt_symbol) -> None:
+        """从股票池移除股票"""
+        if isinstance(vt_symbol, str):
+            self._stocks.discard(vt_symbol)
+        else:
+            self._stocks.difference_update(vt_symbol)
+        self._metadata["updated_at"] = datetime.now().isoformat()
+    
+    def clear(self) -> None:
+        """清空股票池"""
+        self._stocks.clear()
+        self._metadata["updated_at"] = datetime.now().isoformat()
+    
+    def contains(self, vt_symbol: str) -> bool:
+        """检查股票是否在股票池中"""
+        return vt_symbol in self._stocks
+    
+    def get_stocks(self) -> list:
+        """获取股票池中的所有股票"""
+        return sorted(list(self._stocks))
+    
+    def count(self) -> int:
+        """获取股票池中的股票数量"""
+        return len(self._stocks)
+    
+    def add_sub_pool(self, name: str, pool) -> None:
+        """添加子股票池"""
+        self._sub_pools[name] = pool
+    
+    def remove_sub_pool(self, name: str):
+        """移除子股票池"""
+        return self._sub_pools.pop(name, None)
+    
+    def union(self, *pool_names: str) -> list:
+        """计算多个子池的并集"""
+        result: set = set()
+        for name in pool_names:
+            if name in self._sub_pools:
+                result.update(self._sub_pools[name]._stocks)
+        return sorted(list(result))
+    
+    def intersection(self, *pool_names: str) -> list:
+        """计算多个子池的交集"""
+        if not pool_names:
+            return []
+        result: set = set()
+        if pool_names[0] in self._sub_pools:
+            result = set(self._sub_pools[pool_names[0]]._stocks)
+        for name in pool_names[1:]:
+            if name in self._sub_pools:
+                result.intersection_update(self._sub_pools[name]._stocks)
+            else:
+                return []
+        return sorted(list(result))
+    
+    def difference(self, pool_name1: str, pool_name2: str) -> list:
+        """计算两个子池的差集"""
+        if pool_name1 not in self._sub_pools:
+            return []
+        if pool_name2 not in self._sub_pools:
+            return list(self._sub_pools[pool_name1]._stocks)
+        result = self._sub_pools[pool_name1]._stocks - self._sub_pools[pool_name2]._stocks
+        return sorted(list(result))
+    
+    def get_sub_pool_names(self) -> list:
+        """获取所有子池名称"""
+        return list(self._sub_pools.keys())
+    
+    def __len__(self) -> int:
+        return self.count()
+    
+    def __iter__(self):
+        return iter(self.get_stocks())
+    
+    def __contains__(self, vt_symbol: str) -> bool:
+        return self.contains(vt_symbol)
+    
+    def __repr__(self) -> str:
+        return f"CustomStockPool(name='{self.name}', count={self.count()})"
+
+
+def create_index_pool(index_code: str, components: Optional[list] = None) -> IndexStockPool:
+    """创建指数成分股股票池"""
+    pool = IndexStockPool(index_code)
+    if components:
+        pool.update_components(components)
+    return pool
+
+
+def create_custom_pool(name: str = "custom") -> CustomStockPool:
+    """创建自定义股票池"""
+    return CustomStockPool(name=name)

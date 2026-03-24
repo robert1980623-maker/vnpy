@@ -45,3 +45,4 @@ examples/alpha_research/data/news/
 # 配置文件（包含敏感信息）
 examples/alpha_research/config/*.json
 !examples/alpha_research/config/*.example.json
+.env

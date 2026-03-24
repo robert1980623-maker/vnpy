@@ -1,0 +1,146 @@
+# 数据新鲜度配置
+# 版本：1.0
+# 创建：2026-03-18
+
+# ==================== 更新策略 ====================
+update_strategy:
+  # 增量更新 - 日常使用
+  incremental:
+    enabled: true
+    schedule:
+      - "01:00"   # 凌晨更新
+      - "17:30"   # 盘后更新
+    stocks: "positions + watchlist"  # 持仓 + 关注列表
+    max_stocks: 50
+  
+  # 全量同步 - 每周执行
+  full_sync:
+    enabled: true
+    schedule: "03:00 Sunday"  # 周日凌晨
+    stocks: "all"  # 全部股票
+    max_stocks: 500
+  
+  # 紧急补采 - 告警触发
+  emergency:
+    enabled: true
+    trigger: "alert"  # 监控告警触发
+    stocks: "stale_only"  # 只更新滞后股票
+    max_retries: 3
+
+# ==================== 数据源配置 ====================
+data_sources:
+  primary: tushare
+  backup:
+    - akshare
+    - baostock
+  
+  tushare:
+    token_env: "TUSHARE_TOKEN"
+    retry: 3
+    timeout: 60
+    rate_limit: 10  # 每秒请求数
+  
+  akshare:
+    proxy: "101.201.173.125"
+    retry: 3
+    timeout: 60
+    rate_limit: 5
+  
+  baostock:
+    retry: 2
+    timeout: 90
+    rate_limit: 3
+
+# ==================== 新鲜度阈值 ====================
+freshness:
+  max_age_hours: 24         # 最大允许滞后时间
+  warning_threshold: 48     # 警告阈值 (小时)
+  critical_threshold: 72    # 严重阈值 (小时)
+  target_fresh_ratio: 0.95  # 目标准确率
+
+# ==================== 质量检查 ====================
+quality:
+  weights:
+    freshness: 0.40      # 时效性权重
+    completeness: 0.25   # 完整性权重
+    accuracy: 0.25       # 准确性权重
+    continuity: 0.10     # 连续性权重
+  
+  thresholds:
+    excellent: 90  # A 级
+    good: 75       # B 级
+    fair: 60       # C 级
+    # < 60: D 级 (需要修复)
+  
+  checks:
+    required_columns:
+      - vt_symbol
+      - datetime
+      - open_price
+      - high_price
+      - low_price
+      - close_price
+      - volume
+      - turnover
+    
+    price_limits:
+      main_board: 0.10    # 主板涨跌幅限制
+      chi_next: 0.20      # 创业板
+      star_market: 0.20   # 科创板
+      st_stock: 0.05      # ST 股
+      bse: 0.30           # 北交所
+
+# ==================== 告警配置 ====================
+alerts:
+  channels:
+    - wecom      # 企业微信
+    - email      # 邮件
+  
+  escalation:
+    warning_to_critical: 3600   # 1 小时后升级
+    critical_to_emergency: 1800 # 30 分钟后升级
+  
+  notification:
+    max_retries: 3
+    retry_interval: 1800  # 30 分钟
+  
+  thresholds:
+    fresh_ratio_warning: 0.95
+    fresh_ratio_critical: 0.80
+    stale_stock_hours: 48
+    download_failure_rate: 0.20
+
+# ==================== 备份配置 ====================
+backup:
+  enabled: true
+  
+  daily:
+    retention_days: 7
+    path: "./backup/daily"
+    compress: true
+  
+  weekly:
+    retention_weeks: 4
+    path: "./backup/weekly"
+    compress: true
+  
+  monthly:
+    retention_months: 12
+    path: "./backup/monthly"
+    compress: true
+
+# ==================== 日志配置 ====================
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(levelname)s - %(message)s"
+  file: "./logs/data_freshness.log"
+  max_size_mb: 100
+  backup_count: 5
+
+# ==================== 性能配置 ====================
+performance:
+  batch_size: 10           # 批处理大小
+  batch_delay: 5           # 批次间隔 (秒)
+  stock_delay: 1           # 单只股票间隔 (秒)
+  max_workers: 4           # 并发工作数
+  timeout_per_stock: 60    # 单只股票超时 (秒)

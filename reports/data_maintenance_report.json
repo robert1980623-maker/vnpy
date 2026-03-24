@@ -1,0 +1,62 @@
+{
+  "timestamp": "2026-03-23T09:54:01.732795",
+  "tasks": {
+    "data_freshness_check": {
+      "cron_configured": true,
+      "data_files_count": 2,
+      "last_update": 1774228558.337057
+    },
+    "minute_bar_data": {
+      "tushare_available": false,
+      "akshare_available": false,
+      "test_result": "failed",
+      "tushare_error": "请指定正确的接口名",
+      "akshare_error": "HTTPSConnectionPool(host='push2his.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/trends2/get?fields1=f1%2Cf2%2Cf3%2Cf4%2Cf5%2Cf6%2Cf7%2Cf8%2Cf9%2Cf10%2Cf11%2Cf12%2Cf13&fields2=f51%2Cf52%2Cf53%2Cf54%2Cf55%2Cf56%2Cf57%2Cf58&ut=7eea3edcaed734bea9cbfc24409ed989&ndays=5&iscr=0&secid=0.000001 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))"
+    },
+    "capital_flow_data": {
+      "tushare_available": true,
+      "akshare_available": true,
+      "test_result": "success",
+      "tushare_count": 6,
+      "akshare_count": 120
+    },
+    "industry_classification": {
+      "available": true,
+      "stock_count": 5491,
+      "industry_count": 110,
+      "industries": [
+        "银行",
+        "全国地产",
+        "软件服务",
+        "区域地产",
+        "其他商业",
+        "运输设备",
+        "电气设备",
+        "建筑工程",
+        "房产服务",
+        "玻璃",
+        "家用电器",
+        "服饰",
+        "农业综合",
+        "元器件",
+        "港口",
+        "综合类",
+        "火力发电",
+        "医药商业",
+        "汽车配件",
+        "环境保护"
+      ]
+    }
+  },
+  "summary": {
+    "data_freshness": "已配置 cron 定时任务",
+    "minute_bar": "Akshare 可用，Tushare 不可用",
+    "capital_flow": "Tushare 和 Akshare 均可用",
+    "industry": "已接入 (111 个行业分类)",
+    "recommendations": [
+      "分钟线数据应使用 Akshare 作为数据源",
+      "资金流向数据优先使用 Tushare",
+      "行业分类数据已就绪，可开始使用"
+    ]
+  }
+}

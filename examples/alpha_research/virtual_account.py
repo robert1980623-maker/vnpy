@@ -168,7 +168,7 @@ class VirtualAccount:
             'positions': [asdict(p) for p in self.positions.values()],
             'trades': [asdict(t) for t in self.trades],
             'daily_snapshots': [asdict(s) for s in self.daily_snapshots],
-            'last_update': datetime.now().isoformat()
+            'last_updated': datetime.now().isoformat()
         }
         
         with open(account_file, 'w', encoding='utf-8') as f:

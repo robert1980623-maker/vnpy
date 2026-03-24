@@ -212,11 +212,20 @@ class DataQualityChecker:
                 reader = csv.DictReader(f)
                 
                 # 检查列
-                if reader.fieldnames != self.config['required_columns']:
+                required_cols = set(self.config['required_columns'])
+                actual_cols = set(reader.fieldnames) if reader.fieldnames else set()
+                if required_cols != actual_cols:
+                    missing = required_cols - actual_cols
+                    extra = actual_cols - required_cols
+                    desc_parts = []
+                    if missing:
+                        desc_parts.append(f'缺少: {missing}')
+                    if extra:
+                        desc_parts.append(f'多余: {extra}')
                     self.issues.append(QualityIssue(
                         symbol=symbol,
                         issue_type='wrong_columns',
-                        description=f'列名不匹配',
+                        description=f'列名不匹配: {", ".join(desc_parts)}',
                         severity='critical',
                         expected=str(self.config['required_columns']),
                         actual=str(reader.fieldnames)
@@ -287,8 +296,8 @@ class DataQualityChecker:
                 prev_close = None
                 
                 for row in reader:
-                    close_price = float(row['close_price'])
-                    volume = float(row['volume'])
+                    close_price = float(row.get('close_price', row.get('close', 0)))
+                    volume = float(row.get('volume', 0))
                     
                     # 检查价格范围
                     if close_price < self.config['min_price']:
@@ -297,7 +306,7 @@ class DataQualityChecker:
                             issue_type='price_too_low',
                             description=f'价格低于最低限制',
                             severity='warning',
-                            date=row['datetime'],
+                            date=row.get('datetime', ''),
                             expected=f">= {self.config['min_price']}",
                             actual=str(close_price)
                         ))
@@ -309,7 +318,7 @@ class DataQualityChecker:
                             issue_type='price_too_high',
                             description=f'价格高于最高限制',
                             severity='warning',
-                            date=row['datetime'],
+                            date=row.get('datetime', ''),
                             expected=f"<= {self.config['max_price']}",
                             actual=str(close_price)
                         ))
@@ -332,7 +341,7 @@ class DataQualityChecker:
                                 issue_type='price_jump',
                                 description=desc,
                                 severity=severity,
-                                date=row['datetime'],
+                                date=row.get('datetime', ''),
                                 expected=f"<={max_change*100:.0f}%",
                                 actual=f"{change_rate*100:.2f}%"
                             ))
@@ -362,7 +371,7 @@ class DataQualityChecker:
             
             with open(csv_file, 'r', encoding='utf-8') as f:
                 reader = csv.DictReader(f)
-                dates = [datetime.strptime(row['datetime'], '%Y-%m-%d') for row in reader]
+                dates = [datetime.strptime(row['datetime'], '%Y-%m-%d') if len(row['datetime']) == 10 else datetime.strptime(row['datetime'], '%Y%m%d') for row in reader]
                 
                 # 检查日期连续性
                 for i in range(1, len(dates)):
@@ -409,10 +418,10 @@ class DataQualityChecker:
                 reader = csv.DictReader(f)
                 
                 for row in reader:
-                    open_p = float(row['open_price'])
-                    high_p = float(row['high_price'])
-                    low_p = float(row['low_price'])
-                    close_p = float(row['close_price'])
+                    open_p = float(row.get('open_price', row.get('open', 0)))
+                    high_p = float(row.get('high_price', row.get('high', 0)))
+                    low_p = float(row.get('low_price', row.get('low', 0)))
+                    close_p = float(row.get('close_price', row.get('close', 0)))
                     
                     # 检查 OHLC 逻辑
                     if not (low_p <= open_p <= high_p and low_p <= close_p <= high_p):
@@ -421,15 +430,15 @@ class DataQualityChecker:
                             issue_type='ohlc_invalid',
                             description='OHLC 价格逻辑错误',
                             severity='critical',
-                            date=row['datetime'],
+                            date=row.get('datetime', ''),
                             expected='low <= open,close <= high',
                             actual=f"O={open_p}, H={high_p}, L={low_p}, C={close_p}"
                         ))
                         inconsistencies += 1
                     
                     # 优化的量价匹配检查
-                    volume = float(row['volume'])
-                    turnover = float(row['turnover'])
+                    volume = float(row.get('volume', 0))
+                    turnover = float(row.get('turnover', 0))
                     
                     if volume > 0 and turnover > 0:
                         # 使用 (开盘 + 收盘)/2 作为预期均价
@@ -445,7 +454,7 @@ class DataQualityChecker:
                                 issue_type='volume_turnover_mismatch',
                                 description='成交量与成交额差异较大',
                                 severity='info',  # 降低严重性
-                                date=row['datetime'],
+                                date=row.get('datetime', ''),
                                 expected=f"diff <= 30%",
                                 actual=f"diff = {diff_rate*100:.1f}%"
                             ))

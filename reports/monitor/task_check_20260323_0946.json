@@ -1,0 +1,11 @@
+{
+  "check_time": "2026-03-23T09:46:51.451633",
+  "total_issues": 4,
+  "issues": [
+    "❌ Qlib 项目追踪: 连续失败 4 次",
+    "❌ Queen: OTA 行业周报: 连续失败 2 次",
+    "数据目录不存在：data/akshare/bars",
+    "⚠️ 现金比例过高：100.0% (资金利用率低)"
+  ],
+  "status": "error"
+}

@@ -37,8 +37,8 @@ class TestTradingFlow:
             with open(account_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
                 # 检查最后更新时间
-                last_update = data.get('last_update', '')
-                assert last_update != '', "账户最后更新时间为空"
+                last_updated = data.get('last_updated', '')
+                assert last_updated != '', "账户最后更新时间为空"
 
 
 class TestComplianceCheck:

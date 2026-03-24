@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-分批下载股票数据（增强版 - 集成 Neo4j 同步）
+分批下载股票数据（增强版 - 集成 Neo4j 同步 + 自动重试机制）
 
 数据源策略:
 - ✅ 主数据源：Tushare Pro (更稳定可靠)
@@ -12,7 +12,9 @@
 - 单只股票间隔 3 秒
 - ✅ 自动同步到 Neo4j WorldState
 - ✅ 增量同步（只更新新数据）
-- ✅ 错误处理和重试机制
+- ✅ 自动重试机制（指数退避）
+- ✅ 重试日志和监控
+- ✅ 失败告警
 - ✅ 数据一致性验证
 
 用法:
@@ -29,6 +31,14 @@ from pathlib import Path
 # 通知工具
 from notification_utils import TaskNotifier, notify_task_start, notify_task_complete, notify_task_error
 
+# 重试工具（新增）
+from retry_utils import (
+    retry_with_backoff,
+    retry_function,
+    get_retry_monitor,
+    RetryMonitor
+)
+
 # 添加 world_model 模块路径
 sys.path.insert(0, str(Path(__file__).parent / 'world_model'))
 
@@ -44,19 +54,29 @@ BATCH_SIZE = 5
 BATCH_DELAY = 30
 STOCK_DELAY = 3
 TOTAL_STOCKS = 20
-MAX_RETRIES = 3
-RETRY_DELAY = 5
+
+# 重试配置（新增）
+RETRY_CONFIG = {
+    'max_retries': 3,           # 最大重试次数
+    'base_delay': 2.0,          # 基础延迟（秒）
+    'max_delay': 60.0,          # 最大延迟（秒）
+    'timeout': 120.0,           # 单次调用超时（秒）
+    'log_file': 'logs/retry_monitor.json'  # 重试日志文件
+}
 
 # 数据源配置
 DATA_SOURCE_PRIMARY = "tushare"  # 主数据源
 DATA_SOURCE_BACKUP = "akshare"   # 备份数据源
 
 # 日志
+log_dir = Path('logs')
+log_dir.mkdir(exist_ok=True)
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('logs/batch_download.log'),
+        logging.FileHandler(log_dir / 'batch_download.log'),
         logging.StreamHandler()
     ]
 )
@@ -108,9 +128,16 @@ def get_stock_list():
         ]
 
 
+@retry_with_backoff(
+    max_retries=RETRY_CONFIG['max_retries'],
+    base_delay=RETRY_CONFIG['base_delay'],
+    max_delay=RETRY_CONFIG['max_delay'],
+    timeout=RETRY_CONFIG['timeout'],
+    log_file=RETRY_CONFIG['log_file']
+)
 def download_with_tushare(stock_code):
     """
-    使用 Tushare 下载股票数据
+    使用 Tushare 下载股票数据（带自动重试）
     
     Returns:
         bool: 是否成功
@@ -122,29 +149,32 @@ def download_with_tushare(stock_code):
         "--code", stock_code
     ]
     
-    try:
-        result = subprocess.run(
-            cmd,
-            cwd=str(Path(__file__).parent),
-            capture_output=True,
-            text=True,
-            timeout=60
-        )
-        
-        if result.returncode == 0:
-            logger.info(f"✅ Tushare {stock_code} 下载成功")
-            return True
-        else:
-            logger.warning(f"⚠️ Tushare {stock_code} 失败：{result.stderr}")
-            return False
-    except Exception as e:
-        logger.warning(f"⚠️ Tushare {stock_code} 异常：{e}")
-        return False
+    result = subprocess.run(
+        cmd,
+        cwd=str(Path(__file__).parent),
+        capture_output=True,
+        text=True,
+        timeout=60
+    )
+    
+    if result.returncode == 0:
+        logger.info(f"✅ Tushare {stock_code} 下载成功")
+        return True
+    else:
+        logger.warning(f"⚠️ Tushare {stock_code} 失败：{result.stderr}")
+        raise Exception(f"Tushare 下载失败：{result.stderr}")
 
 
+@retry_with_backoff(
+    max_retries=RETRY_CONFIG['max_retries'],
+    base_delay=RETRY_CONFIG['base_delay'],
+    max_delay=RETRY_CONFIG['max_delay'],
+    timeout=RETRY_CONFIG['timeout'],
+    log_file=RETRY_CONFIG['log_file']
+)
 def download_with_akshare(stock_code):
     """
-    使用 Akshare 下载股票数据（备份）
+    使用 Akshare 下载股票数据（带自动重试，备份数据源）
     
     Returns:
         bool: 是否成功
@@ -156,61 +186,57 @@ def download_with_akshare(stock_code):
         "--code", stock_code
     ]
     
-    try:
-        result = subprocess.run(
-            cmd,
-            cwd=str(Path(__file__).parent),
-            capture_output=True,
-            text=True,
-            timeout=60
-        )
-        
-        if result.returncode == 0:
-            logger.info(f"✅ Akshare {stock_code} 下载成功")
-            return True
-        else:
-            logger.error(f"❌ Akshare {stock_code} 失败：{result.stderr}")
-            return False
-    except Exception as e:
-        logger.error(f"❌ Akshare {stock_code} 异常：{e}")
-        return False
+    result = subprocess.run(
+        cmd,
+        cwd=str(Path(__file__).parent),
+        capture_output=True,
+        text=True,
+        timeout=60
+    )
+    
+    if result.returncode == 0:
+        logger.info(f"✅ Akshare {stock_code} 下载成功")
+        return True
+    else:
+        logger.error(f"❌ Akshare {stock_code} 失败：{result.stderr}")
+        raise Exception(f"Akshare 下载失败：{result.stderr}")
 
 
-def download_with_retry(stock_code, retry_count=0):
+def download_with_dual_source(stock_code):
     """
-    下载单只股票（带重试机制，双数据源）
+    下载单只股票（双数据源策略）
     
     策略:
-    1. 优先使用 Tushare
-    2. Tushare 失败时使用 Akshare
-    3. 最多重试 3 次
+    1. 优先使用 Tushare（带重试）
+    2. Tushare 失败时使用 Akshare（带重试）
+    3. 都失败则返回失败
     
     Args:
         stock_code: 股票代码
-        retry_count: 当前重试次数
     
     Returns:
         dict: 股票数据，失败返回 None
     """
-    logger.info(f"\n--- 下载 {stock_code} (重试 {retry_count}/{MAX_RETRIES}) ---")
+    logger.info(f"\n--- 下载 {stock_code} (双数据源策略) ---")
     
-    # 1. 尝试 Tushare（主数据源）
-    if download_with_tushare(stock_code):
-        return {'symbol': stock_code, 'status': 'success', 'source': 'tushare'}
+    # 1. 尝试 Tushare（主数据源，带重试）
+    try:
+        if download_with_tushare(stock_code):
+            return {'symbol': stock_code, 'status': 'success', 'source': 'tushare'}
+    except Exception as e:
+        logger.warning(f"⚠️ Tushare 最终失败：{e}")
     
-    # 2. Tushare 失败，尝试 Akshare（备份）
+    # 2. Tushare 失败，尝试 Akshare（备份，带重试）
     logger.info(f"  ⚠️ Tushare 失败，切换到备份数据源 Akshare")
-    if download_with_akshare(stock_code):
-        return {'symbol': stock_code, 'status': 'success', 'source': 'akshare'}
+    try:
+        if download_with_akshare(stock_code):
+            return {'symbol': stock_code, 'status': 'success', 'source': 'akshare'}
+    except Exception as e:
+        logger.error(f"❌ Akshare 最终失败：{e}")
     
-    # 3. 都失败，重试
-    if retry_count < MAX_RETRIES:
-        logger.warning(f"⚠️ {stock_code} 双数据源均失败，{RETRY_DELAY}秒后重试...")
-        time.sleep(RETRY_DELAY)
-        return download_with_retry(stock_code, retry_count + 1)
-    else:
-        logger.error(f"❌ {stock_code} 下载失败，已达最大重试次数")
-        return {'symbol': stock_code, 'status': 'failed', 'source': 'none'}
+    # 3. 都失败
+    logger.error(f"❌ {stock_code} 下载失败（双数据源均失败）")
+    return {'symbol': stock_code, 'status': 'failed', 'source': 'none'}
 
 
 def sync_to_neo4j(stock_data):
@@ -280,7 +306,8 @@ def download_batch(batch_num, stocks):
     logger.info("=" * 60)
     logger.info(f"股票：{', '.join(stocks)}")
     logger.info(f"开始时间：{datetime.now().strftime('%H:%M:%S')}")
-    logger.info(f"数据源策略：Tushare(主) + Akshare(备)")
+    logger.info(f"数据源策略：{DATA_SOURCE_PRIMARY}(主) + {DATA_SOURCE_BACKUP}(备)")
+    logger.info(f"重试配置：{RETRY_CONFIG['max_retries']}次重试，{RETRY_CONFIG['base_delay']}s 基础延迟")
     
     success_count = 0
     tushare_count = 0
@@ -289,8 +316,8 @@ def download_batch(batch_num, stocks):
     verify_count = 0
     
     for i, stock in enumerate(stocks):
-        # 下载（带重试，双数据源）
-        result = download_with_retry(stock)
+        # 下载（双数据源，各自带重试）
+        result = download_with_dual_source(stock)
         
         if result.get('status') == 'success':
             success_count += 1
@@ -322,20 +349,41 @@ def download_batch(batch_num, stocks):
     return success_count == len(stocks)
 
 
+def print_retry_stats():
+    """打印重试统计信息"""
+    monitor = get_retry_monitor()
+    monitor.print_stats()
+    
+    # 显示最近的失败记录
+    failures = monitor.get_recent_failures(limit=5)
+    if failures:
+        logger.info("\n最近失败记录:")
+        for f in failures:
+            logger.info(f"  - {f['func_name']}: {f['final_error']}")
+
+
 def main():
     # 发送开始通知
     notify_task_start("数据下载", {
-        "模式": "批量下载",
-        "时间": datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        "模式": "批量下载 (增强版)",
+        "时间": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        "重试机制": "启用",
+        "重试次数": RETRY_CONFIG['max_retries']
     })
 
     """主函数"""
     logger.info("=" * 60)
-    logger.info("批量下载股票（增强版 - Tushare 主 + Akshare 备）")
+    logger.info("批量下载股票（增强版 - Tushare 主 + Akshare 备 + 自动重试）")
     logger.info("=" * 60)
     logger.info(f"开始时间：{datetime.now()}")
     logger.info(f"Neo4j 同步：{'✅ 启用' if NEO4J_AVAILABLE else '❌ 禁用'}")
     logger.info(f"数据源策略：{DATA_SOURCE_PRIMARY}(主) + {DATA_SOURCE_BACKUP}(备)")
+    logger.info(f"重试配置:")
+    logger.info(f"  最大重试次数：{RETRY_CONFIG['max_retries']}")
+    logger.info(f"  基础延迟：{RETRY_CONFIG['base_delay']}秒")
+    logger.info(f"  最大延迟：{RETRY_CONFIG['max_delay']}秒")
+    logger.info(f"  超时时间：{RETRY_CONFIG['timeout']}秒")
+    logger.info(f"  日志文件：{RETRY_CONFIG['log_file']}")
     logger.info("=" * 60)
     
     # 获取股票列表
@@ -363,6 +411,17 @@ def main():
     logger.info("✅ 全部下载完成！")
     logger.info(f"结束时间：{datetime.now()}")
     logger.info("=" * 60)
+    
+    # 打印重试统计
+    print_retry_stats()
+    
+    # 发送完成通知
+    monitor = get_retry_monitor()
+    stats = monitor.get_stats()
+    notify_task_complete("数据下载", {
+        "成功率": f"{stats['total_success']}/{stats['total_calls']}",
+        "重试次数": stats['total_retries']
+    })
 
 
 if __name__ == "__main__":
@@ -372,4 +431,5 @@ if __name__ == "__main__":
         logger.info("\n⚠️ 用户中断")
     except Exception as e:
         logger.error(f"❌ 程序异常：{e}")
+        notify_task_error("数据下载", str(e))
         raise

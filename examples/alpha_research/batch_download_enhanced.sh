@@ -2,6 +2,10 @@
 # 分批下载股票数据（优化版）
 # 下载最近 1 天的数据（昨日收盘价）
 
+# 加载用户环境变量（TUSHARE_TOKEN 等）
+source ~/.zshrc 2>/dev/null || source ~/.bash_profile 2>/dev/null
+export TUSHARE_TOKEN
+
 # 配置
 BATCH_SIZE=10         # 每批数量
 BATCH_DELAY=30        # 批次间隔（秒）

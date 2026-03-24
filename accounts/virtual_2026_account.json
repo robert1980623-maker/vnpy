@@ -1,0 +1,18 @@
+{
+  "account_id": "virtual_2026_account",
+  "account_type": "virtual",
+  "initial_balance": 1000000,
+  "cash": 1000000,
+  "positions": [],
+  "currency": "CNY",
+  "created_at": "2026-01-01T00:00:00Z",
+  "status": "active",
+  "risk_level": "moderate",
+  "last_updated": "2026-03-23T09:00:00Z",
+  "strategy_config": {
+    "max_position_size": 100000,
+    "max_daily_loss": 50000,
+    "max_drawdown": 100000
+  },
+  "permissions": ["read_market_data", "place_orders", "cancel_orders", "get_account_info"]
+}

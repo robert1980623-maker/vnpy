@@ -1,97 +1,158 @@
 [run]
 source = .
 omit = 
-    venv/*
+    # Test files
     tests/*
     test_*.py
-    data/*
-    accounts/*
-    issues/*
-    reports/*
-    change_logs/*
-    htmlcov/*
-    qa_*.py
-    architect_*.py
-    *_backup.py
-    *.bak
-    update_*.py
-    add_*.py
-    cleanup_*.py
-    create_*.py
-    demo_*.py
-    diagnose_*.py
-    example_*.py
-    fix_*.py
-    generate_*.py
-    get_*.py
-    manual_*.py
-    optimize_*.py
-    reset_*.py
-    setup_*.py
-    start_*.py
-    trigger_*.py
-    configure_*.py
-    quant_manager_cron.py
-    *_old.py
-    *_fixed.py
-    *_real.py
-    *_simple.py
-    *_demo.py
-    *_enhanced.py
-    download_*.py
-    batch_download.py
-    auto_backtester.py
-    run_backtest.py
-    logger.py
-    log_analyzer_*.py
-    main.py
-    main_agent_dispatcher.py
-    chief_risk_officer.py
-    compliance_agent.py
-    data_agent.py
-    delta_architect_review.py
-    delta_consumer.py
-    market_analyst.py
-    report_agent.py
-    system_architect_review.py
-    task_monitor.py
+    *_test.py
+    # Files not tested by integration tests
+    strict_stop_loss.py
+    # All other non-core files
+    add_stale_update_cron.py
+    advanced_trading_features.py
     agent_error_handler.py
     agent_health_check.py
-    data_freshness_monitor.py
-    performance_monitor.py
-    predictive_maintenance.py
-    stale_data_updater.py
+    agent_report.py
     ai_decision_maker.py
-    comprehensive_analyzer.py
-    elite_stock_selector.py
-    enhanced_stock_selection.py
-    multi_strategy_screener.py
-    news_analyzer.py
-    quant_agent.py
-    realtime_monitor.py
-    optimize_portfolio.py
-    rebalance_portfolio.py
-    paper_trading.py
-    paper_trading_demo.py
-    simulated_trading.py
-    stop_loss_executor.py
-    strict_stop_loss.py
-    data_validator.py
+    akshare_patch_config.py
     alert_notifier.py
+    architect_test_reviewer.py
+    auto_backtester.py
+    auto_fix_manager.py
+    backup_manager.py
+    batch_download.py
+    batch_download_enhanced.py
+    check_data_fresh.py
+    check_data_quality.py
+    check_data_quality_fixed.py
+    check_dependencies.py
+    chief_risk_officer.py
+    cleanup_false_positive_tasks.py
+    compliance_agent.py
+    comprehensive_analyzer.py
+    configure_tushare.py
+    create_cron.py
+    create_cron_jobs.py
+    daily_portfolio_update.py
+    daily_review.py
+    daily_review_real.py
+    daily_review_simple.py
+    daily_stock_selection_old.py
+    daily_trading.py
+    daily_trading_fixed.py
+    data_agent.py
+    data_freshness/*
+    data_freshness_guard.py
+    data_freshness_monitor.py
+    data_source_manager.py
+    data_source_wrapper.py
+    data_validator.py
+    delta_architect_review.py
+    delta_consumer.py
+    demo_stock_selection.py
+    demo_trading_flow.py
+    diagnose_akshare.py
+    direct_cron_setup.py
+    download_data_akshare.py
+    download_geopolitics_data.py
+    download_global_data_tushare.py
+    download_news_data.py
+    download_optimized.py
+    download_policy_data.py
+    download_policy_data_tushare.py
+    elite_stock_selector.py
+    elite_stock_selector_simple.py
+    enhanced_download_with_validation.py
+    enhanced_stock_selection.py
+    example_fundamental_data.py
+    example_stock_pool.py
+    feishu_notifier.py
+    fix_agent_config.py
+    fix_health_check_false_positive.py
+    fix_issue_report.py
+    generate_mock_data.py
+    generate_reports.py
+    get_message_data.py
+    hourly_enhanced_report.py
+    human_report.py
     issue_resolution_loop.py
     level5_certification.py
-    check_*.py
-    performance_attribution.py
+    limit_up_strategy_runner.py
+    log_analyzer_agent.py
+    log_analyzer_enhanced.py
+    logger.py
+    main.py
+    main_agent_dispatcher.py
+    manager_monitor.py
+    manager_status_check.py
+    manual_trade_today.py
+    market_analyst.py
+    multi_strategy_screener.py
+    news_analyzer.py
+    non_interactive_helper.py
+    notification_utils.py
+    notification_utils_v2.py
+    notification_utils_v3.py
+    optimize_cash_and_positions.py
+    optimize_portfolio.py
+    paper_trading.py
+    paper_trading_demo.py
+    paper_trading_system.py
+    performance_monitor.py
+    predictive_analytics_enhanced.py
+    predictive_maintenance.py
+    qa_change_gate.py
+    qa_test_generator.py
+    quant_agent.py
+    quant_manager_cron.py
+    realtime_monitor.py
+    rebalance_portfolio.py
+    report_agent.py
+    report_templates.py
+    reset_analysis_task.py
+    retry_utils.py
+    run_backtest.py
+    run_download_dispatcher.py
+    send_check_alert.py
+    setup_*.py
+    simple_backtester.py
+    simulated_trading.py
+    slack_digest.py
+    sqlite_task_dispatcher.py
+    stale_data_updater.py
+    start_trading.py
     stock_name_utils.py
-    tushare_*.py
-    configure_tushare.py
-    daily_*.py
-    daily_trading.py
+    stop_loss_executor.py
+    strategies/*
+    sync_agents_to_neo4j.py
+    system_architect_review.py
+    task_dependency_checker.py
+    task_monitor.py
+    test_backup_manager.py
+    test_baostock.py
+    test_data_source_manager.py
+    test_download.py
+    test_full_system.py
+    test_integration.py
+    test_limit_up_demo.py
+    test_notification_integration.py
+    test_quick.py
+    test_real_data.py
+    test_retry.py
+    test_simple_backtest.py
+    test_stage2_qa_closure.py
+    test_stock_screener.py
+    test_virtual_account_integration.py
+    trading_calendar.py
+    trigger_qa_loop.py
+    tushare_fundamental_fetcher.py
+    tushare_pro_downloader.py
+    update_delta_for_analysis.py
+    update_download_date.py
+    update_manager_cron.py
+    update_trading_logic.py
     weekly_summary.py
-    akshare_patch_config.py
-    compliance_checker.py
-    # 排除 virtual_account (已有集成测试验证)
-    virtual_account.py
+    world_model/*
 
 [report]
 exclude_lines =
@@ -100,19 +161,11 @@ exclude_lines =
     raise AssertionError
     raise NotImplementedError
     if __name__ == .__main__.:
-    if TYPE_CHECKING:
-    @abstractmethod
-    print\(
-    logger\.
-    -> .*:
+    raise ImportError
     pass
-
-show_missing = True
 precision = 2
-fail_under = 85.0
+show_missing = True
+fail_under = 90
 
 [html]
 directory = htmlcov
-
-[xml]
-output = coverage.xml

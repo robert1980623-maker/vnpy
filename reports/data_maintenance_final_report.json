@@ -1,0 +1,68 @@
+{
+  "timestamp": "2026-03-23T09:56:15.163395",
+  "tasks": {
+    "data_freshness": {
+      "status": "✅ 正常",
+      "cron_jobs": 3,
+      "data_files": 4,
+      "schedule": {
+        "data_download": "每日 17:00",
+        "stock_selection": "工作日 09:00",
+        "daily_review": "工作日 20:00"
+      }
+    },
+    "minute_bar_data": {
+      "status": "⚠️ 部分可用",
+      "tushare": "不可用",
+      "akshare": "可用 (网络不稳定)",
+      "downloaded_files": 0,
+      "recommendation": "建议使用 Akshare 作为数据源，需处理网络稳定性问题"
+    },
+    "capital_flow_data": {
+      "status": "✅ 已补充",
+      "tushare": "可用",
+      "akshare": "可用",
+      "downloaded_files": 10,
+      "data_columns": [
+        "ts_code",
+        "trade_date",
+        "buy_sm_vol",
+        "buy_sm_amount",
+        "sell_sm_vol",
+        "sell_sm_amount",
+        "buy_md_vol",
+        "buy_md_amount",
+        "sell_md_vol",
+        "sell_md_amount",
+        "buy_lg_vol",
+        "buy_lg_amount",
+        "sell_lg_vol",
+        "sell_lg_amount",
+        "buy_elg_vol",
+        "buy_elg_amount",
+        "sell_elg_vol",
+        "sell_elg_amount",
+        "net_mf_vol",
+        "net_mf_amount"
+      ]
+    },
+    "industry_classification": {
+      "status": "✅ 已接入",
+      "stock_count": 5491,
+      "industry_count": 110,
+      "file": "data/stock_industry_classification.csv"
+    }
+  },
+  "summary": {
+    "task1_freshness": "completed",
+    "task2_minute_bar": "partial",
+    "task3_capital_flow": "completed",
+    "task4_industry": "completed",
+    "next_steps": [
+      "解决 Akshare 网络连接问题以补充分钟线数据",
+      "接入涨跌停数据",
+      "接入龙虎榜数据",
+      "扩大资金流向数据下载范围至全部沪深 300 成分股"
+    ]
+  }
+}

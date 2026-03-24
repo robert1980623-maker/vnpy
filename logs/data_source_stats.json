@@ -1,0 +1,61 @@
+{
+  "last_updated": "2026-03-22T21:49:37.414163",
+  "usage_stats": {
+    "tushare": {
+      "total_requests": 1,
+      "successful_requests": 0,
+      "failed_requests": 1,
+      "total_response_time_ms": 0.005245208740234375,
+      "rate_limit_hits": 0,
+      "last_used_time": "2026-03-22T21:49:37.105764"
+    },
+    "akshare": {
+      "total_requests": 1,
+      "successful_requests": 0,
+      "failed_requests": 1,
+      "total_response_time_ms": 147.81498908996582,
+      "rate_limit_hits": 0,
+      "last_used_time": "2026-03-22T21:49:37.253752"
+    },
+    "sina": {
+      "total_requests": 0,
+      "successful_requests": 0,
+      "failed_requests": 0,
+      "total_response_time_ms": 0.0,
+      "rate_limit_hits": 0,
+      "last_used_time": null
+    }
+  },
+  "health_metrics": {
+    "tushare": {
+      "response_time_ms": 53.038716316223145,
+      "success_rate": 0.81,
+      "data_completeness": 1.0,
+      "rate_limit_hit": false,
+      "consecutive_failures": 2,
+      "last_check_time": "2026-03-22T21:49:37.211641",
+      "last_success_time": null,
+      "last_error": "您的token不对，请确认。"
+    },
+    "akshare": {
+      "response_time_ms": 157.64331817626953,
+      "success_rate": 0.81,
+      "data_completeness": 1.0,
+      "rate_limit_hit": false,
+      "consecutive_failures": 2,
+      "last_check_time": "2026-03-22T21:49:37.379816",
+      "last_success_time": null,
+      "last_error": "HTTPSConnectionPool(host='push2his.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/kline/get?fields1=f1%2Cf2%2Cf3%2Cf4%2Cf5%2Cf6&fields2=f51%2Cf52%2Cf53%2Cf54%2Cf55%2Cf56%2Cf57%2Cf58%2Cf59%2Cf60%2Cf61%2Cf116&ut=7eea3edcaed734bea9cbfc24409ed989&klt=101&fqt=0&secid=0.000001&beg=20260316&end=20260316 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))"
+    },
+    "sina": {
+      "response_time_ms": 32.568931579589844,
+      "success_rate": 0.9,
+      "data_completeness": 0.0,
+      "rate_limit_hit": false,
+      "consecutive_failures": 1,
+      "last_check_time": "2026-03-22T21:49:37.412581",
+      "last_success_time": null,
+      "last_error": null
+    }
+  }
+}

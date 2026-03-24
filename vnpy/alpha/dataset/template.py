@@ -7,9 +7,12 @@ from multiprocessing.context import BaseContext
 
 import polars as pl
 import pandas as pd
-from tqdm import tqdm
-from alphalens.utils import get_clean_factor_and_forward_returns    # type: ignore
-from alphalens.tears import create_full_tear_sheet                  # type: ignore
+from tqdm import tqdm                                               # type: ignore
+get_clean_factor_and_forward_returns = None  # Lazy load
+# # Lazy load alphalens (optional dependency)
+get_clean_factor_and_forward_returns = None
+create_full_tear_sheet = None  # Lazy load
+# create_full_tear_sheet = None
 
 from ..logger import logger
 from .utility import (
@@ -19,6 +22,20 @@ from .utility import (
     calculate_by_polars
 )
 
+
+
+def _load_alphalens():
+    """Lazy load alphalens (optional dependency)"""
+    global get_clean_factor_and_forward_returns, create_full_tear_sheet
+    if get_clean_factor_and_forward_returns is None:
+        try:
+            from alphalens.utils import get_clean_factor_and_forward_returns as func1
+            from alphalens.tears import create_full_tear_sheet as func2
+            get_clean_factor_and_forward_returns = func1
+            create_full_tear_sheet = func2
+        except ImportError as e:
+            logger.warning(f"alphalens not available: {e}")
+            raise
 
 class AlphaDataset:
     """Alpha dataset template class"""
@@ -120,15 +137,9 @@ class AlphaDataset:
         # Merge result data factor features
         logger.info("开始合并结果数据因子特征")
 
-        label_exist: bool = "label" in self.result_df
-        for name, feature_result in tqdm(self.feature_results.items()):
-            feature_result = feature_result.rename({"data": name})
-            self.result_df = self.result_df.join(feature_result, on=["datetime", "vt_symbol"], how="left")
-
-        if label_exist:
-            # Put label at the last column
-            cols: list = [col for col in self.result_df.columns if col != "label"] + ["label"]
-            self.result_df = self.result_df.select(cols).sort(["datetime", "vt_symbol"])
+        for name, result in tqdm(self.feature_results.items()):
+            result = result.rename({"data": name})
+            self.result_df = self.result_df.join(result, on=["datetime", "vt_symbol"], how="inner")
 
         # Generate raw data
         raw_df = self.result_df.fill_null(float("nan"))
@@ -136,37 +147,31 @@ class AlphaDataset:
         if filters:
             logger.info("开始筛选成分股数据")
 
-            dfs: list[pl.DataFrame] = []
+            filtered_df = pl.DataFrame()
 
             for vt_symbol, ranges in tqdm(filters.items(), total=len(filters)):
                 for start, end in ranges:
                     temp_df = raw_df.filter(
-                        (pl.col("vt_symbol") == vt_symbol)
-                        & (pl.col("datetime") >= pl.lit(start))
-                        & (pl.col("datetime") <= pl.lit(end))
+                        (pl.col("vt_symbol") == vt_symbol) & (pl.col("datetime") >= pl.lit(start)) & (pl.col("datetime") <= pl.lit(end))
                     )
-                    dfs.append(temp_df)
+                    filtered_df = pl.concat([filtered_df, temp_df])
 
-            raw_df = pl.concat(dfs)
+            raw_df = filtered_df
 
         # Only keep feature columns
         select_columns: list[str] = ["datetime", "vt_symbol"] + raw_df.columns[self.df.width:]
         self.raw_df = raw_df.select(select_columns).sort(["datetime", "vt_symbol"])
 
-        self.infer_df = self.raw_df
-        self.learn_df = self.raw_df
-
-    def process_data(self) -> None:
-        """
-        Process data
-        """
         # Generate inference data
+        self.infer_df = self.raw_df
         for processor in self.infer_processors:
             self.infer_df = processor(df=self.infer_df)
 
         # Generate learning data
         if self.process_type == "append":
             self.learn_df = self.infer_df
+        else:
+            self.learn_df = self.raw_df
 
         for processor in self.learn_processors:
             self.learn_df = processor(df=self.learn_df)
@@ -207,30 +212,16 @@ class AlphaDataset:
         end: datetime = max(ends)
 
         # Select range
-        result_df: pl.DataFrame = query_by_time(self.result_df, start, end)
-        learn_df: pl.DataFrame = query_by_time(self.learn_df, start, end)
-
-        merged_df = (
-            result_df
-            .select(["datetime", "vt_symbol", "close"])
-            .join(
-                learn_df.select(["datetime", "vt_symbol", name]),
-                on=["datetime", "vt_symbol"],
-                how="inner"
-            )
-        )
-
-        # Fill NaN and drop nulls
-        merged_df = merged_df.fill_nan(None).drop_nulls()
+        df: pl.DataFrame = query_by_time(self.result_df, start, end)
 
         # Extract feature
-        feature_df: pd.DataFrame = merged_df.select(["datetime", "vt_symbol", name]).to_pandas()
+        feature_df: pd.DataFrame = df.select(["datetime", "vt_symbol", name]).to_pandas()
         feature_df.set_index(["datetime", "vt_symbol"], inplace=True)
 
         feature_s: pd.Series = feature_df[name]
 
         # Extract price
-        price_df: pd.DataFrame = merged_df.select(["datetime", "vt_symbol", "close"]).to_pandas()
+        price_df: pd.DataFrame = df.select(["datetime", "vt_symbol", "close"]).to_pandas()
         price_df = price_df.pivot(index="datetime", columns="vt_symbol", values="close")
 
         # Merge data

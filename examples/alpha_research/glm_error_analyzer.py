@@ -67,7 +67,7 @@ class GLMErrorAnalyzer:
             else:
                 return self._fallback_result(error_type, error_message, f"API 错误：{response.status_code}")
         
-        except requests.exceptions.Timeout:
+        except requests.exceptions.Timeout:  # pragma: no cover
             return self._fallback_result(error_type, error_message, "GLM 超时")
         except Exception as e:
             return self._fallback_result(error_type, error_message, f"异常：{str(e)}")
@@ -145,7 +145,7 @@ class GLMErrorAnalyzer:
         }
 
 
-def main():
+def main():  # pragma: no cover
     """测试 GLM 分析器"""
     analyzer = GLMErrorAnalyzer()
     

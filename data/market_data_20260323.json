@@ -1,0 +1,14 @@
+{
+  "date": "2026-03-23",
+  "indices": [
+    {"symbol": "000001.SH", "name": "上证指数", "close": 3375.23, "change": 1.25},
+    {"symbol": "399001.SH", "name": "深证成指", "close": 11235.45, "change": -0.35}
+  ],
+  "top_gainers": [
+    {"symbol": "600519.SH", "name": "贵州茅台", "change": 5.2},
+    {"symbol": "000858.SZ", "name": "五粮液", "change": 4.1}
+  ],
+  "top_losers": [
+    {"symbol": "601318.SH", "name": "中国平安", "change": -3.2}
+  ]
+}

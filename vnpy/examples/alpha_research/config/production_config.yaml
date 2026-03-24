@@ -1,0 +1,193 @@
+# vnpy 世界模型 - 生产环境配置
+
+# 数据库配置
+database:
+  neo4j:
+    uri: "bolt://localhost:7687"
+    user: "neo4j"
+    password: "${NEO4J_PASSWORD}"  # 使用环境变量
+    max_pool_size: 50
+    connection_timeout: 30
+  
+  redis:
+    host: "localhost"
+    port: 6379
+    db: 0
+    password: "${REDIS_PASSWORD}"
+    max_connections: 50
+
+# 数据源配置
+data_sources:
+  primary: "tushare"
+  backup: "akshare"
+  
+  tushare:
+    api_token: "${TUSHARE_TOKEN}"
+    retry_times: 3
+    retry_delay: 5
+  
+  akshare:
+    retry_times: 3
+    retry_delay: 5
+
+# 任务调度配置
+scheduler:
+  timezone: "Asia/Shanghai"
+  max_workers: 10
+  job_defaults:
+    coalesce: true
+    max_instances: 3
+    misfire_grace_time: 60
+
+# 监控配置
+monitoring:
+  enabled: true
+  check_interval: 60  # 秒
+  
+  health_check:
+    enabled: true
+    interval: 300  # 5 分钟
+  
+  performance_monitoring:
+    enabled: true
+    interval: 60
+    thresholds:
+      response_time: 5000  # ms
+      error_rate: 0.05     # 5%
+      throughput_min: 10   # requests/min
+
+# 告警配置
+alerting:
+  enabled: true
+  
+  channels:
+    slack:
+      enabled: false  # 生产环境建议启用
+      webhook_url: "${SLACK_WEBHOOK_URL}"
+      default_channel: "#vnpy-alerts"
+    
+    email:
+      enabled: false  # 生产环境建议启用
+      smtp_server: "smtp.example.com"
+      smtp_port: 587
+      username: "${EMAIL_USERNAME}"
+      password: "${EMAIL_PASSWORD}"
+      from_addr: "vnpy-alerts@example.com"
+      to_addrs:
+        - "admin@example.com"
+    
+    log:
+      enabled: true
+      level: "WARNING"
+  
+  rules:
+    critical:
+      notify_channels: ["slack", "email", "log"]
+      retry_times: 3
+      retry_interval: 60
+    high:
+      notify_channels: ["slack", "log"]
+      retry_times: 2
+      retry_interval: 120
+    medium:
+      notify_channels: ["log"]
+    low:
+      notify_channels: ["log"]
+
+# 备份配置
+backup:
+  enabled: true
+  backup_dir: "/data/vnpy/backups"
+  
+  schedule:
+    daily:
+      enabled: true
+      time: "02:00"
+      keep_days: 7
+    
+    weekly:
+      enabled: true
+      day: "Sunday"
+      time: "03:00"
+      keep_weeks: 4
+    
+    monthly:
+      enabled: true
+      day: 1
+      time: "04:00"
+      keep_months: 12
+  
+  items:
+    - config
+    - data
+    - logs
+    - neo4j_backup
+    - redis_backup
+
+# 日志配置
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  
+  handlers:
+    console:
+      enabled: true
+      level: "INFO"
+    
+    file:
+      enabled: true
+      level: "DEBUG"
+      path: "/data/vnpy/logs/app.log"
+      max_size: 104857600  # 100MB
+      backup_count: 10
+    
+    syslog:
+      enabled: false
+      address: "/dev/log"
+      facility: "local0"
+
+# 性能优化
+performance:
+  cache:
+    enabled: true
+    type: "redis"
+    ttl: 3600  # 1 小时
+  
+  batch_size:
+    data_sync: 100
+    event_publish: 50
+    alert_process: 20
+  
+  connection_pooling:
+    neo4j: true
+    redis: true
+
+# 安全配置
+security:
+  api_authentication:
+    enabled: true
+    token_expiry: 86400  # 24 小时
+  
+  rate_limiting:
+    enabled: true
+    requests_per_minute: 100
+  
+  audit_logging:
+    enabled: true
+    log_file: "/data/vnpy/logs/audit.log"
+
+# 生产环境特定配置
+production:
+  debug_mode: false
+  hot_reload: false
+  verbose_errors: false
+  
+  resource_limits:
+    max_memory: "8GB"
+    max_cpu_percent: 80
+    max_disk_percent: 90
+  
+  auto_recovery:
+    enabled: true
+    max_retries: 3
+    retry_delay: 60

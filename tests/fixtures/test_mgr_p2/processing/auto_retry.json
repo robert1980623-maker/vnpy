@@ -1,0 +1,79 @@
+[
+  {
+    "issue_id": "test-p2",
+    "agent": "test",
+    "retry_count": 0,
+    "max_retries": 3,
+    "next_retry": "2026-03-22T14:56:02.305936"
+  },
+  {
+    "issue_id": "test-p2",
+    "agent": "test",
+    "retry_count": 0,
+    "max_retries": 3,
+    "next_retry": "2026-03-22T14:59:53.269924"
+  },
+  {
+    "issue_id": "test-p2",
+    "agent": "test",
+    "retry_count": 0,
+    "max_retries": 3,
+    "next_retry": "2026-03-23T09:13:23.875584"
+  },
+  {
+    "issue_id": "test-p2",
+    "agent": "test",
+    "retry_count": 0,
+    "max_retries": 3,
+    "next_retry": "2026-03-23T09:14:35.095839"
+  },
+  {
+    "issue_id": "test-p2",
+    "agent": "test",
+    "retry_count": 0,
+    "max_retries": 3,
+    "next_retry": "2026-03-23T09:17:17.751847"
+  },
+  {
+    "issue_id": "test-p2",
+    "agent": "test",
+    "retry_count": 0,
+    "max_retries": 3,
+    "next_retry": "2026-03-23T09:19:20.841356"
+  },
+  {
+    "issue_id": "test-p2",
+    "agent": "test",
+    "retry_count": 0,
+    "max_retries": 3,
+    "next_retry": "2026-03-23T09:22:09.892741"
+  },
+  {
+    "issue_id": "test-p2",
+    "agent": "test",
+    "retry_count": 0,
+    "max_retries": 3,
+    "next_retry": "2026-03-23T09:23:03.757713"
+  },
+  {
+    "issue_id": "test-p2",
+    "agent": "test",
+    "retry_count": 0,
+    "max_retries": 3,
+    "next_retry": "2026-03-23T09:23:47.625000"
+  },
+  {
+    "issue_id": "test-p2",
+    "agent": "test",
+    "retry_count": 0,
+    "max_retries": 3,
+    "next_retry": "2026-03-23T09:25:12.405434"
+  },
+  {
+    "issue_id": "test-p2",
+    "agent": "test",
+    "retry_count": 0,
+    "max_retries": 3,
+    "next_retry": "2026-03-23T09:31:40.383651"
+  }
+]

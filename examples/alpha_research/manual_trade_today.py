@@ -2,7 +2,7 @@
 """
 手动执行今日交易
 
-修复交易计划格式问题后，手动执行今天的交易
+从当日交易计划读取并执行交易
 """
 
 import json
@@ -23,17 +23,33 @@ def execute_today_trades():
     print(f"   持仓：{len(account.positions)} 只")
     print()
     
-    # 加载交易计划
-    plan_file = Path('reports/trading_plan_2026-03-09.json')
-    with open(plan_file, 'r') as f:
+    # 加载当日交易计划
+    today = datetime.now().strftime('%Y-%m-%d')
+    plan_file = Path(f'reports/trading_plan_{today}.json')
+    
+    if not plan_file.exists():
+        # 查找最新的交易计划
+        plan_files = sorted(Path('reports').glob('trading_plan_*.json'))
+        if plan_files:
+            plan_file = plan_files[-1]
+            print(f"⚠️  今日交易计划不存在，使用最新：{plan_file.name}")
+        else:
+            print(f"❌ 无交易计划文件")
+            return 0, 0
+    
+    with open(plan_file, 'r', encoding='utf-8') as f:
         plan = json.load(f)
     
-    today = datetime.now().strftime('%Y-%m-%d')
+    print(f"✅ 加载交易计划：{plan_file.name}")
+    print(f"   日期：{plan.get('date', 'N/A')}")
+    print(f"   买入：{len(plan.get('buy', []))} 只")
+    print(f"   卖出：{len(plan.get('sell', []))} 只")
+    print()
     
     # 执行卖出
     print("【执行卖出】")
     sell_count = 0
-    for symbol in plan['sell']:
+    for symbol in plan.get('sell', []):
         # 查找持仓
         position = next((p for p in account.positions if p.symbol == symbol), None)
         if position:
@@ -58,37 +74,45 @@ def execute_today_trades():
     # 执行买入
     print("【执行买入】")
     buy_count = 0
-    buy_list = plan['buy']
+    buy_list = plan.get('buy', [])
     
     if buy_list:
-        # 计算每只股票的买入金额 (留 10% 现金)
-        available_cash = account.cash * 0.9
-        position_size = available_cash / len(buy_list)
-        
-        print(f"  可用现金：¥{available_cash:,.2f}")
-        print(f"  每只股票：¥{position_size:,.2f}")
-        print()
-        
-        for stock in buy_list:
-            symbol = stock['symbol']
-            price = stock.get('price', 10.0)
+        # 检查买入列表格式
+        if isinstance(buy_list[0], str):
+            # 旧格式：简单符号列表
+            print(f"⚠️ 交易计划为旧格式，跳过买入执行")
+        else:
+            # 新格式：包含详细信息的字典列表
+            # 计算每只股票的买入金额 (留 10% 现金)
+            available_cash = account.cash * 0.9
+            position_size = available_cash / len(buy_list) if buy_list else 0
             
-            # 计算买入数量 (100 股的整数倍)
-            volume = int(position_size / price / 100) * 100
+            print(f"  可用现金：¥{available_cash:,.2f}")
+            print(f"  每只股票：¥{position_size:,.2f}")
+            print()
             
-            if volume >= 100:
-                trade = account.buy(
-                    symbol=symbol,
-                    price=price,
-                    volume=volume,
-                    date=today,
-                    reason=stock.get('reason', '策略买入')
-                )
-                if trade:
-                    print(f"  买入 {symbol} {volume}股 @ ¥{price:.2f} = ¥{trade.amount:,.2f}")
-                    buy_count += 1
-            else:
-                print(f"  ⚠️ {symbol} 资金不足 (需要¥{price*100:,.2f}, 可用¥{position_size:,.2f})")
+            for stock in buy_list:
+                symbol = stock.get('symbol', '')
+                # 价格需要从市场数据获取，这里使用默认值
+                price = stock.get('price', 10.0)
+                reason = stock.get('reason', '策略买入')
+                
+                # 计算买入数量 (100 股的整数倍)
+                volume = int(position_size / price / 100) * 100 if price > 0 else 0
+                
+                if volume >= 100:
+                    trade = account.buy(
+                        symbol=symbol,
+                        price=price,
+                        volume=volume,
+                        date=today,
+                        reason=reason
+                    )
+                    if trade:
+                        print(f"  买入 {symbol} {volume}股 @ ¥{price:.2f} = ¥{trade.amount:,.2f}")
+                        buy_count += 1
+                else:
+                    print(f"  ⚠️ {symbol} 资金不足或价格无效")
     
     print(f"  完成：{buy_count} 笔买入")
     print()

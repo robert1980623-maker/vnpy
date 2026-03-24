@@ -1,0 +1,19 @@
+{
+  "id": "issue_20260320_012911_6fda006c",
+  "agent": "test",
+  "severity": "P0",
+  "error_type": "CriticalError",
+  "error_message": "严重错误",
+  "timestamp": "2026-03-20T01:29:11.307043",
+  "status": "resolved",
+  "assigned_to": null,
+  "resolved_at": "2026-03-20T01:29:11.307567",
+  "resolution": "解决失败",
+  "type": null,
+  "title": null,
+  "description": null,
+  "details": {},
+  "report_file": null,
+  "requires_action": null,
+  "action_items": []
+}

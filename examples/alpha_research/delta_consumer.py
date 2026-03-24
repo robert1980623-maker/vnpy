@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Delta 任务消费者
 
@@ -42,8 +41,22 @@ class DeltaConsumer:
             json.dump(tasks, f, ensure_ascii=False, indent=2)
     
     def get_pending_tasks(self, tasks: List[Dict]) -> List[Dict]:
-        """获取待处理任务（按优先级排序）"""
-        pending = [t for t in tasks if t.get('status') == 'pending']
+        """获取待处理任务（包括可重试的失败任务，按优先级排序）"""
+        # 包括状态为 'pending' 和 'failed' 但重试次数未达上限的任务
+        pending = []
+        
+        for task in tasks:
+            status = task.get('status', 'pending')
+            retry_count = task.get('retry_count', 0)
+            max_retries = 3  # 最多重试 3 次
+            
+            if status == 'pending':
+                # 直接添加待处理任务
+                pending.append(task)
+            elif status == 'failed':
+                # 检查是否可以重试（重试次数未达上限）
+                if retry_count < max_retries:
+                    pending.append(task)
         
         # 按优先级排序：P0/urgent > P1/high > P2/normal > P3/low
         # P0 整改：完善优先级队列
@@ -71,10 +84,19 @@ class DeltaConsumer:
         retry_count = task.get('retry_count', 0)
         max_retries = 3  # 最多重试 3 次
         
+        # 如果是失败的任务，重置状态为 pending 并增加重试次数
+        if task.get('status') == 'failed':
+            retry_count = task.get('retry_count', 0) + 1
+            task['retry_count'] = retry_count
+            task['status'] = 'pending'  # 重置状态为 pending 以便处理
+            task['last_retry_at'] = datetime.now().isoformat()
+            self.log(f"🔄 重试失败任务：{issue_id} (重试 {retry_count}/{max_retries})")
+        
         self.log(f"🔧 开始处理：{issue_id}")
         self.log(f"   Agent: {agent}")
         self.log(f"   错误：{error_type}")
         self.log(f"   消息：{error_message[:100]}...")
+        self.log(f"   重试次数：{retry_count}")
         
         try:
             # 1. 更新 Issue 状态为 processing
@@ -82,7 +104,7 @@ class DeltaConsumer:
                 issue_id,
                 'processing',
                 assigned_to='delta',
-                resolution='Delta 正在修复'
+                resolution=f'Delta 正在修复 (重试 {retry_count})' if retry_count > 0 else 'Delta 正在修复'
             )
             
             # 2. 调用 Delta 修复（通过脚本或 session）
@@ -107,13 +129,13 @@ class DeltaConsumer:
                 return True
             else:
                 # 修复失败，检查是否可以重试
-                retry_count = task.get('retry_count', 0)
-                if retry_count < max_retries:
+                current_retry_count = task.get('retry_count', 0)
+                if current_retry_count < max_retries:
                     # 重试
-                    task['retry_count'] = retry_count + 1
+                    task['retry_count'] = current_retry_count + 1
                     task['last_retry_at'] = datetime.now().isoformat()
                     task['status'] = 'pending'  # 保持 pending，下次再试
-                    self.log(f"⚠️ 修复失败，将重试 ({retry_count + 1}/{max_retries})")
+                    self.log(f"⚠️ 修复失败，将重试 ({current_retry_count + 1}/{max_retries})")
                 else:
                     # 超过最大重试次数，标记为 failed
                     task['status'] = 'failed'

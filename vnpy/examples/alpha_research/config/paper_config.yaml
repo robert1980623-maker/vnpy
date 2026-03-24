@@ -1,0 +1,40 @@
+# 模拟交易配置
+
+account:
+  initial_capital: 1000000    # 初始资金 100 万
+  mode: paper                 # 模拟模式
+
+strategy:
+  name: value                 # 价值股策略
+  max_pe: 20                  # 最大 PE
+  min_roe: 10                 # 最小 ROE(%)
+  min_dividend_yield: 2.0     # 最小股息率 (%)
+  max_positions: 30           # 最大持仓数
+
+trading:
+  position_size: 0.03         # 单只股票 3% 仓位
+  rebalance_days: 20          # 20 天调仓一次
+  commission_rate: 0.0003     # 手续费万分之三
+  slippage: 0.01              # 1% 滑点
+  manual_confirm: true        # 手动确认交易
+
+schedule:
+  select_time: "09:15"        # 选股时间
+  trade_time: "14:50"         # 交易时间
+
+risk_control:
+  max_daily_loss: 0.02        # 日最大亏损 2%
+  max_position_ratio: 0.95    # 最大仓位 95%
+  stop_loss: 0.10             # 单只止损 10%
+  max_sector_ratio: 0.40      # 单一行业最大 40%
+
+data:
+  source: akshare             # 数据源
+  data_dir: ./data/akshare/bars
+  cache_enabled: true
+  update_time: "08:30"
+
+logging:
+  level: INFO
+  file: logs/trading.log
+  backup_days: 30

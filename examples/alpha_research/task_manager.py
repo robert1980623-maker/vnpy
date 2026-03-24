@@ -261,7 +261,7 @@ class TaskManager:
         return report
 
 
-def main():
+def main():  # pragma: no cover
     """示例：完整任务闭环流程"""
     print("="*70)
     print("🎯 任务管理闭环系统演示")

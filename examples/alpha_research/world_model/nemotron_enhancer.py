@@ -117,23 +117,38 @@ class NemotronEnhancer:
         """调用 glm-4.7-flash"""
         
         try:
-            cmd = f'''
-            curl -s {self.api_url} \\
-              -H "Content-Type: application/json" \\
-              -d '{{
-                "model": "{self.model}",
-                "messages": [{{"role": "user", "content": {json.dumps(prompt)}}}],
+            payload = {
+                "model": self.model,
+                "messages": [{"role": "user", "content": prompt}],
                 "temperature": 0.3,
                 "max_tokens": 600
-              }}' | python3 -c "import sys,json; print(json.load(sys.stdin)['choices'][0]['message']['content'])"
-            '''
+            }
             
-            result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=60)
+            result = subprocess.run(
+                ["curl", "-s", self.api_url, "-H", "Content-Type: application/json", "-d", json.dumps(payload)],
+                capture_output=True,
+                text=True,
+                timeout=60
+            )
             
             if result.returncode == 0:
-                return result.stdout.strip()
+                response = json.loads(result.stdout)
+                if 'choices' in response and len(response['choices']) > 0:
+                    content = response['choices'][0]['message']['content']
+                    # 如果内容包含"分析请求"等，说明模型在思考，直接返回内容
+                    if "**分析请求**" in content or "分析请求" in content:
+                        # 提取最终输出部分
+                        lines = content.split('\n')
+                        output_lines = []
+                        for line in lines:
+                            if line.strip() and not line.strip().startswith('**') and not line.strip().startswith('*'):
+                                output_lines.append(line)
+                        return '\n'.join(output_lines).strip()
+                    return content
+                else:
+                    return f"⚠️ 响应格式错误：{response}"
             else:
-                return f"⚠️ nemotron 调用失败：{result.stderr}"
+                return f"⚠️ curl 调用失败：{result.stderr}"
         
         except Exception as e:
             return f"⚠️ 错误：{e}"

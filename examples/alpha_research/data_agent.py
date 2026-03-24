@@ -88,8 +88,7 @@ class UnifiedDataAgent:
         reporter.update_metric('items_failed', len([r for r in all_results if r.get('status') == 'failed']))
         
         result = reporter.finish('success')
-        print(f"
-📄 报告已保存：{result['filepath']}")
+        print(f"✅ 报告已保存：{result['filepath']}")
         
         print("="*70)
         print(" " * 25 + "完成")

@@ -7,9 +7,8 @@ from .processor import (
     process_robust_zscore_norm,
     process_cs_rank_norm
 )
-from .pool import StockPool, create_pool
-from .fundamental import FundamentalData, create_fundamental_data
-
+from .pool import StockPool, IndexStockPool, CustomStockPool
+from .fundamental import FundamentalData, FinancialIndicator
 
 __all__ = [
     "AlphaDataset",
@@ -21,7 +20,8 @@ __all__ = [
     "process_robust_zscore_norm",
     "process_cs_rank_norm",
     "StockPool",
-    "create_pool",
+    "IndexStockPool",
+    "CustomStockPool",
     "FundamentalData",
-    "create_fundamental_data"
+    "FinancialIndicator",
 ]

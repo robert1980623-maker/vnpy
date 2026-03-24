@@ -1,0 +1,19 @@
+{
+  "id": "issue_20260320_012910_75d46020",
+  "agent": "test",
+  "severity": "P1",
+  "error_type": "TestError",
+  "error_message": "测试错误",
+  "timestamp": "2026-03-20T01:29:10.020648",
+  "status": "processing",
+  "assigned_to": "qa",
+  "resolved_at": null,
+  "resolution": null,
+  "type": null,
+  "title": null,
+  "description": null,
+  "details": {},
+  "report_file": null,
+  "requires_action": null,
+  "action_items": []
+}

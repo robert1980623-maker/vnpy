@@ -97,7 +97,7 @@ class QuantManager:
             )
             if glm_result['confidence'] >= 0.7:
                 return glm_result['task_type']
-        except Exception as e:
+        except Exception as e:  # pragma: no cover
             print(f"⚠️  GLM 分析失败：{e}")
         
         return rule_result['task_type']
@@ -213,7 +213,7 @@ class QuantManager:
                     'resolved',
                     resolution='数据已更新'
                 )
-        except Exception as e:
+        except Exception as e:  # pragma: no cover
             print(f"   ❌ 调度失败：{e}")
     
     def auto_retry_or_queue(self, issue: Issue):

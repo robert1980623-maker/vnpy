@@ -1,0 +1,101 @@
+[
+  {
+    "issue_id": "test-p1",
+    "agent": "test",
+    "error_type": "TestError",
+    "error_message": "P1 错误",
+    "priority": "high",
+    "assigned_at": "2026-03-22T14:56:00.942206",
+    "status": "pending"
+  },
+  {
+    "issue_id": "test-p1",
+    "agent": "test",
+    "error_type": "TestError",
+    "error_message": "P1 错误",
+    "priority": "high",
+    "assigned_at": "2026-03-22T14:59:51.893543",
+    "status": "pending"
+  },
+  {
+    "issue_id": "test-p1",
+    "agent": "test",
+    "error_type": "TestError",
+    "error_message": "P1 错误",
+    "priority": "high",
+    "assigned_at": "2026-03-23T09:13:22.519701",
+    "status": "pending"
+  },
+  {
+    "issue_id": "test-p1",
+    "agent": "test",
+    "error_type": "TestError",
+    "error_message": "P1 错误",
+    "priority": "high",
+    "assigned_at": "2026-03-23T09:14:33.545197",
+    "status": "pending"
+  },
+  {
+    "issue_id": "test-p1",
+    "agent": "test",
+    "error_type": "TestError",
+    "error_message": "P1 错误",
+    "priority": "high",
+    "assigned_at": "2026-03-23T09:17:16.402336",
+    "status": "pending"
+  },
+  {
+    "issue_id": "test-p1",
+    "agent": "test",
+    "error_type": "TestError",
+    "error_message": "P1 错误",
+    "priority": "high",
+    "assigned_at": "2026-03-23T09:19:19.367864",
+    "status": "pending"
+  },
+  {
+    "issue_id": "test-p1",
+    "agent": "test",
+    "error_type": "TestError",
+    "error_message": "P1 错误",
+    "priority": "high",
+    "assigned_at": "2026-03-23T09:22:08.551934",
+    "status": "pending"
+  },
+  {
+    "issue_id": "test-p1",
+    "agent": "test",
+    "error_type": "TestError",
+    "error_message": "P1 错误",
+    "priority": "high",
+    "assigned_at": "2026-03-23T09:23:02.420691",
+    "status": "pending"
+  },
+  {
+    "issue_id": "test-p1",
+    "agent": "test",
+    "error_type": "TestError",
+    "error_message": "P1 错误",
+    "priority": "high",
+    "assigned_at": "2026-03-23T09:23:46.272001",
+    "status": "pending"
+  },
+  {
+    "issue_id": "test-p1",
+    "agent": "test",
+    "error_type": "TestError",
+    "error_message": "P1 错误",
+    "priority": "high",
+    "assigned_at": "2026-03-23T09:25:11.058153",
+    "status": "pending"
+  },
+  {
+    "issue_id": "test-p1",
+    "agent": "test",
+    "error_type": "TestError",
+    "error_message": "P1 错误",
+    "priority": "high",
+    "assigned_at": "2026-03-23T09:31:38.996387",
+    "status": "pending"
+  }
+]

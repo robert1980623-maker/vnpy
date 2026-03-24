@@ -1,0 +1,6 @@
+{"severity": "P1", "title": "⚠️ 功能异常", "message": "功能异常，已调度工程师修复：测试错误", "agent": "test", "error": "测试错误", "timestamp": "2026-03-20T01:29:11.300177", "status": "new", "action_taken": "已调度 qa 修复", "estimated_fix": "10 分钟"}
+{"severity": "P3", "title": "📝 通知", "message": "问题已解决：测试错误", "agent": "test", "error": "问题已解决：测试错误", "timestamp": "2026-03-20T01:29:11.305331", "status": "new", "action_taken": "已解决", "estimated_fix": ""}
+{"severity": "P3", "title": "📝 通知", "message": "问题已解决：严重错误", "agent": "test", "error": "问题已解决：严重错误", "timestamp": "2026-03-20T01:29:11.308333", "status": "new", "action_taken": "解决失败", "estimated_fix": ""}
+{"severity": "P1", "title": "⚠️ 功能异常", "message": "功能异常，已调度工程师修复：测试错误", "agent": "test", "error": "测试错误", "timestamp": "2026-03-20T02:09:33.320943", "status": "new", "action_taken": "已调度 qa 修复", "estimated_fix": "10 分钟"}
+{"severity": "P3", "title": "📝 通知", "message": "问题已解决：测试错误", "agent": "test", "error": "问题已解决：测试错误", "timestamp": "2026-03-20T02:09:33.326762", "status": "new", "action_taken": "已解决", "estimated_fix": ""}
+{"severity": "P3", "title": "📝 通知", "message": "问题已解决：严重错误", "agent": "test", "error": "问题已解决：严重错误", "timestamp": "2026-03-20T02:09:33.329914", "status": "new", "action_taken": "解决失败", "estimated_fix": ""}

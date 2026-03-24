@@ -1,0 +1,7 @@
+{
+  "date": "2026-03-23",
+  "plans": [
+    {"symbol": "600519.SH", "action": "buy", "quantity": 100, "price": 1850.0}
+  ],
+  "approved": true
+}

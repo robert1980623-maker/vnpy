@@ -61,9 +61,9 @@ def update_compliance_checker():
             'min_liquidity': 10000000,        # 最小日均成交 1000 万
             'forbid_st': True,                # 禁止 ST 股票
             'forbid_suspended': True,         # 禁止停牌股票
-        }"""
-        
-        new_rules = """self.rules = {
+            }"""
+            
+            new_rules = """self.rules = {
             'max_positions': 10,              # 最大持仓数量 10 只
             'max_single_position': 0.25,      # 单只股票最大持仓 25%
             'max_industry_weight': 0.30,      # 行业集中度 30%
@@ -71,14 +71,14 @@ def update_compliance_checker():
             'min_liquidity': 10000000,        # 最小日均成交 1000 万
             'forbid_st': True,                # 禁止 ST 股票
             'forbid_suspended': True,         # 禁止停牌股票
-        }"""
+            }"""
             
             content = content.replace(old_rules, new_rules)
-        
-        with open(filename, 'w', encoding='utf-8') as f:
-            f.write(content)
-        
-        print(f"✅ {filename}: 已更新合规规则")
+            
+            with open(filename, 'w', encoding='utf-8') as f:
+                f.write(content)
+            
+            print(f"✅ {filename}: 已更新合规规则")
         
     except FileNotFoundError:
         print(f"⚠️ {filename} 不存在")

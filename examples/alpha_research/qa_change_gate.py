@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """
-代码变更 QA 门禁系统 (增强版 - 包含覆盖率检查)
-P0-3 修复：测试通过后通知 Manager 关闭 Issue
+代码变更 QA 门禁系统 (增强版 - 只负责检测和上报)
+职责：检测问题 → 创建 Issue → 退出（不尝试修复）
 
 功能:
 - 检测代码变更
 - 自动触发 QA 闭环测试
-- 代码覆盖率检查 (必须≥90%)
-- 验证通过后才允许提交
+- 代码覆盖率检查 (必须≥85%)
+- 验证失败时创建 Issue 并上报
 - 生成质量报告
-- P0-3: 测试通过/失败时通知 Manager
+- 由 Manager 调度专业 Agent 修复（不在本脚本中执行）
 """
 
 import os
@@ -25,7 +25,7 @@ from human_report import human_qa_report
 
 
 class QAChangeGate:
-    """代码变更 QA 门禁 (P0-3 增强版)"""
+    """代码变更 QA 门禁 - 只负责检测和上报"""
     
     def __init__(self):
         self.project_root = Path('/Users/rowang/projects/vnpy/examples/alpha_research')
@@ -33,71 +33,6 @@ class QAChangeGate:
         self.change_log_dir = self.project_root / 'change_logs'
         self.change_log_dir.mkdir(parents=True, exist_ok=True)
         self.coverage_threshold = 85.0  # 覆盖率阈值
-        
-        # P0-3 修复：Issue 追踪
-        self.current_issue_id = None
-        self.manager = None
-    
-    def _get_manager(self):
-        """懒加载 Manager 实例"""
-        if self.manager is None:
-            try:
-                from manager_interface import QuantManager
-                self.manager = QuantManager()
-                print("✅ Manager 接口已初始化")
-            except Exception as e:
-                print(f"⚠️  Manager 初始化失败：{e}")
-                self.manager = False
-        return self.manager if self.manager else None
-    
-    def _notify_manager_success(self, issue_id: str, test_report: Dict):
-        """
-        P0-3 修复：通知 Manager 测试通过
-        
-        Args:
-            issue_id: 关联的 Issue ID
-            test_report: 测试报告
-        """
-        manager = self._get_manager()
-        if not manager:
-            print(f"  ⚠️  Manager 不可用，跳过通知")
-            return
-        
-        try:
-            coverage = test_report.get('coverage', 0)
-            resolution = f"修复已通过 QA 验证，测试覆盖率 {coverage}%"
-            
-            manager.complete_issue(issue_id, {
-                'success': True,
-                'resolution': resolution,
-                'test_report': test_report
-            })
-            
-            print(f"  ✅ 已通知 Manager 关闭 Issue: {issue_id}")
-            
-        except Exception as e:
-            print(f"  ❌ 通知 Manager 失败：{e}")
-    
-    def _notify_manager_failure(self, issue_id: str, test_report: Dict):
-        """
-        P0-3 修复：通知 Manager 测试失败
-        
-        Args:
-            issue_id: 关联的 Issue ID
-            test_report: 测试报告
-        """
-        manager = self._get_manager()
-        if not manager:
-            print(f"  ⚠️  Manager 不可用，跳过通知")
-            return
-        
-        try:
-            # 触发重试
-            manager.retry_issue(issue_id)
-            print(f"  🔄 已通知 Manager 重试 Issue: {issue_id}")
-            
-        except Exception as e:
-            print(f"  ❌ 通知 Manager 失败：{e}")
     
     def get_file_hash(self, filepath: Path) -> str:
         """获取文件哈希值"""
@@ -171,18 +106,21 @@ class QAChangeGate:
         
         return changes
     
-    def check_coverage(self) -> bool:
-        """检查代码覆盖率 (必须≥90%)"""
+    def check_coverage(self) -> tuple[bool, float]:
+        """
+        检查代码覆盖率
+        
+        Returns:
+            tuple: (是否通过，实际覆盖率)
+        """
         print("\n" + "="*70)
         print(f"📊 代码覆盖率检查 (要求≥{self.coverage_threshold}%)")
         print("="*70)
         
         try:
             # 运行覆盖率测试
-            result = subprocess.run(
-                [
-                    'python3', '-m', 'coverage', 'erase'
-                ],
+            subprocess.run(
+                ['python3', '-m', 'coverage', 'erase'],
                 cwd=self.project_root,
                 capture_output=True,
                 text=True,
@@ -206,8 +144,6 @@ class QAChangeGate:
                 text=True,
                 timeout=600
             )
-            
-            print(result.stdout[-1000:])
             
             # 生成覆盖率报告
             report_result = subprocess.run(
@@ -235,7 +171,7 @@ class QAChangeGate:
                             pass
             
             if report_result.returncode == 0:
-                print(f"\n✅ 代码覆盖率 ≥ {self.coverage_threshold}%")
+                print(f"\n✅ 代码覆盖率 ≥ {self.coverage_threshold}% (实际：{coverage_value}%)")
                 
                 # 生成 HTML 报告
                 subprocess.run(
@@ -246,10 +182,9 @@ class QAChangeGate:
                 )
                 print(f"📄 HTML 报告：htmlcov/index.html")
                 
-                return True
+                return True, coverage_value
             else:
-                print(f"\n❌ 代码覆盖率 < {self.coverage_threshold}%")
-                print(f"   实际覆盖率：{coverage_value}%")
+                print(f"\n❌ 代码覆盖率 < {self.coverage_threshold}% (实际：{coverage_value}%)")
                 print(report_result.stderr[:500])
                 
                 # 生成详细报告
@@ -261,40 +196,14 @@ class QAChangeGate:
                 )
                 print(f"📄 详细报告：htmlcov/index.html")
                 
-                # 🆕 上报到 Manager
-                print(f"\n📋 上报问题到 Manager...")
-                try:
-                    queue = IssueQueue()
-                    issue = queue.create_issue(
-                        agent="qa-gate",
-                        severity="P1",
-                        error_type="coverage_low",
-                        error_message=f"代码覆盖率 {coverage_value}% < 阈值 {self.coverage_threshold}%"
-                    )
-                    issue.details = {
-                        'coverage_value': coverage_value,
-                        'coverage_threshold': self.coverage_threshold,
-                        'report_file': 'htmlcov/index.html'
-                    }
-                    issue_id = queue.write_issue(issue)
-                    print(f"✅ 问题已上报：{issue_id}")
-                    
-                    # 通知 Manager 处理
-                    manager = self._get_manager()
-                    if manager:
-                        manager.handle_error_report(issue)
-                        print(f"✅ Manager 已接收并处理")
-                except Exception as e:
-                    print(f"⚠️  上报失败：{e}")
-                
-                return False
+                return False, coverage_value
         
         except subprocess.TimeoutExpired:
             print("\n❌ 覆盖率检查超时")
-            return False
+            return False, 0
         except Exception as e:
             print(f"\n❌ 覆盖率检查异常：{e}")
-            return False
+            return False, 0
     
     def run_qa_loop(self) -> bool:
         """运行 QA 闭环测试"""
@@ -331,6 +240,34 @@ class QAChangeGate:
             print(f"\n❌ QA 闭环测试异常：{e}")
             return False
     
+    def create_issue(self, error_type: str, error_message: str, details: Dict) -> str:
+        """
+        创建 Issue 并上报到队列
+        
+        Returns:
+            str: Issue ID
+        """
+        print(f"\n📋 创建 Issue 上报问题...")
+        
+        try:
+            queue = IssueQueue()
+            issue = queue.create_issue(
+                agent="qa-gate",
+                severity="P1",
+                error_type=error_type,
+                error_message=error_message
+            )
+            issue.details = details
+            issue_id = queue.write_issue(issue)
+            print(f"✅ Issue 已创建：{issue_id}")
+            print(f"   等待 Manager 调度专业 Agent 处理")
+            
+            return issue_id
+            
+        except Exception as e:
+            print(f"⚠️  Issue 创建失败：{e}")
+            return None
+    
     def generate_quality_report(self, changes: List[Dict], qa_passed: bool, 
                                coverage_passed: bool, coverage_value: float = 0) -> str:
         """生成质量报告"""
@@ -359,7 +296,7 @@ class QAChangeGate:
                 'overall_passed': qa_passed and coverage_passed
             },
             'verdict': '✅ APPROVED' if (qa_passed and coverage_passed) else '❌ REJECTED',
-            'next_action': '允许提交' if (qa_passed and coverage_passed) else '修复后重新验证'
+            'next_action': '允许提交' if (qa_passed and coverage_passed) else '等待 Manager 调度修复'
         }
         
         with open(report_file, 'w', encoding='utf-8') as f:
@@ -375,71 +312,56 @@ class QAChangeGate:
     def check_and_gate(self) -> bool:
         """执行变更检查和 QA 门禁"""
         print("\n" + "="*70)
-        print("🚪 QA 变更门禁系统 (含覆盖率检查)")
+        print("🚪 QA 变更门禁系统 (只检测，不修复)")
         print(f"时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         print("="*70)
         
         # 步骤 1: 检测变更
         changes = self.detect_changes()
         
-        # 步骤 2: 检查覆盖率 (必须≥90%)
-        coverage_passed = self.check_coverage()
+        # 步骤 2: 检查覆盖率
+        coverage_passed, coverage_value = self.check_coverage()
         
         if not coverage_passed:
-            print("\n❌ 覆盖率未达到 90%，禁止提交")
-            self.generate_quality_report(changes, False, False, 0)
+            print("\n❌ 覆盖率未达到阈值，创建 Issue 等待修复")
+            
+            # 创建 Issue，等待 Manager 调度
+            issue_id = self.create_issue(
+                error_type="coverage_low",
+                error_message=f"代码覆盖率 {coverage_value}% < 阈值 {self.coverage_threshold}%",
+                details={
+                    'coverage_value': coverage_value,
+                    'coverage_threshold': self.coverage_threshold,
+                    'report_file': 'htmlcov/index.html'
+                }
+            )
+            
+            self.generate_quality_report(changes, False, False, coverage_value)
             return False
         
         # 步骤 3: 运行 QA 闭环
         qa_passed = self.run_qa_loop()
         
         if not qa_passed:
-            print("\n❌ QA 闭环测试失败，禁止提交")
+            print("\n❌ QA 闭环测试失败，创建 Issue 等待修复")
             
-            # 🆕 P0-3 修复：上报 QA 失败到 Manager
-            print(f"\n📋 上报 QA 失败问题到 Manager...")
-            try:
-                queue = IssueQueue()
-                issue = queue.create_issue(
-                    agent="qa-gate",
-                    severity="P1",
-                    error_type="qa_loop_failed",
-                    error_message="QA 闭环测试失败"
-                )
-                issue.details = {
+            # 创建 Issue，等待 Manager 调度
+            issue_id = self.create_issue(
+                error_type="qa_loop_failed",
+                error_message="QA 闭环测试失败",
+                details={
                     'qa_loop_passed': False,
                     'coverage_passed': coverage_passed,
+                    'coverage_value': coverage_value,
                     'report_file': 'quality_report_*.json'
                 }
-                issue_id = queue.write_issue(issue)
-                print(f"✅ QA 失败问题已上报：{issue_id}")
-                
-                # 通知 Manager 处理
-                manager = self._get_manager()
-                if manager:
-                    manager.handle_error_report(issue)
-                    print(f"✅ Manager 已接收并处理")
-                    
-                    # 保存 issue_id 供后续使用
-                    self.current_issue_id = issue_id
-            except Exception as e:
-                print(f"⚠️  上报失败：{e}")
+            )
             
-            self.generate_quality_report(changes, qa_passed, coverage_passed, 90)
+            self.generate_quality_report(changes, qa_passed, coverage_passed, coverage_value)
             return False
         
         # 步骤 4: 生成质量报告
-        report_file = self.generate_quality_report(changes, qa_passed, coverage_passed, 90)
-        
-        # P0-3 修复：如果有 Issue 正在追踪，通知 Manager 关闭
-        if self.current_issue_id:
-            print(f"\n📋 通知 Manager 关闭 Issue {self.current_issue_id}...")
-            self._notify_manager_success(self.current_issue_id, {
-                'coverage': coverage_passed,
-                'qa_passed': qa_passed,
-                'report_file': report_file
-            })
-            self.current_issue_id = None
+        report_file = self.generate_quality_report(changes, qa_passed, coverage_passed, coverage_value)
         
         print("\n" + "="*70)
         print("✅ 所有质量检查通过，允许提交")

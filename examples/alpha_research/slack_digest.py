@@ -163,7 +163,7 @@ class SlackDigestReporter:
 
 上午交易:
 • 买入：{len([t for t in trades if t.get('action') == 'buy'])} 只
-• 卖出：{len([t in trades if t.get('action') == 'sell'])} 只
+• 卖出：{len([t for t in trades if t.get('action') == 'sell'])} 只
 
 下午关注:
 • 13:00 市场开盘

@@ -18,6 +18,140 @@ import numpy as np
 
 from ..logger import logger
 
+from typing import Optional, Dict, Any
+from datetime import datetime
+from dataclasses import dataclass
+
+
+@dataclass
+class FinancialIndicator:
+    """
+    财务指标数据类
+    """
+    vt_symbol: str
+    report_date: str  # 报告期，如 "2024-03-31"
+    
+    # 估值指标
+    pe_ratio: Optional[float] = None  # 市盈率 (TTM)
+    pb_ratio: Optional[float] = None  # 市净率
+    ps_ratio: Optional[float] = None  # 市销率
+    pcf_ratio: Optional[float] = None  # 市现率
+    dividend_yield: Optional[float] = None  # 股息率
+    
+    # 盈利能力
+    roe: Optional[float] = None  # 净资产收益率
+    roa: Optional[float] = None  # 总资产收益率
+    gross_margin: Optional[float] = None  # 毛利率
+    net_margin: Optional[float] = None  # 净利率
+    operating_margin: Optional[float] = None  # 营业利润率
+    
+    # 成长能力
+    revenue_growth: Optional[float] = None  # 营收增长率
+    net_profit_growth: Optional[float] = None  # 净利润增长率
+    eps_growth: Optional[float] = None  # EPS 增长率
+    book_value_growth: Optional[float] = None  # 净资产增长率
+    
+    # 偿债能力
+    debt_to_asset: Optional[float] = None  # 资产负债率
+    current_ratio: Optional[float] = None  # 流动比率
+    quick_ratio: Optional[float] = None  # 速动比率
+    interest_coverage: Optional[float] = None  # 利息保障倍数
+    
+    # 现金流
+    operating_cash_flow: Optional[float] = None  # 经营活动现金流
+    free_cash_flow: Optional[float] = None  # 自由现金流
+    cash_flow_per_share: Optional[float] = None  # 每股现金流
+    
+    # 每股指标
+    eps: Optional[float] = None  # 每股收益
+    bps: Optional[float] = None  # 每股净资产
+    revenue_per_share: Optional[float] = None  # 每股营收
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """转换为字典"""
+        return {
+            "vt_symbol": self.vt_symbol,
+            "report_date": self.report_date,
+            "valuation": {
+                "pe_ratio": self.pe_ratio,
+                "pb_ratio": self.pb_ratio,
+                "ps_ratio": self.ps_ratio,
+                "pcf_ratio": self.pcf_ratio,
+                "dividend_yield": self.dividend_yield,
+            },
+            "profitability": {
+                "roe": self.roe,
+                "roa": self.roa,
+                "gross_margin": self.gross_margin,
+                "net_margin": self.net_margin,
+                "operating_margin": self.operating_margin,
+            },
+            "growth": {
+                "revenue_growth": self.revenue_growth,
+                "net_profit_growth": self.net_profit_growth,
+                "eps_growth": self.eps_growth,
+                "book_value_growth": self.book_value_growth,
+            },
+            "solvency": {
+                "debt_to_asset": self.debt_to_asset,
+                "current_ratio": self.current_ratio,
+                "quick_ratio": self.quick_ratio,
+                "interest_coverage": self.interest_coverage,
+            },
+            "cash_flow": {
+                "operating_cash_flow": self.operating_cash_flow,
+                "free_cash_flow": self.free_cash_flow,
+                "cash_flow_per_share": self.cash_flow_per_share,
+            },
+            "per_share": {
+                "eps": self.eps,
+                "bps": self.bps,
+                "revenue_per_share": self.revenue_per_share,
+            }
+        }
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "FinancialIndicator":
+        """从字典创建"""
+        return cls(
+            vt_symbol=data["vt_symbol"],
+            report_date=data["report_date"],
+            **{k: v for k, v in data.items() if k not in ["vt_symbol", "report_date"]}
+        )
+    
+    def get_valuation(self) -> Dict[str, Optional[float]]:
+        """获取估值指标"""
+        return {
+            "pe_ratio": self.pe_ratio,
+            "pb_ratio": self.pb_ratio,
+            "ps_ratio": self.ps_ratio,
+            "pcf_ratio": self.pcf_ratio,
+            "dividend_yield": self.dividend_yield,
+        }
+    
+    def get_profitability(self) -> Dict[str, Optional[float]]:
+        """获取盈利能力指标"""
+        return {
+            "roe": self.roe,
+            "roa": self.roa,
+            "gross_margin": self.gross_margin,
+            "net_margin": self.net_margin,
+            "operating_margin": self.operating_margin,
+        }
+    
+    def get_growth(self) -> Dict[str, Optional[float]]:
+        """获取成长能力指标"""
+        return {
+            "revenue_growth": self.revenue_growth,
+            "net_profit_growth": self.net_profit_growth,
+            "eps_growth": self.eps_growth,
+            "book_value_growth": self.book_value_growth,
+        }
+    
+    def is_valid(self) -> bool:
+        """检查数据是否有效"""
+        return self.vt_symbol is not None and self.report_date is not None
+
 
 class FundamentalData:
     """财务数据管理类"""
