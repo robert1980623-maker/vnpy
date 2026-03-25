@@ -66,6 +66,10 @@ class DataFreshnessGuard:
         expected_date = self.get_expected_date()
         freshness = self.check_all_freshness(expected_date)
         
+        # 检查是否有错误（账户文件不存在/无持仓等）
+        if 'error' in freshness:
+            return False, f"无法检查新鲜度：{freshness['error']}"
+        
         stale_rate = freshness['stale_rate']
         if stale_rate > 0.2:  # 超过 20% 滞后
             return True, f"{stale_rate*100:.1f}% 数据滞后"
@@ -197,6 +201,11 @@ class DataFreshnessGuard:
         if symbols is None:
             # 下载所有滞后数据
             freshness = self.check_all_freshness()
+            
+            # 检查是否有错误
+            if 'error' in freshness:
+                return {'status': 'error', 'downloaded': 0, 'error': freshness['error']}
+            
             symbols = [s['symbol'] for s in freshness.get('stale', [])]
             symbols.extend(freshness.get('missing', []))
         
@@ -303,6 +312,18 @@ class DataFreshnessGuard:
         # 2. 检查新鲜度详情
         print("\n📊 新鲜度详情:")
         freshness = self.check_all_freshness(expected_date)
+        
+        # 检查是否有错误
+        if 'error' in freshness:
+            print(f"  ❌ 错误：{freshness['error']}")
+            self.report['status'] = 'error'
+            self.report['actions'].append({
+                'action': 'freshness_check_error',
+                'error': freshness['error'],
+                'time': datetime.now().isoformat()
+            })
+            self._save_report()
+            return {'status': 'error', 'error': freshness['error']}
         
         print(f"  总持仓：{freshness['total']}")
         print(f"  新鲜：{freshness['fresh_count']} ({freshness['fresh_rate']*100:.1f}%)")
