@@ -24,10 +24,14 @@ class DataFreshnessGuard:
     """数据新鲜度守护者"""
     
     def __init__(self, data_dir: str = './data/akshare/bars'):
+        # 基于脚本位置计算项目根目录，确保路径始终正确解析
+        self.script_root = Path(__file__).resolve().parent  # examples/alpha_research/
+        self.project_root = self.script_root.parent.parent   # /Users/rowang/projects/vnpy/
+        
         self.data_dir = Path(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.calendar = TradingCalendar()
-        self.report_dir = Path('./reports/data_freshness')
+        self.report_dir = self.script_root / 'reports' / 'data_freshness'
         self.report_dir.mkdir(parents=True, exist_ok=True)
         
         self.report = {
@@ -70,7 +74,8 @@ class DataFreshnessGuard:
         if 'error' in freshness:
             return False, f"无法检查新鲜度：{freshness['error']}"
         
-        stale_rate = freshness['stale_rate']
+        # 安全检查：确保 stale_rate 存在
+        stale_rate = freshness.get('stale_rate', 0)
         if stale_rate > 0.2:  # 超过 20% 滞后
             return True, f"{stale_rate*100:.1f}% 数据滞后"
         
@@ -147,10 +152,10 @@ class DataFreshnessGuard:
         if expected_date is None:
             expected_date = self.get_expected_date()
         
-        # 加载持仓
-        account_file = Path('./accounts/virtual_2026_account.json')
+        # 加载持仓（使用项目根目录下的 accounts 目录）
+        account_file = self.project_root / 'accounts' / 'virtual_2026_account.json'
         if not account_file.exists():
-            return {'error': '账户文件不存在'}
+            return {'error': f'账户文件不存在: {account_file}'}
         
         with open(account_file, 'r', encoding='utf-8') as f:
             account = json.load(f)
@@ -221,15 +226,15 @@ class DataFreshnessGuard:
         })
         
         try:
-            # 调用批量下载脚本
-            script = Path('./batch_download_enhanced.py')
+            # 调用批量下载脚本（基于项目根目录查找）
+            script = self.project_root / 'examples' / 'alpha_research' / 'batch_download_enhanced.py'
             if not script.exists():
-                script = Path('./batch_download.py')
+                script = self.project_root / 'examples' / 'alpha_research' / 'batch_download.py'
             
-            env = {'PYTHONPATH': str(Path('./').absolute())}
+            env = {'PYTHONPATH': str(self.project_root)}
             result = subprocess.run(
                 [sys.executable, str(script)],
-                cwd=Path(__file__).parent,
+                cwd=str(self.project_root),
                 capture_output=True,
                 text=True,
                 timeout=600,

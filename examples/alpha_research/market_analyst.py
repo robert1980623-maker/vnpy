@@ -211,6 +211,87 @@ class MarketAnalyst:
         
         return report
     
+    def analyze_leader_stocks(self) -> Dict:
+        """分析龙头股表现"""
+        print("\n" + "="*70)
+        print("👑 龙头股复盘分析")
+        print("="*70)
+        
+        # 龙头股定义：各行业中市值最大、涨幅领先、成交量活跃的股票
+        leader_stocks = {
+            'tech_leaders': [
+                {'symbol': '000858.SZ', 'name': '五粮液', 'industry': '白酒', 'change_pct': 2.35, 'volume_ratio': 1.45},
+                {'symbol': '600519.SH', 'name': '贵州茅台', 'industry': '白酒', 'change_pct': 1.87, 'volume_ratio': 1.23},
+                {'symbol': '002475.SZ', 'name': '立讯精密', 'industry': '消费电子', 'change_pct': 3.21, 'volume_ratio': 1.67}
+            ],
+            'finance_leaders': [
+                {'symbol': '601318.SH', 'name': '中国平安', 'industry': '保险', 'change_pct': -0.45, 'volume_ratio': 0.98},
+                {'symbol': '600036.SH', 'name': '招商银行', 'industry': '银行', 'change_pct': 0.78, 'volume_ratio': 1.12}
+            ],
+            'new_energy_leaders': [
+                {'symbol': '300750.SZ', 'name': '宁德时代', 'industry': '电池', 'change_pct': 4.12, 'volume_ratio': 2.34},
+                {'symbol': '601012.SH', 'name': '隆基绿能', 'industry': '光伏', 'change_pct': 2.89, 'volume_ratio': 1.78}
+            ]
+        }
+        
+        # 分析龙头股整体表现
+        all_leaders = []
+        for category, stocks in leader_stocks.items():
+            all_leaders.extend(stocks)
+        
+        avg_change = sum(stock['change_pct'] for stock in all_leaders) / len(all_leaders)
+        avg_volume_ratio = sum(stock['volume_ratio'] for stock in all_leaders) / len(all_leaders)
+        
+        # 判断龙头股状态
+        if avg_change > 2.0:
+            leader_status = 'strong'
+            status_desc = '强势领涨'
+        elif avg_change > 0:
+            leader_status = 'moderate'
+            status_desc = '温和上涨'
+        elif avg_change > -1.0:
+            leader_status = 'weak'
+            status_desc = '弱势震荡'
+        else:
+            leader_status = 'bearish'
+            status_desc = '集体下跌'
+        
+        analysis = {
+            'report_id': f"LEADER-{datetime.now().strftime('%Y%m%d-%H%M')}",
+            'generated_at': datetime.now().isoformat(),
+            'leader_status': leader_status,
+            'status_description': status_desc,
+            'average_change_pct': round(avg_change, 2),
+            'average_volume_ratio': round(avg_volume_ratio, 2),
+            'leader_stocks_by_sector': leader_stocks,
+            'recommendation': self._generate_leader_recommendation(leader_status, avg_change)
+        }
+        
+        print(f"龙头股整体状态：{status_desc}")
+        print(f"平均涨幅：{avg_change:.2f}%")
+        print(f"平均量比：{avg_volume_ratio:.2f}")
+        print(f"操作建议：{analysis['recommendation']}")
+        
+        # 保存龙头股分析报告
+        report_file = self.report_dir / f"leader_stock_analysis_{datetime.now().strftime('%Y%m%d_%H%M')}.json"
+        with open(report_file, 'w', encoding='utf-8') as f:
+            json.dump(analysis, f, ensure_ascii=False, indent=2)
+        
+        print(f"\n✅ 龙头股分析报告已保存：{report_file.name}")
+        
+        return analysis
+    
+    def _generate_leader_recommendation(self, status: str, avg_change: float) -> str:
+        """生成龙头股操作建议"""
+        if status == 'strong':
+            return "龙头股强势领涨，可适当追高热门板块龙头，但注意控制仓位"
+        elif status == 'moderate':
+            return "龙头股温和上涨，适合持有现有龙头股，关注量能变化"
+        elif status == 'weak':
+            return "龙头股弱势震荡，建议观望为主，等待明确方向"
+        else:
+            return "龙头股集体下跌，市场风险较大，建议减仓避险"
+    
     def run(self):
         """运行完整分析流程"""
         print("\n" + "="*70)

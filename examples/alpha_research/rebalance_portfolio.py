@@ -12,7 +12,7 @@
 import json
 from pathlib import Path
 from datetime import datetime
-from non_interactive_helper import setup_non_interactive_mode, is_non_interactive
+from non_interactive_helper import setup_non_interactive_mode, is_non_interactive, confirm_action
 
 
 class PortfolioRebalancer:
@@ -321,8 +321,7 @@ class PortfolioRebalancer:
         
         # 确认执行
         print("\n" + "=" * 70)
-        confirm = input("是否执行调仓？(y/n): ")
-        if confirm.lower() != 'y':
+        if not confirm_action("是否执行调仓？", default=True):
             print("❌ 已取消")
             return
         

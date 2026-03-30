@@ -14,7 +14,7 @@ def main():
     print("开始执行全面复盘归因...")
     try:
         # 初始化虚拟账户
-        account = VirtualAccount(account_id="robert")
+        account = VirtualAccount()
         
         # 执行归因分析
         attribution = PerformanceAttribution(account)

@@ -7,20 +7,20 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from virtual_account import VirtualAccount
-from rebalance_portfolio import RebalancePortfolio
+from rebalance_portfolio import PortfolioRebalancer
+from non_interactive_helper import setup_non_interactive_mode
 
 def main():
     print("开始执行调仓操作...")
     try:
-        # 初始化虚拟账户
-        account = VirtualAccount()
+        # 启用无人值守模式
+        setup_non_interactive_mode(True)
         
         # 执行调仓
-        rebalancer = RebalancePortfolio(account)
-        rebalance_result = rebalancer.execute_rebalance()
+        rebalancer = PortfolioRebalancer(target_stocks=5)
+        rebalancer.run()
         
-        print(f"调仓执行完成: {rebalance_result}")
+        print("调仓执行完成")
         
     except Exception as e:
         print(f"调仓执行失败: {e}")

@@ -1,397 +1,304 @@
 #!/usr/bin/env python3
 """
-虚拟账户模拟交易系统
+虚拟账户管理模块
 
-功能:
-- 虚拟账户管理 (初始资金可配置)
-- 每日自动交易
-- 实时持仓跟踪
-- 每日/每周复盘
-- 交易记录保存
-- 收益曲线生成
+功能：
+1. 管理虚拟账户资金和持仓
+2. 记录交易流水
+3. 同步到飞书多维表格
 """
 
 import json
-import csv
+import os
+from datetime import datetime
 from pathlib import Path
-from datetime import datetime, timedelta
-from dataclasses import dataclass, asdict, field
-from typing import List, Dict, Optional
-import random
 
+# 配置
+ACCOUNT_FILE = Path(__file__).parent / "data" / "virtual_account.json"
+TRADE_LOG_FILE = Path(__file__).parent / "data" / "trade_log.json"
 
-@dataclass
-class Position:
-    """持仓"""
-    symbol: str
-    name: str
-    volume: int
-    avg_price: float
-    cost: float
-    current_price: float = 0.0
-    market_value: float = 0.0
-    profit: float = 0.0
-    profit_rate: float = 0.0
-    score: float = 0.0
-
-
-@dataclass
-class Trade:
-    """交易记录"""
-    trade_id: str
-    symbol: str
-    name: str
-    direction: str  # buy/sell
-    volume: int
-    price: float
-    amount: float
-    fee: float
-    datetime: str
-    reason: str = ""
-
-
-@dataclass
-class DailyAccount:
-    """每日账户快照"""
-    date: str
-    cash: float
-    total_value: float
-    market_value: float
-    daily_return: float
-    daily_return_rate: float
-    positions_count: int
-    buy_count: int
-    sell_count: int
-    positions: List[Dict] = field(default_factory=list)
-    
-    def __init__(self, **kwargs):
-        """处理旧格式数据 - 完全兼容所有历史版本"""
-        # 兼容旧版本的字段名
-        if 'position_count' in kwargs:
-            kwargs['positions_count'] = kwargs.pop('position_count')
-        if 'total_assets' in kwargs:
-            kwargs['total_value'] = kwargs.pop('total_assets')
-        if 'total_market_value' in kwargs:
-            kwargs['market_value'] = kwargs.pop('total_market_value')
-        # 所有字段都使用 .get() 提供默认值，避免 KeyError
-        object.__setattr__(self, 'date', kwargs.get('date', datetime.now().strftime('%Y-%m-%d')))
-        object.__setattr__(self, 'cash', kwargs.get('cash', 0.0))
-        object.__setattr__(self, 'total_value', kwargs.get('total_value', 0.0))
-        object.__setattr__(self, 'market_value', kwargs.get('market_value', 0.0))
-        object.__setattr__(self, 'daily_return', kwargs.get('daily_return', 0.0))
-        object.__setattr__(self, 'daily_return_rate', kwargs.get('daily_return_rate', 0.0))
-        object.__setattr__(self, 'positions_count', kwargs.get('positions_count', 0))
-        object.__setattr__(self, 'buy_count', kwargs.get('buy_count', 0))
-        object.__setattr__(self, 'sell_count', kwargs.get('sell_count', 0))
-        object.__setattr__(self, 'positions', kwargs.get('positions', []))
-    
-    def __post_init__(self):
-        """处理旧格式数据"""
-        # 兼容旧版本的字段名
-        if not hasattr(self, 'positions_count') and hasattr(self, 'position_count'):
-            self.positions_count = self.position_count
-        if not hasattr(self, 'total_value') and hasattr(self, 'total_assets'):
-            self.total_value = self.total_assets
-        if not hasattr(self, 'market_value') and hasattr(self, 'total_market_value'):
-            self.market_value = self.total_market_value
+# 飞书多维表格配置
+FEISHU_APP_TOKEN = "YpWLbsLAfaXw3HsprKfcj0AFnrh"
+FEISHU_ACCOUNT_TABLE = "tblMqYRdqBjhMnik"  # 虚拟账户表
+FEISHU_TRADE_TABLE = "tbl4n14ZYANQtI26"  # 交易日志表
 
 
 class VirtualAccount:
-    """虚拟账户"""
+    """虚拟账户管理类"""
     
-    def __init__(self, initial_capital: float = 1000000, account_id: str = "default"):
-        self.account_id = account_id
-        self.initial_capital = initial_capital
-        self.cash = initial_capital
-        self.positions: Dict[str, Position] = {}
-        self.trades: List[Trade] = []
-        self.daily_snapshots: List[DailyAccount] = []
-        
-        # 配置
-        self.commission_rate = 0.0003  # 万三手续费
-        self.slippage_rate = 0.001     # 千一滑点
-        self.min_commission = 5        # 最低 5 元
-        
-        # 数据目录
-        self.data_dir = Path('./data/akshare/bars')
-        self.account_dir = Path('./accounts')
-        self.account_dir.mkdir(parents=True, exist_ok=True)
-        
-        # 股票名称缓存
-        self.stock_names: Dict[str, str] = {}
-        self._load_stock_names()
-        
-        # 加载已有账户 (如果存在)
-        self._load_account()
-    
-    def _load_stock_names(self):
-        """加载股票名称"""
-        name_file = Path('./data/akshare/stock_names.json')
-        if name_file.exists():
-            with open(name_file, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                self.stock_names = {item['code']: item['name'] for item in data.get('stocks', [])}
-    
-    def _get_stock_name(self, symbol: str) -> str:
-        """获取股票名称"""
-        code = symbol.split('.')[0]
-        return self.stock_names.get(code, "")
+    def __init__(self):
+        self.account_data = self._load_account()
+        self.trade_log = self._load_trade_log()
     
     def _load_account(self):
-        """加载已有账户"""
-        account_file = self.account_dir / f'{self.account_id}_account.json'
-        if account_file.exists():
-            with open(account_file, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                self.cash = data.get('cash', self.initial_capital)
-                self.trades = [Trade(**t) for t in data.get('trades', [])]
-                self.daily_snapshots = [DailyAccount(**s) for s in data.get('daily_snapshots', [])]
-                
-                # 恢复持仓
-                for pos_data in data.get('positions', []):
-                    pos = Position(**pos_data)
-                    self.positions[pos.symbol] = pos
-                
-                print(f"✅ 加载账户：{self.account_id}")
-                print(f"   现金：¥{self.cash:,.2f}")
-                print(f"   持仓：{len(self.positions)} 只")
-                print(f"   交易：{len(self.trades)} 笔")
+        """加载账户数据"""
+        if ACCOUNT_FILE.exists():
+            with open(ACCOUNT_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        else:
+            # 默认账户
+            return {
+                "account_id": "ACC001",
+                "account_name": "王雅轩主账户",
+                "initial_capital": 1000000,
+                "current_cash": 1000000,
+                "currency": "CNY",
+                "status": "active",
+                "created_at": "2026-03-24",
+                "updated_at": datetime.now().isoformat()
+            }
     
-    def _save_account(self):
-        """保存账户"""
-        account_file = self.account_dir / f'{self.account_id}_account.json'
+    def _load_trade_log(self):
+        """加载交易流水"""
+        if TRADE_LOG_FILE.exists():
+            with open(TRADE_LOG_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        else:
+            return {"trades": []}
+    
+    def get_available_cash(self):
+        """获取可用资金"""
+        return self.account_data.get("current_cash", 0)
+    
+    def get_positions(self):
+        """获取持仓列表"""
+        positions = {}
+        for trade in self.trade_log.get("trades", []):
+            if trade.get("status") == "filled" and trade.get("direction") == "买":
+                symbol = trade.get("symbol")
+                if symbol not in positions:
+                    positions[symbol] = {
+                        "symbol": symbol,
+                        "name": trade.get("name", ""),
+                        "quantity": 0,
+                        "avg_price": 0,
+                        "cost": 0
+                    }
+                positions[symbol]["quantity"] += trade.get("quantity", 0)
+                positions[symbol]["cost"] += trade.get("quantity", 0) * trade.get("price", 0)
         
-        data = {
-            'account_id': self.account_id,
-            'initial_capital': self.initial_capital,
-            'cash': self.cash,
-            'positions': [asdict(p) for p in self.positions.values()],
-            'trades': [asdict(t) for t in self.trades],
-            'daily_snapshots': [asdict(s) for s in self.daily_snapshots],
-            'last_updated': datetime.now().isoformat()
+        # 计算平均价格
+        for symbol in positions:
+            if positions[symbol]["quantity"] > 0:
+                positions[symbol]["avg_price"] = positions[symbol]["cost"] / positions[symbol]["quantity"]
+        
+        return list(positions.values())
+    
+    def get_position_value(self):
+        """获取持仓总市值"""
+        total = 0
+        for pos in self.get_positions():
+            total += pos["cost"]
+        return total
+    
+    def get_total_asset(self):
+        """获取总资产"""
+        return self.get_available_cash() + self.get_position_value()
+    
+    def get_position_ratio(self):
+        """获取仓位比例"""
+        total = self.get_total_asset()
+        if total == 0:
+            return 0
+        return self.get_position_value() / total * 100
+    
+    def buy(self, symbol, name, price, quantity, reason=""):
+        """
+        买入操作
+        
+        Args:
+            symbol: 股票代码
+            name: 股票名称
+            price: 买入价格
+            quantity: 买入数量
+            reason: 买入理由
+        
+        Returns:
+            dict: 交易记录
+        """
+        cost = price * quantity
+        available = self.get_available_cash()
+        
+        if cost > available:
+            raise ValueError(f"资金不足！需要 {cost:.2f} 元，可用 {available:.2f} 元")
+        
+        # 扣减资金
+        self.account_data["current_cash"] -= cost
+        
+        # 生成交易 ID
+        trade_id = f"{datetime.now().strftime('%Y%m%d')}-{len(self.trade_log['trades']) + 1:03d}"
+        
+        # 创建交易记录
+        trade_record = {
+            "trade_id": trade_id,
+            "symbol": symbol,
+            "name": name,
+            "direction": "买",
+            "price": price,
+            "quantity": quantity,
+            "cost": cost,
+            "reason": reason,
+            "status": "filled",
+            "timestamp": datetime.now().isoformat(),
+            "agent_id": "Q-Trade"
         }
         
-        with open(account_file, 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+        self.trade_log["trades"].append(trade_record)
+        self.account_data["updated_at"] = datetime.now().isoformat()
+        
+        # 保存
+        self._save()
+        
+        print(f"✅ 买入成功：{symbol} {name} @ {price:.2f} x {quantity} = {cost:.2f} 元")
+        return trade_record
     
-    def buy(self, symbol: str, price: float, volume: int, date: str, reason: str = "") -> Optional[Trade]:
-        """买入"""
-        name = self._get_stock_name(symbol)
+    def sell(self, symbol, price, quantity, reason=""):
+        """
+        卖出操作
         
-        # 计算滑点和费用
-        exec_price = price * (1 + self.slippage_rate)
-        amount = exec_price * volume
-        fee = max(self.min_commission, amount * self.commission_rate)
-        total_cost = amount + fee
+        Args:
+            symbol: 股票代码
+            price: 卖出价格
+            quantity: 卖出数量
+            reason: 卖出理由
         
-        if total_cost > self.cash:
-            return None
+        Returns:
+            dict: 交易记录
+        """
+        # 检查持仓
+        positions = self.get_positions()
+        position = next((p for p in positions if p["symbol"] == symbol), None)
         
-        # 更新现金
-        self.cash -= total_cost
+        if not position:
+            raise ValueError(f"没有 {symbol} 的持仓！")
         
-        # 更新持仓
-        if symbol in self.positions:
-            pos = self.positions[symbol]
-            total_volume = pos.volume + volume
-            total_cost = pos.cost + amount
-            pos.avg_price = total_cost / total_volume
-            pos.volume = total_volume
-            pos.cost = total_cost
-        else:
-            self.positions[symbol] = Position(
-                symbol=symbol,
-                name=name,
-                volume=volume,
-                avg_price=exec_price,
-                cost=amount
-            )
+        if quantity > position["quantity"]:
+            raise ValueError(f"持仓不足！持有 {position['quantity']}，要卖 {quantity}")
         
-        # 记录交易
-        trade = Trade(
-            trade_id=f"T{len(self.trades)+1:06d}",
-            symbol=symbol,
-            name=name,
-            direction='buy',
-            volume=volume,
-            price=exec_price,
-            amount=amount,
-            fee=fee,
-            datetime=date,
-            reason=reason
-        )
-        self.trades.append(trade)
+        # 计算收益
+        proceeds = price * quantity
+        cost_basis = position["avg_price"] * quantity
+        profit = proceeds - cost_basis
         
-        return trade
-    
-    def sell(self, symbol: str, price: float, volume: int, date: str, reason: str = "") -> Optional[Trade]:
-        """卖出"""
-        if symbol not in self.positions:
-            return None
+        # 增加资金
+        self.account_data["current_cash"] += proceeds
         
-        pos = self.positions[symbol]
-        if pos.volume < volume:
-            return None
+        # 生成交易 ID
+        trade_id = f"{datetime.now().strftime('%Y%m%d')}-{len(self.trade_log['trades']) + 1:03d}"
         
-        name = pos.name
-        
-        # 计算滑点和费用
-        exec_price = price * (1 - self.slippage_rate)
-        amount = exec_price * volume
-        fee = max(self.min_commission, amount * self.commission_rate)
-        net_amount = amount - fee
-        
-        # 更新现金
-        self.cash += net_amount
-        
-        # 更新持仓
-        pos.volume -= volume
-        if pos.volume == 0:
-            del self.positions[symbol]
-        
-        # 记录交易
-        trade = Trade(
-            trade_id=f"T{len(self.trades)+1:06d}",
-            symbol=symbol,
-            name=name,
-            direction='sell',
-            volume=volume,
-            price=exec_price,
-            amount=amount,
-            fee=fee,
-            datetime=date,
-            reason=reason
-        )
-        self.trades.append(trade)
-        
-        return trade
-    
-    def update_positions(self, current_prices: Dict[str, float]):
-        """更新持仓市值"""
-        for symbol, pos in self.positions.items():
-            if symbol in current_prices:
-                pos.current_price = current_prices[symbol]
-                pos.market_value = pos.volume * pos.current_price
-                pos.profit = pos.market_value - pos.cost
-                pos.profit_rate = pos.profit / pos.cost * 100 if pos.cost > 0 else 0
-    
-    def get_total_value(self) -> float:
-        """计算账户总值"""
-        market_value = sum(pos.market_value for pos in self.positions.values())
-        return self.cash + market_value
-    
-    def generate_daily_snapshot(self, date: str, buy_count: int = 0, sell_count: int = 0):
-        """生成每日快照"""
-        self.update_positions({})  # 更新持仓
-        
-        total_value = self.get_total_value()
-        market_value = sum(pos.market_value for pos in self.positions.values())
-        
-        # 计算当日收益
-        if self.daily_snapshots:
-            prev_value = self.daily_snapshots[-1].total_value
-            daily_return = total_value - prev_value
-            daily_return_rate = daily_return / prev_value * 100 if prev_value > 0 else 0
-        else:
-            daily_return = total_value - self.initial_capital
-            daily_return_rate = daily_return / self.initial_capital * 100 if self.initial_capital > 0 else 0
-        
-        snapshot = DailyAccount(
-            date=date,
-            cash=round(self.cash, 2),
-            total_value=round(total_value, 2),
-            market_value=round(market_value, 2),
-            daily_return=round(daily_return, 2),
-            daily_return_rate=round(daily_return_rate, 2),
-            positions_count=len(self.positions),
-            buy_count=buy_count,
-            sell_count=sell_count,
-            positions=[asdict(p) for p in self.positions.values()]
-        )
-        
-        self.daily_snapshots.append(snapshot)
-        self._save_account()
-        
-        return snapshot
-    
-    def get_performance(self) -> dict:
-        """获取业绩统计"""
-        if not self.daily_snapshots:
-            return {}
-        
-        final = self.daily_snapshots[-1]
-        total_return = final.total_value - self.initial_capital
-        total_return_rate = total_return / self.initial_capital * 100
-        
-        daily_returns = [s.daily_return_rate for s in self.daily_snapshots]
-        avg_daily_return = sum(daily_returns) / len(daily_returns) if daily_returns else 0
-        max_daily_return = max(daily_returns) if daily_returns else 0
-        min_daily_return = min(daily_returns) if daily_returns else 0
-        
-        # 计算最大回撤
-        peak = self.initial_capital
-        max_drawdown = 0
-        for snapshot in self.daily_snapshots:
-            if snapshot.total_value > peak:
-                peak = snapshot.total_value
-            drawdown = (peak - snapshot.total_value) / peak * 100
-            if drawdown > max_drawdown:
-                max_drawdown = drawdown
-        
-        return {
-            'initial_capital': self.initial_capital,
-            'current_value': final.total_value,
-            'total_return': round(total_return, 2),
-            'total_return_rate': round(total_return_rate, 2),
-            'trading_days': len(self.daily_snapshots),
-            'avg_daily_return': round(avg_daily_return, 2),
-            'max_daily_return': round(max_daily_return, 2),
-            'min_daily_return': round(min_daily_return, 2),
-            'max_drawdown': round(max_drawdown, 2),
-            'total_trades': len(self.trades),
-            'current_positions': len(self.positions)
+        # 创建交易记录
+        trade_record = {
+            "trade_id": trade_id,
+            "symbol": symbol,
+            "name": position["name"],
+            "direction": "卖",
+            "price": price,
+            "quantity": quantity,
+            "proceeds": proceeds,
+            "profit": profit,
+            "reason": reason,
+            "status": "filled",
+            "timestamp": datetime.now().isoformat(),
+            "agent_id": "Q-Trade"
         }
+        
+        self.trade_log["trades"].append(trade_record)
+        self.account_data["updated_at"] = datetime.now().isoformat()
+        
+        # 保存
+        self._save()
+        
+        print(f"✅ 卖出成功：{symbol} {position['name']} @ {price:.2f} x {quantity} = {proceeds:.2f} 元 (盈亏：{profit:.2f} 元)")
+        return trade_record
+    
+    def _save(self):
+        """保存账户数据和交易流水"""
+        # 确保目录存在
+        ACCOUNT_FILE.parent.mkdir(parents=True, exist_ok=True)
+        
+        # 保存账户数据
+        with open(ACCOUNT_FILE, 'w', encoding='utf-8') as f:
+            json.dump(self.account_data, f, ensure_ascii=False, indent=2)
+        
+        # 保存交易流水
+        with open(TRADE_LOG_FILE, 'w', encoding='utf-8') as f:
+            json.dump(self.trade_log, f, ensure_ascii=False, indent=2)
+    
+    def sync_to_feishu(self, trade_records):
+        """
+        同步交易记录到飞书多维表格
+        
+        Args:
+            trade_records: 交易记录列表
+        """
+        try:
+            from openclaw_lark import feishu_bitable_app_table_record
+            
+            for trade in trade_records:
+                fields = {
+                    "Agent ID": trade.get("agent_id", "Q-Trade"),
+                    "Trade ID": trade.get("trade_id"),
+                    "Symbol": trade.get("symbol"),
+                    "方向": trade.get("direction"),
+                    "价格": trade.get("price", 0),
+                    "数量": trade.get("quantity", 0),
+                    "状态": trade.get("status", "filled"),
+                    "时间戳": int(datetime.fromisoformat(trade.get("timestamp")).timestamp() * 1000)
+                }
+                
+                # 添加备注
+                if trade.get("reason"):
+                    fields["备注"] = trade.get("reason")
+                
+                # 如果是买入，添加建仓时间
+                if trade.get("direction") == "买":
+                    fields["建仓时间"] = int(datetime.fromisoformat(trade.get("timestamp")).timestamp() * 1000)
+                
+                result = feishu_bitable_app_table_record(
+                    action='create',
+                    app_token=FEISHU_APP_TOKEN,
+                    table_id=FEISHU_TRADE_TABLE,
+                    fields=fields
+                )
+                print(f"📱 已同步到飞书：{trade.get('trade_id')}")
+                
+        except Exception as e:
+            print(f"⚠️ 飞书同步失败：{e}")
+    
+    def print_summary(self):
+        """打印账户摘要"""
+        print("\n" + "=" * 60)
+        print(" " * 20 + "虚拟账户摘要")
+        print("=" * 60)
+        print(f"账户：{self.account_data.get('account_name', 'N/A')}")
+        print(f"初始资金：{self.account_data.get('initial_capital', 0):,.2f} 元")
+        print(f"当前现金：{self.get_available_cash():,.2f} 元")
+        print(f"持仓市值：{self.get_position_value():,.2f} 元")
+        print(f"总资产：{self.get_total_asset():,.2f} 元")
+        print(f"仓位：{self.get_position_ratio():.1f}%")
+        
+        # 计算总盈亏
+        initial = self.account_data.get("initial_capital", 0)
+        total = self.get_total_asset()
+        profit = total - initial
+        profit_pct = profit / initial * 100 if initial > 0 else 0
+        print(f"总盈亏：{profit:+,.2f} 元 ({profit_pct:+.2f}%)")
+        
+        # 持仓明细
+        positions = self.get_positions()
+        if positions:
+            print("\n持仓明细:")
+            for pos in positions:
+                print(f"  - {pos['symbol']} {pos['name']}: {pos['quantity']} 股 @ {pos['avg_price']:.2f} 元")
+        
+        print("=" * 60)
 
 
 def main():
-    """主函数"""
-    print("=" * 70)
-    print(" " * 20 + "虚拟账户模拟交易系统")
-    print("=" * 70)
-    print(f"当前时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print()
-    
-    # 创建虚拟账户
-    account = VirtualAccount(
-        initial_capital=1000000,
-        account_id="virtual_2026"
-    )
-    
-    print(f"账户 ID: {account.account_id}")
-    print(f"初始资金：¥{account.initial_capital:,.0f}")
-    print(f"当前现金：¥{account.cash:,.2f}")
-    print(f"当前持仓：{len(account.positions)} 只")
-    print(f"总交易：{len(account.trades)} 笔")
-    print()
-    
-    # 显示业绩
-    perf = account.get_performance()
-    if perf:
-        print("【业绩统计】")
-        print(f"  当前总值：¥{perf['current_value']:,.2f}")
-        print(f"  总收益：¥{perf['total_return']:,.2f}")
-        print(f"  总收益率：{perf['total_return_rate']:+.2f}%")
-        print(f"  交易天数：{perf['trading_days']} 天")
-        print(f"  最大回撤：{perf['max_drawdown']:.2f}%")
-        print()
-    
-    # 保存账户
-    account._save_account()
-    print(f"✅ 账户已保存：accounts/{account.account_id}_account.json")
-    print()
-    
-    print("=" * 70)
+    """主函数 - 测试用"""
+    account = VirtualAccount()
+    account.print_summary()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
