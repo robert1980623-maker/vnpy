@@ -1,0 +1,3 @@
+{"severity": "P1", "title": "⚠️ 功能异常", "message": "功能异常，已调度工程师修复：测试错误", "agent": "test", "error": "测试错误", "timestamp": "2026-04-01T09:18:05.226296", "status": "new", "action_taken": "已调度 delta 修复", "estimated_fix": "10 分钟"}
+{"severity": "P3", "title": "📝 通知", "message": "问题已解决：测试错误", "agent": "test", "error": "问题已解决：测试错误", "timestamp": "2026-04-01T09:18:05.228013", "status": "new", "action_taken": "已解决", "estimated_fix": ""}
+{"severity": "P3", "title": "📝 通知", "message": "问题已解决：严重错误", "agent": "test", "error": "问题已解决：严重错误", "timestamp": "2026-04-01T09:18:05.228753", "status": "new", "action_taken": "解决失败", "estimated_fix": ""}

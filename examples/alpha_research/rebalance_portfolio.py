@@ -71,13 +71,13 @@ class PortfolioRebalancer:
         for pos in account['positions']:
             symbol = pos['symbol']
             current_price = prices.get(symbol, pos['current_price'])
-            market_value = pos['volume'] * current_price
+            market_value = pos['quantity'] * current_price
             position_ratio = market_value / total_assets if total_assets > 0 else 0
             
             positions.append({
                 'symbol': symbol,
-                'volume': pos['volume'],
-                'cost': pos['cost'],
+                'volume': pos['quantity'],
+                'cost': pos.get('cost_basis', pos.get('cost', 0)),
                 'market_value': market_value,
                 'profit_rate': pos.get('profit_rate', 0),
                 'position_ratio': position_ratio,
@@ -208,14 +208,14 @@ class PortfolioRebalancer:
             # 更新或移除持仓
             for pos in account['positions']:
                 if pos['symbol'] == symbol:
-                    if pos['volume'] <= volume:
+                    if pos['quantity'] <= volume:
                         # 全部卖出
                         account['positions'].remove(pos)
                     else:
                         # 部分卖出
-                        pos['volume'] -= volume
-                        pos['cost'] -= (sell_value * pos['cost'] / pos['market_value']) if pos['market_value'] > 0 else 0
-                        pos['market_value'] = pos['volume'] * sell_price
+                        pos['quantity'] -= volume
+                        pos['cost_basis'] -= (sell_value * pos['cost_basis'] / pos['market_value']) if pos['market_value'] > 0 else 0
+                        pos['market_value'] = pos['quantity'] * sell_price
                     break
         
         # 2. 执行买入
@@ -231,9 +231,9 @@ class PortfolioRebalancer:
                 account['positions'].append({
                     'symbol': symbol,
                     'name': '',
-                    'volume': volume,
+                    'quantity': volume,
                     'avg_price': buy_price,
-                    'cost': buy_cost,
+                    'cost_basis': buy_cost,
                     'current_price': buy_price,
                     'market_value': buy_cost,
                     'profit': 0,
@@ -248,9 +248,9 @@ class PortfolioRebalancer:
             symbol = pos['symbol']
             current_price = prices.get(symbol, pos['current_price'])
             pos['current_price'] = current_price
-            pos['market_value'] = pos['volume'] * current_price
-            pos['profit'] = pos['market_value'] - pos['cost']
-            pos['profit_rate'] = pos['profit'] / pos['cost'] if pos['cost'] > 0 else 0
+            pos['market_value'] = pos['quantity'] * current_price
+            pos['profit'] = pos['market_value'] - pos['cost_basis']
+            pos['profit_rate'] = pos['profit'] / pos['cost_basis'] if pos['cost_basis'] > 0 else 0
         
         # 4. 计算新状态
         total_market_value = sum(p.get('market_value', 0) for p in account['positions'])

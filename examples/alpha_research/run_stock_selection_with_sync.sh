@@ -9,6 +9,9 @@ PROJECT_DIR="/Users/rowang/projects/vnpy/examples/alpha_research"
 REPORTS_DIR="$PROJECT_DIR/reports"
 TODAY=$(date +%Y-%m-%d)
 
+# Fix PATH for cron
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
+
 echo "======================================================================"
 echo "                    每日选股任务 (含飞书同步)"
 echo "======================================================================"

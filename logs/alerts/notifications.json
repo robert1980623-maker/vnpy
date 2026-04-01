@@ -838,5 +838,54 @@
     "to": "user:U0AHSM009ML",
     "message": "⚠️ 功能异常\n\nAgent: data_source_manager\n错误：数据源 tushare 健康检查失败：您的token不对，请确认。\n时间：2026-03-23T09:51:58.874890\n状态：已切换到备用数据源\n预计修复：自动恢复\n\n详细报告：查看日志文件",
     "timestamp": "2026-03-23T09:51:58.875087"
+  },
+  {
+    "type": "alert_notification",
+    "channel": "slack",
+    "to": "user:U0AHSM009ML",
+    "message": "🚨 严重错误\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-04-01T09:18:05.115041\n状态：已调度 test-agent 紧急修复\n预计修复：10-15 分钟\n\n详细报告：查看日志文件",
+    "timestamp": "2026-04-01T09:18:05.115128"
+  },
+  {
+    "type": "alert_notification",
+    "channel": "slack",
+    "to": "user:U0AHSM009ML",
+    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-04-01T09:18:05.116885\n状态：已调度 test-agent 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
+    "timestamp": "2026-04-01T09:18:05.116934"
+  },
+  {
+    "type": "alert_notification",
+    "channel": "slack",
+    "to": "user:U0AHSM009ML",
+    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-04-01T09:18:05.119667\n状态：已调度 qa 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
+    "timestamp": "2026-04-01T09:18:05.119728"
+  },
+  {
+    "type": "alert_notification",
+    "channel": "slack",
+    "to": "user:U0AHSM009ML",
+    "message": "🚨 严重错误\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-04-01T09:18:05.131591\n状态：已调度 qa 紧急修复\n预计修复：10-15 分钟\n\n详细报告：查看日志文件",
+    "timestamp": "2026-04-01T09:18:05.131647"
+  },
+  {
+    "type": "alert_notification",
+    "channel": "slack",
+    "to": "user:U0AHSM009ML",
+    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-04-01T09:18:05.133432\n状态：已调度 qa 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
+    "timestamp": "2026-04-01T09:18:05.133474"
+  },
+  {
+    "type": "alert_notification",
+    "channel": "slack",
+    "to": "user:U0AHSM009ML",
+    "message": "🚨 严重错误\n\nAgent: test\n错误：P0 错误\n时间：2026-04-01T09:18:05.140320\n状态：已调度 delta 紧急修复\n预计修复：10-15 分钟\n\n详细报告：查看日志文件",
+    "timestamp": "2026-04-01T09:18:05.140378"
+  },
+  {
+    "type": "alert_notification",
+    "channel": "slack",
+    "to": "user:U0AHSM009ML",
+    "message": "⚠️ 功能异常\n\nAgent: test\n错误：P1 错误\n时间：2026-04-01T09:18:05.143794\n状态：已调度 delta 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
+    "timestamp": "2026-04-01T09:18:05.143844"
   }
 ]

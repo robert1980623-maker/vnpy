@@ -97,5 +97,14 @@
     "priority": "high",
     "assigned_at": "2026-03-23T09:31:38.996387",
     "status": "pending"
+  },
+  {
+    "issue_id": "test-p1",
+    "agent": "test",
+    "error_type": "TestError",
+    "error_message": "P1 错误",
+    "priority": "high",
+    "assigned_at": "2026-04-01T09:18:05.144610",
+    "status": "pending"
   }
 ]

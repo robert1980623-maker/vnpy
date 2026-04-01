@@ -152,5 +152,19 @@
     "retry_count": 0,
     "max_retries": 3,
     "next_retry": "2026-03-23T09:31:40.390667"
+  },
+  {
+    "issue_id": "test-retry",
+    "agent": "test",
+    "retry_count": 0,
+    "max_retries": 3,
+    "next_retry": "2026-04-01T09:18:05.148236"
+  },
+  {
+    "issue_id": "test-retry",
+    "agent": "test",
+    "retry_count": 0,
+    "max_retries": 3,
+    "next_retry": "2026-04-01T09:18:05.149473"
   }
 ]

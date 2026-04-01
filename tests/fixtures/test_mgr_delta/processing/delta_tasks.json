@@ -97,5 +97,14 @@
     "priority": "normal",
     "assigned_at": "2026-03-23T09:31:40.385254",
     "status": "pending"
+  },
+  {
+    "issue_id": "test-delta",
+    "agent": "test",
+    "error_type": "TestError",
+    "error_message": "测试错误",
+    "priority": "normal",
+    "assigned_at": "2026-04-01T09:18:05.147750",
+    "status": "pending"
   }
 ]

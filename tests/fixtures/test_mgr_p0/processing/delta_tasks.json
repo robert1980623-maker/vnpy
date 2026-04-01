@@ -97,5 +97,14 @@
     "priority": "urgent",
     "assigned_at": "2026-03-23T09:31:37.608099",
     "status": "pending"
+  },
+  {
+    "issue_id": "test-p0",
+    "agent": "test",
+    "error_type": "TestError",
+    "error_message": "P0 错误",
+    "priority": "urgent",
+    "assigned_at": "2026-04-01T09:18:05.141161",
+    "status": "pending"
   }
 ]

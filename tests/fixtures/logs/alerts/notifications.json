@@ -82,5 +82,12 @@
     "to": "user:U0AHSM009ML",
     "message": "⚠️ 功能异常\n\nAgent: test\n错误：测试错误\n时间：2026-03-23T09:31:47.572154\n状态：已调度 qa 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
     "timestamp": "2026-03-23T09:31:47.572256"
+  },
+  {
+    "type": "alert_notification",
+    "channel": "slack",
+    "to": "user:U0AHSM009ML",
+    "message": "⚠️ 功能异常\n\nAgent: test\n错误：测试错误\n时间：2026-04-01T09:18:05.226296\n状态：已调度 delta 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
+    "timestamp": "2026-04-01T09:18:05.226400"
   }
 ]

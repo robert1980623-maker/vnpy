@@ -75,5 +75,12 @@
     "retry_count": 0,
     "max_retries": 3,
     "next_retry": "2026-03-23T09:31:40.388511"
+  },
+  {
+    "issue_id": "test-p2q",
+    "agent": "test",
+    "retry_count": 0,
+    "max_retries": 3,
+    "next_retry": "2026-04-01T09:18:05.148724"
   }
 ]
