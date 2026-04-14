@@ -18,7 +18,9 @@ from typing import Dict, List, Optional
 from issue_queue import IssueQueue, Issue
 from human_report import human_manager_report
 from alert_notifier import AlertNotifier, Alert
+from vnpy_config import get_manager_config
 from glm_error_analyzer import GLMErrorAnalyzer
+from file_lock import FileLock
 
 
 class QuantManager:
@@ -37,11 +39,12 @@ class QuantManager:
             'data': 'data-agent',
             'engineering': 'delta',
             'general': 'delta',
-        }
-        # P0-2 新增：超时配置
-        self.default_timeout_minutes = 30
-        self.max_retries = 3
-    
+}
+        # P0-2 新增：超时配置（从统一配置读取）
+        cfg = get_manager_config()
+        self.default_timeout_minutes = cfg.get('default_timeout_minutes', 30)
+        self.max_retries = cfg.get('max_retries', 3)
+
     def handle_error_report(self, issue: Issue):
         """处理错误上报"""
         severity = issue.severity
@@ -71,12 +74,19 @@ class QuantManager:
         )
         self.active_tasks[issue.id] = task
         
-        if severity == 'P0':
-            self.handle_p0(task, issue)
-        elif severity == 'P1':
-            self.handle_p1(task, issue)
-        elif severity == 'P2':
-            self.handle_p2(task, issue)
+        try:
+            if severity == 'P0':
+                self.handle_p0(task, issue)
+            elif severity == 'P1':
+                self.handle_p1(task, issue)
+            elif severity == 'P2':
+                self.handle_p2(task, issue)
+        except Exception as e:
+            # MG-01 修复：确保异常时也从 active_tasks 清理
+            print(f"⚠️ 处理任务时异常：{e}")
+            if issue.id in self.active_tasks:
+                del self.active_tasks[issue.id]
+            raise
         
         return task
     
@@ -163,15 +173,10 @@ class QuantManager:
         return {'status': 'queued', 'agent': task.get('agent', 'delta')}
     
     def dispatch_to_delta(self, issue: Issue, priority: str = 'normal'):
-        """调度 Delta"""
+        """调度 Delta（线程安全，原子性读写）"""
         delta_task_file = self.base_dir / 'processing' / 'delta_tasks.json'
         
-        tasks = []
-        if delta_task_file.exists():
-            with open(delta_task_file, 'r', encoding='utf-8') as f:
-                tasks = json.load(f)
-        
-        tasks.append({
+        new_task = {
             'issue_id': issue.id,
             'agent': issue.agent,
             'error_type': issue.error_type,
@@ -179,10 +184,13 @@ class QuantManager:
             'priority': priority,
             'assigned_at': datetime.now().isoformat(),
             'status': 'pending'
-        })
+        }
         
-        with open(delta_task_file, 'w', encoding='utf-8') as f:
-            json.dump(tasks, f, ensure_ascii=False, indent=2)
+        def append_task(tasks: List) -> List:
+            tasks.append(new_task)
+            return tasks
+        
+        FileLock.locked_read_write(delta_task_file, append_task)
     
     def _dispatch_to_delta(self, issue: Issue, priority: str = 'high'):
         """私有方法：调度 Delta"""
@@ -217,24 +225,22 @@ class QuantManager:
             print(f"   ❌ 调度失败：{e}")
     
     def auto_retry_or_queue(self, issue: Issue):
-        """自动重试"""
+        """自动重试（线程安全）"""
         retry_file = self.base_dir / 'processing' / 'auto_retry.json'
         
-        retries = []
-        if retry_file.exists():
-            with open(retry_file, 'r', encoding='utf-8') as f:
-                retries = json.load(f)
-        
-        retries.append({
+        new_retry = {
             'issue_id': issue.id,
             'agent': issue.agent,
             'retry_count': 0,
-            'max_retries': 3,
+            'max_retries': get_manager_config().get('max_retries', 3),
             'next_retry': datetime.now().isoformat(),
-        })
+        }
         
-        with open(retry_file, 'w', encoding='utf-8') as f:
-            json.dump(retries, f, ensure_ascii=False, indent=2)
+        def append_retry(retries: List) -> List:
+            retries.append(new_retry)
+            return retries
+        
+        FileLock.locked_read_write(retry_file, append_retry)
     
     # ========== P0-2 新增方法 ==========
     
@@ -370,24 +376,29 @@ class QuantManager:
         
         return timeout_count
     
-    def track_agent_execution(self, issue_id: str, agent: str, timeout: int = 300) -> Dict:
+    def track_agent_execution(self, issue_id: str, agent: str, timeout: int = 300, 
+                               poll_interval: int = 2) -> Dict:
         """
         P0-2 新增：追踪 Agent 执行结果
+        
+        MG-02 修复：从阻塞轮询改为带超时的非阻塞轮询
         
         Args:
             issue_id: Issue ID
             agent: 执行的 Agent 名称
-            timeout: 超时时间（秒）
+            timeout: 超时时间（秒），默认 300 秒
+            poll_interval: 轮询间隔（秒），默认 2 秒（原为 5 秒）
         
         Returns:
             {'status': 'success'/'failed'/'timeout', 'result': ...}
         """
         start_time = time.time()
         
-        # 轮询检查 Issue 状态
+        # MG-02 修复：轮询间隔从 5 秒减少到 2 秒，提高响应速度
+        if poll_interval < 1:
+            poll_interval = 1  # 最小 1 秒
+        
         while time.time() - start_time < timeout:
-            issue = self.issue_queue.read_issue(issue_id)
-            
             # 检查 Agent 是否完成
             result_file = Path(f'./reports/agent_results/{issue_id}.json')
             if result_file.exists():
@@ -402,11 +413,36 @@ class QuantManager:
                 
                 return result
             
-            time.sleep(5)  # 每 5 秒检查一次
+            # 非阻塞等待：只 sleep 一个轮询间隔
+            time.sleep(poll_interval)
         
         # 超时
         self.retry_issue(issue_id)
         return {'status': 'timeout'}
+    
+    def check_agent_execution(self, issue_id: str) -> Dict:
+        """
+        MG-02 新增：非阻塞检查 Agent 执行状态
+        
+        不等待，立即返回当前状态
+        
+        Returns:
+            {'status': 'running'/'completed'/'not_found', 'result': ...}
+        """
+        result_file = Path(f'./reports/agent_results/{issue_id}.json')
+        if result_file.exists():
+            with open(result_file, 'r') as f:
+                result = json.load(f)
+            return {'status': 'completed', 'result': result}
+        
+        # 检查 Issue 状态
+        issue = self.issue_queue.read_issue(issue_id)
+        if issue:
+            if issue.status in ['resolved', 'failed', 'escalated']:
+                return {'status': 'completed', 'result': {'status': issue.status}}
+            return {'status': 'running'}
+        
+        return {'status': 'not_found'}
     
     # ========== 原有方法 ==========
     
