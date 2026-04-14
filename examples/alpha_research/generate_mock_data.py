@@ -2,6 +2,8 @@
 生成模拟数据进行回测测试
 
 用于验证回测系统功能
+
+AL-05 修复：使用真实交易日历（AKShare）替代伪造的日期
 """
 
 import random
@@ -9,17 +11,44 @@ import pandas as pd
 from datetime import datetime, timedelta
 from pathlib import Path
 import json
+import sys
+
+# 添加项目路径以导入 trading_calendar
+sys.path.insert(0, str(Path(__file__).parent))
+from trading_calendar import TradingCalendar
 
 
 def generate_trading_dates(start: datetime, end: datetime) -> list:
-    """生成交易日期（排除周末）"""
-    dates = []
-    current = start
-    while current <= end:
-        if current.weekday() < 5:  # 周一到周五
-            dates.append(current)
-        current += timedelta(days=1)
-    return dates
+    """生成交易日期（使用真实 A 股交易日历）
+    
+    AL-05 修复：不再使用简单的周末排除逻辑，而是使用 AKShare 获取真实交易日历
+    """
+    cal = TradingCalendar()
+    
+    # 确保交易日历已加载
+    if not cal.calendar.get('trading_days'):
+        cal._fetch_trading_days(start.year)
+    
+    trading_days = []
+    start_str = start.strftime('%Y-%m-%d')
+    end_str = end.strftime('%Y-%m-%d')
+    
+    for day_str in cal.calendar.get('trading_days', []):
+        if start_str <= day_str <= end_str:
+            trading_days.append(datetime.strptime(day_str, '%Y-%m-%d'))
+    
+    if not trading_days:
+        # 如果当年没有数据，尝试获取相邻年份
+        print(f"⚠️ {start.year} 年交易日数据不足，尝试获取相邻年份")
+        cal._fetch_trading_days(start.year - 1)
+        cal._fetch_trading_days(start.year + 1)
+        
+        for day_str in cal.calendar.get('trading_days', []):
+            if start_str <= day_str <= end_str:
+                trading_days.append(datetime.strptime(day_str, '%Y-%m-%d'))
+    
+    print(f"✅ 从 AKShare 获取真实交易日历：{len(trading_days)} 个交易日")
+    return trading_days
 
 
 def generate_bars(vt_symbol: str, start_price: float, dates: list) -> pd.DataFrame:
