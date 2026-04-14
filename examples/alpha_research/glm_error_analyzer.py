@@ -8,16 +8,17 @@ GLM 错误分析器
 import json
 import requests
 from typing import Dict, Optional
+from vnpy_config import get_glm_analyzer_config
 
 
 class GLMErrorAnalyzer:
     """GLM 错误分析器"""
     
-    def __init__(self, model_url: str = "http://localhost:1234/v1/chat/completions", 
-                 model_name: str = "glm-4.7-flash"):
-        self.model_url = model_url
-        self.model_name = model_name
-        self.timeout = 30  # 30 秒超时
+    def __init__(self, model_url: str = None, model_name: str = None):
+        cfg = get_glm_analyzer_config()
+        self.model_url = model_url or cfg.get("model_url", "http://localhost:1234/v1/chat/completions")
+        self.model_name = model_name or cfg.get("model_name", "glm-4.7-flash")
+        self.timeout = cfg.get("timeout", 30)  # 30 秒超时
     
     def analyze(self, error_type: str, error_message: str, 
                 context: Optional[str] = None) -> Dict:

@@ -12,6 +12,23 @@ from pathlib import Path
 from datetime import datetime, timedelta
 import time
 
+# 自动加载 .env 文件（支持 cron 环境）
+_env_path = Path(__file__).parent.parent.parent / '.env'
+if _env_path.exists():
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(_env_path)
+    except ImportError:
+        # 手动解析 .env
+        with open(_env_path, 'r') as _f:
+            for _line in _f:
+                _line = _line.strip()
+                if _line and not _line.startswith('#') and '=' in _line:
+                    _key, _val = _line.split('=', 1)
+                    os.environ.setdefault(_key.strip(), _val.strip())
+        del _f, _line, _key, _val
+    del _env_path
+
 
 def safe_float(value, default=None):
     """安全转换为 float"""

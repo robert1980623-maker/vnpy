@@ -32,30 +32,65 @@ class PortfolioRebalancer:
             return json.load(f)
     
     def load_elite_selection(self):
-        """加载精英选股结果"""
+        """加载精英选股结果，支持回退到最近的结果"""
         today = datetime.now().strftime('%Y-%m-%d')
         selection_file = Path(f'./reports/elite_selection_{today}.json')
         
         if selection_file.exists():
+            print(f"✅ 使用今日选股报告：{selection_file}")
             with open(selection_file, 'r', encoding='utf-8') as f:
                 return json.load(f)
-        else:
-            print(f"⚠️ 未找到今日选股报告：{selection_file}")
-            return None
+        
+        # 回退到最近的结果（最多回退3天）
+        print(f"⚠️ 未找到今日选股报告，尝试回退...")
+        from datetime import timedelta
+        for i in range(1, 4):
+            fallback_date = (datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d')
+            fallback_file = Path(f'./reports/elite_selection_{fallback_date}.json')
+            if fallback_file.exists():
+                print(f"✅ 使用 {fallback_date} 选股报告（{i}天前）：{fallback_file}")
+                with open(fallback_file, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+        
+        print(f"⚠️ 未找到最近3天的选股报告，请先运行 python3 elite_stock_selector.py")
+        return None
     
     def get_current_prices(self):
         """获取最新价格"""
         import csv
         prices = {}
+        skipped = 0
         
         for csv_file in Path('./data/akshare/bars').glob('*.csv'):
             symbol = csv_file.stem.replace('_', '.')
             with open(csv_file, 'r', encoding='utf-8') as f:
                 lines = f.readlines()
-                if len(lines) > 1:
-                    last_line = lines[-1].strip().split(',')
-                    if len(last_line) >= 5:
-                        prices[symbol] = float(last_line[4])
+                if len(lines) < 2:
+                    skipped += 1
+                    continue
+                # 从最后一行往前找，找到第一条有效数据
+                close_price = None
+                for line in reversed(lines):
+                    line = line.strip()
+                    if not line:
+                        continue
+                    parts = line.split(',')
+                    if len(parts) >= 6:
+                        try:
+                            close_price = float(parts[5])
+                            if close_price > 0:
+                                break
+                            else:
+                                continue
+                        except ValueError:
+                            continue
+                if close_price and close_price > 0:
+                    prices[symbol] = close_price
+                else:
+                    skipped += 1
+        
+        if skipped > 0:
+            print(f"⚠️ 跳过 {skipped} 只无效/缺失价格数据")
         
         return prices
     
@@ -119,28 +154,37 @@ class PortfolioRebalancer:
         # 2. 卖出计划：不在精英选股中的全部卖出
         for pos in positions:
             if pos['symbol'] not in elite_symbols:
+                sell_price = prices.get(pos['symbol'], 0)
+                # 🛡️ 安全防护：价格为 0 或不可用时禁止卖出
+                if sell_price <= 0:
+                    print(f"⚠️ 跳过卖出 {pos['symbol']}：当前价格 ¥{sell_price:.2f} 无效，中止卖出！")
+                    continue
                 plan['sell'].append({
                     'symbol': pos['symbol'],
                     'volume': pos['volume'],
-                    'current_price': prices.get(pos['symbol'], 0),
+                    'current_price': sell_price,
                     'estimated_value': pos['market_value'],
                     'reason': '不在精英组合'
                 })
             else:
                 # 检查是否超配
+                pos_price = prices.get(pos['symbol'], 0)
                 if pos['position_ratio'] > self.max_position_ratio:
                     excess_ratio = pos['position_ratio'] - self.max_position_ratio
                     excess_value = total_assets * excess_ratio
-                    excess_volume = int(excess_value / prices.get(pos['symbol'], 1) / 100) * 100
-                    
-                    if excess_volume > 0:
-                        plan['sell'].append({
-                            'symbol': pos['symbol'],
-                            'volume': excess_volume,
-                            'current_price': prices.get(pos['symbol'], 0),
-                            'estimated_value': excess_volume * prices.get(pos['symbol'], 0),
-                            'reason': f'超配 (当前{pos["position_ratio"]*100:.1f}% → 目标{self.max_position_ratio*100:.1f}%)'
-                        })
+                    if pos_price <= 0:
+                        print(f"⚠️ 跳过 {pos['symbol']} 超配调整：价格为 ¥{pos_price:.2f} 无效")
+                    else:
+                        excess_volume = int(excess_value / pos_price / 100) * 100
+                        
+                        if excess_volume > 0:
+                            plan['sell'].append({
+                                'symbol': pos['symbol'],
+                                'volume': excess_volume,
+                                'current_price': pos_price,
+                                'estimated_value': excess_volume * pos_price,
+                                'reason': f'超配 (当前{pos["position_ratio"]*100:.1f}% → 目标{self.max_position_ratio*100:.1f}%)'
+                            })
                 
                 plan['hold'].append(pos['symbol'])
         
@@ -198,6 +242,10 @@ class PortfolioRebalancer:
             symbol = sell['symbol']
             volume = sell['volume']
             sell_price = prices.get(symbol, sell['current_price'])
+            # 🛡️ 双重校验：执行时再验一次价格
+            if sell_price <= 0:
+                print(f"⚠️ 跳过 {symbol}：执行时价格 ¥{sell_price:.2f} 仍为无效值！")
+                continue
             sell_value = volume * sell_price
             
             print(f"  卖出 {symbol}: {volume} 股 × ¥{sell_price:.2f} = ¥{sell_value:,.2f}")
@@ -305,7 +353,16 @@ class PortfolioRebalancer:
         # 加载精英选股
         elite_stocks = self.load_elite_selection()
         if not elite_stocks:
-            print("\n⚠️ 未找到精英选股结果，请先运行 python3 elite_stock_selector.py")
+            print("\n🛡️ 风控拦截：未找到精英选股结果，中止调仓！")
+            print("   原因：没有选股结果时禁止调仓，防止误操作清空持仓")
+            print("   请先运行 python3 elite_stock_selector.py")
+            return
+        
+        if len(elite_stocks.get('stocks', [])) == 0:
+            print("\n🛡️ 风控拦截：精英选股结果为空（0只），中止调仓！")
+            print("   原因：选股结果为空可能是数据异常或市场极端情况")
+            print("   当前持仓保持不变，等待下次选股结果")
+            print("   建议：检查 elite_stock_selector.py 运行状态")
             return
         
         print(f"✅ 精英选股：{len(elite_stocks['stocks'])} 只")

@@ -106,5 +106,104 @@
     "priority": "normal",
     "assigned_at": "2026-04-01T09:18:05.147750",
     "status": "pending"
+  },
+  {
+    "issue_id": "test-delta",
+    "agent": "test",
+    "error_type": "TestError",
+    "error_message": "测试错误",
+    "priority": "normal",
+    "assigned_at": "2026-04-15T01:21:35.378517",
+    "status": "pending"
+  },
+  {
+    "issue_id": "test-delta",
+    "agent": "test",
+    "error_type": "TestError",
+    "error_message": "测试错误",
+    "priority": "normal",
+    "assigned_at": "2026-04-15T01:22:52.900468",
+    "status": "pending"
+  },
+  {
+    "issue_id": "test-delta",
+    "agent": "test",
+    "error_type": "TestError",
+    "error_message": "测试错误",
+    "priority": "normal",
+    "assigned_at": "2026-04-15T01:23:03.788007",
+    "status": "pending"
+  },
+  {
+    "issue_id": "test-delta",
+    "agent": "test",
+    "error_type": "TestError",
+    "error_message": "测试错误",
+    "priority": "normal",
+    "assigned_at": "2026-04-15T01:24:43.157455",
+    "status": "pending"
+  },
+  {
+    "issue_id": "test-delta",
+    "agent": "test",
+    "error_type": "TestError",
+    "error_message": "测试错误",
+    "priority": "normal",
+    "assigned_at": "2026-04-15T01:24:48.701468",
+    "status": "pending"
+  },
+  {
+    "issue_id": "test-delta",
+    "agent": "test",
+    "error_type": "TestError",
+    "error_message": "测试错误",
+    "priority": "normal",
+    "assigned_at": "2026-04-15T01:25:50.995462",
+    "status": "pending"
+  },
+  {
+    "issue_id": "test-delta",
+    "agent": "test",
+    "error_type": "TestError",
+    "error_message": "测试错误",
+    "priority": "normal",
+    "assigned_at": "2026-04-15T01:27:06.104643",
+    "status": "pending"
+  },
+  {
+    "issue_id": "test-delta",
+    "agent": "test",
+    "error_type": "TestError",
+    "error_message": "测试错误",
+    "priority": "normal",
+    "assigned_at": "2026-04-15T01:27:48.673982",
+    "status": "pending"
+  },
+  {
+    "issue_id": "test-delta",
+    "agent": "test",
+    "error_type": "TestError",
+    "error_message": "测试错误",
+    "priority": "normal",
+    "assigned_at": "2026-04-15T01:29:04.009108",
+    "status": "pending"
+  },
+  {
+    "issue_id": "test-delta",
+    "agent": "test",
+    "error_type": "TestError",
+    "error_message": "测试错误",
+    "priority": "normal",
+    "assigned_at": "2026-04-15T01:29:39.053343",
+    "status": "pending"
+  },
+  {
+    "issue_id": "test-delta",
+    "agent": "test",
+    "error_type": "TestError",
+    "error_message": "测试错误",
+    "priority": "normal",
+    "assigned_at": "2026-04-15T01:31:13.928604",
+    "status": "pending"
   }
 ]

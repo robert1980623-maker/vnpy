@@ -148,29 +148,49 @@ class EnhancedDownloader:
         failed = []
         
         for symbol in symbols:
-            code = symbol.split('.')[0]
+            code = symbol.split('.')[0] if '.' in symbol else symbol
+            suffix = symbol.split('.')[1].lower() if '.' in symbol else ''
             possible_files = [
                 DATA_DIR / f'{code}.csv',
-                DATA_DIR / f'{code}_{symbol.split(".")[1].lower()}.csv',
+                DATA_DIR / f'{code}_{suffix}.csv' if suffix else None,
                 DATA_DIR / f'{code.upper()}.csv'
             ]
+            possible_files = [f for f in possible_files if f]  # filter None
             
-            file_found = None
+            # 查找所有匹配的文件，选择最新数据的那个
+            valid_files = []
             for f in possible_files:
                 if f.exists():
-                    file_found = f
-                    break
+                    try:
+                        df_temp = pd.read_csv(f)
+                        if not df_temp.empty:
+                            # 获取日期列
+                            date_col = None
+                            for col in ['trade_date', 'datetime', '日期', 'date']:
+                                if col in df_temp.columns:
+                                    date_col = col
+                                    break
+                            if not date_col:
+                                date_col = df_temp.columns[1]
+                            # 获取最新日期
+                            last_row_date = pd.to_datetime(df_temp.iloc[-1][date_col])
+                            valid_files.append((f, df_temp, last_row_date))
+                    except Exception:
+                        continue
             
-            if not file_found:
+            if not valid_files:
                 failed.append({
                     'symbol': symbol,
                     'reason': '文件不存在'
                 })
                 continue
             
+            # 选择最新数据的文件
+            valid_files.sort(key=lambda x: x[2], reverse=True)
+            file_found, df, last_date = valid_files[0]
+            
             try:
-                # 读取第一行（最新数据）
-                df = pd.read_csv(file_found, nrows=1)
+                # 读取最后一行（最新数据）
                 if df.empty:
                     failed.append({
                         'symbol': symbol,
@@ -188,7 +208,8 @@ class EnhancedDownloader:
                 if not date_col:
                     date_col = df.columns[1]
                 
-                last_date_str = df.iloc[0][date_col]
+                # 读取最后一行（最新数据）
+                last_date_str = df.iloc[-1][date_col]
                 last_date = pd.to_datetime(last_date_str)
                 
                 # 检查日期是否匹配期望
@@ -249,10 +270,18 @@ class EnhancedDownloader:
             symbols = self._get_holdings_stocks()
         
         if not symbols:
-            self.log("⚠️ 无股票需要下载")
-            self.report['status'] = 'no_symbols'
-            self._save_report()
-            return self.report
+            self.log("📋 持仓为空，使用 HS300 成分股作为下载列表...")
+            try:
+                import tushare as ts
+                df = ts.index_stock('000300')
+                symbols = df['code'].tolist()[:50]  # 取前50只
+                self.log(f"✅ 从 HS300 获取 {len(symbols)} 只股票")
+            except Exception as e:
+                self.log(f"⚠️ HS300 获取失败：{e}")
+                self.log("⚠️ 无股票需要下载")
+                self.report['status'] = 'no_symbols'
+                self._save_report()
+                return self.report
         
         self.log(f"📋 待下载股票：{len(symbols)} 只")
         
@@ -296,16 +325,37 @@ class EnhancedDownloader:
         return self.report
     
     def _get_holdings_stocks(self) -> list:
-        """从持仓获取股票列表"""
+        """从持仓获取股票列表（优先级：飞书缓存 > 虚拟账户 > HS300）"""
+        # 优先从飞书缓存读取（真实持仓）
+        feishu_positions_file = Path('./data/feishu_cache/positions.json')
+        if feishu_positions_file.exists():
+            try:
+                with open(feishu_positions_file, 'r', encoding='utf-8') as f:
+                    feishu_data = json.load(f)
+                records = feishu_data.get('records', [])
+                symbols = [r.get('股票代码', '') for r in records if r.get('股票代码')]
+                if symbols:
+                    self.log(f"📋 从飞书缓存读取持仓：{len(symbols)} 只")
+                    return symbols
+            except Exception as e:
+                self.log(f"⚠️ 飞书缓存读取失败：{e}")
+        
+        # Fallback: 虚拟账户持仓
         account_file = Path('./accounts/virtual_2026_account.json')
-        if not account_file.exists():
-            return []
+        if account_file.exists():
+            try:
+                with open(account_file, 'r', encoding='utf-8') as f:
+                    account = json.load(f)
+                positions = account.get('positions', [])
+                symbols = [p.get('symbol', '') for p in positions if p.get('symbol')]
+                if symbols:
+                    self.log(f"📋 从虚拟账户读取持仓：{len(symbols)} 只")
+                    return symbols
+            except Exception as e:
+                self.log(f"⚠️ 虚拟账户读取失败：{e}")
         
-        with open(account_file, 'r', encoding='utf-8') as f:
-            account = json.load(f)
-        
-        positions = account.get('positions', [])
-        return [p.get('symbol', '') for p in positions if p.get('symbol')]
+        # 最终 Fallback: 返回空列表，让外层用 HS300
+        return []
     
     def _save_report(self):
         """保存报告"""

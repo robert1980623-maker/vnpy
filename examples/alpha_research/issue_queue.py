@@ -16,7 +16,7 @@ from pathlib import Path
 from datetime import datetime
 from typing import List, Dict, Optional, Any
 from dataclasses import dataclass, asdict, field
-from file_lock import FileLock
+
 
 
 # ============================================================
@@ -70,10 +70,12 @@ class IssueDB:
     def _get_conn(self) -> sqlite3.Connection:
         """获取数据库连接（延迟初始化）"""
         if self._conn is None:
-            self._conn = sqlite3.connect(str(self.db_path))
+            self._conn = sqlite3.connect(str(self.db_path), timeout=30)
             self._conn.row_factory = sqlite3.Row
             # 启用外键约束
             self._conn.execute("PRAGMA foreign_keys = ON")
+            # 启用 WAL 模式，提升并发性能
+            self._conn.execute("PRAGMA journal_mode=WAL")
         return self._conn
     
     def initialize(self):
@@ -268,14 +270,17 @@ class IssueQueue:
         self._db: Optional[IssueDB] = None
         
         if self.use_sqlite:
-            self._db = IssueDB()
+            # 使用与 base_dir 对应的独立数据库文件，避免测试之间数据污染
+            db_path = self.base_dir / "issues.db"
+            self._db = IssueDB(db_path=str(db_path))
             self._db.initialize()
     
     @property
     def db(self) -> IssueDB:
         """获取数据库实例（懒加载）"""
         if self._db is None:
-            self._db = IssueDB()
+            db_path = self.base_dir / "issues.db"
+            self._db = IssueDB(db_path=str(db_path))
             self._db.initialize()
         return self._db
     
@@ -283,7 +288,8 @@ class IssueQueue:
         """启用 SQLite 模式"""
         if not self.use_sqlite:
             self.use_sqlite = True
-            self._db = IssueDB()
+            db_path = self.base_dir / "issues.db"
+            self._db = IssueDB(db_path=str(db_path))
             self._db.initialize()
     
     def disable_sqlite(self):
@@ -467,6 +473,8 @@ class IssueQueue:
     def _acquire_issue_lock(self, issue_id: str):
         """获取 issue 级别的锁（用于 update_status 的原子性）"""
         lock_file = self.base_dir / f".issue_{issue_id}.lock"
+        # 确保父目录存在，避免 FileNotFoundError
+        lock_file.parent.mkdir(parents=True, exist_ok=True)
         lock_file.touch(exist_ok=True)
         
         if sys.platform == 'win32':
@@ -663,9 +671,23 @@ class IssueQueue:
                 try:
                     timestamp = datetime.fromisoformat(timestamp_str)
                     if timestamp < cutoff:
+                        issue_id = data.get('id')
+                        old_status = data.get('status')
                         if archive:
                             data['status'] = 'archived'
                             self.db.upsert_issue(data)
+                            # 修复：同时将文件从旧状态目录移动到 archive 目录
+                            status_to_dir = {
+                                'pending': self.pending_dir,
+                                'processing': self.processing_dir,
+                                'resolved': self.resolved_dir,
+                                'archived': self.archive_dir,
+                            }
+                            src_dir = status_to_dir.get(old_status, self.resolved_dir)
+                            src_file = src_dir / f"{issue_id}.json"
+                            if src_file.exists():
+                                dst_file = self.archive_dir / f"{issue_id}.json"
+                                shutil.move(str(src_file), str(dst_file))
                         else:
                             self.db.delete_issue(data['id'])
                         cleaned += 1

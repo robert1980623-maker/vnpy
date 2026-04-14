@@ -124,19 +124,36 @@ class TradingCalendar:
     
     def is_data_published(self, date: datetime = None) -> bool:
         """
-        判断当日数据是否已发布
+        判断最近交易日的数据是否已发布
         
         A 股数据通常在交易日 16:00-17:00 后发布
+        修复：检查的是"最近交易日"的数据，不是"今天"
+        - 如果今天是交易日且 >= 16:00，今天的数据已发布
+        - 如果今天不是交易日（或 < 16:00），昨天是交易日的话，昨天数据已发布
         """
         if date is None:
             date = datetime.now()
         
-        # 非交易日不需要数据
-        if not self.is_trading_day(date):
+        today_str = date.strftime('%Y-%m-%d')
+        trading_days = self.calendar.get('trading_days', [])
+        
+        # 找到最近一个交易日
+        recent_days = [d for d in trading_days if d <= today_str]
+        if not recent_days:
+            return False
+        
+        last_trading_day = max(recent_days)
+        
+        # 如果今天是交易日且 >= 16:00，今天的数据已发布
+        if today_str == last_trading_day and date.hour >= 16:
             return True
         
-        # 16:30 后认为数据已发布
-        return date.hour >= 16 or date.weekday() >= 5
+        # 如果最近交易日是"昨天"或更早，数据肯定已发布
+        if last_trading_day < today_str:
+            return True
+        
+        # 今天早于 16:00，还没发布
+        return False
 
 
 # 便捷函数

@@ -1,891 +1,527 @@
 [
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "🚨 严重错误\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-20T01:28:59.351067\n状态：已调度 test-agent 紧急修复\n预计修复：10-15 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-20T01:28:59.351148"
+    "channel": "wecom",
+    "to": "wecom_webhook_url",
+    "message": "🚨 **🚨 严重错误**\n\n🤖 Agent: test-agent\n❌ 错误：Test assertion failed\n🕐 时间：2026-04-15T01:28:26.807172\n🔧 操作：已调度 test-agent 紧急修复\n⏱️ 预计修复：10-15 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:28:28.073754"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-20T01:28:59.352018\n状态：已调度 test-agent 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-20T01:28:59.352065"
+    "channel": "email",
+    "to": "wangyaxuan@example.com",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test-agent\n❌ 错误：Test assertion failed\n🕐 时间：2026-04-15T01:28:28.079587\n🔧 操作：已调度 test-agent 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:28:28.370109"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-20T01:28:59.354387\n状态：已调度 qa 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-20T01:28:59.354443"
+    "channel": "telegram",
+    "to": "@your_channel",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test-agent\n❌ 错误：Test assertion failed\n🕐 时间：2026-04-15T01:28:27.728633\n🔧 操作：已调度 qa 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:28:29.000459"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "🚨 严重错误\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-20T01:29:00.955374\n状态：已调度 qa 紧急修复\n预计修复：10-15 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-20T01:29:00.955608"
+    "channel": "wecom",
+    "to": "wecom_webhook_url",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test-agent\n❌ 错误：Test assertion failed\n🕐 时间：2026-04-15T01:28:27.728633\n🔧 操作：已调度 qa 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:28:29.004892"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-20T01:29:00.962053\n状态：已调度 qa 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-20T01:29:00.962365"
+    "channel": "telegram",
+    "to": "@your_channel",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test-agent\n❌ 错误：Test assertion failed\n🕐 时间：2026-04-15T01:28:28.079587\n🔧 操作：已调度 test-agent 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:28:29.436064"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "🚨 严重错误\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-20T01:29:08.263536\n状态：已调度 delta 紧急修复\n预计修复：10-15 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-20T01:29:08.263708"
+    "channel": "wecom",
+    "to": "wecom_webhook_url",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test-agent\n❌ 错误：Test assertion failed\n🕐 时间：2026-04-15T01:28:28.079587\n🔧 操作：已调度 test-agent 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:28:29.439262"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-20T01:29:08.269433\n状态：已调度 delta 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-20T01:29:08.269575"
+    "channel": "email",
+    "to": "wangyaxuan@example.com",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test-agent\n❌ 错误：Test assertion failed\n🕐 时间：2026-04-15T01:28:29.458953\n🔧 操作：已调度 qa 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:28:29.746267"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: \n错误：\n时间：2026-03-20T01:29:09.859337\n状态：已调度 delta 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-20T01:29:09.859863"
+    "channel": "telegram",
+    "to": "@your_channel",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test-agent\n❌ 错误：Test assertion failed\n🕐 时间：2026-04-15T01:28:29.458953\n🔧 操作：已调度 qa 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:28:30.752651"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-20T01:29:09.880962\n状态：已调度 qa 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-20T01:29:09.881412"
+    "channel": "wecom",
+    "to": "wecom_webhook_url",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test-agent\n❌ 错误：Test assertion failed\n🕐 时间：2026-04-15T01:28:29.458953\n🔧 操作：已调度 qa 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:28:30.755867"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-20T01:29:09.892675\n状态：已调度 qa 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-20T01:29:09.892910"
+    "channel": "email",
+    "to": "wangyaxuan@example.com",
+    "message": "🚨 **🚨 严重错误**\n\n🤖 Agent: test-agent\n❌ 错误：Test assertion failed\n🕐 时间：2026-04-15T01:28:37.973151\n🔧 操作：已调度 qa 紧急修复\n⏱️ 预计修复：10-15 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:28:38.268876"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "🚨 严重错误\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-20T02:09:21.392007\n状态：已调度 test-agent 紧急修复\n预计修复：10-15 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-20T02:09:21.392371"
+    "channel": "email",
+    "to": "wangyaxuan@example.com",
+    "message": "🚨 **🚨 严重错误**\n\n🤖 Agent: test-agent\n❌ 错误：Test assertion failed\n🕐 时间：2026-04-15T01:28:38.541471\n🔧 操作：已调度 qa 紧急修复\n⏱️ 预计修复：10-15 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:28:38.815513"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-20T02:09:21.393466\n状态：已调度 test-agent 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-20T02:09:21.393527"
+    "channel": "telegram",
+    "to": "@your_channel",
+    "message": "🚨 **🚨 严重错误**\n\n🤖 Agent: test-agent\n❌ 错误：Test assertion failed\n🕐 时间：2026-04-15T01:28:37.973151\n🔧 操作：已调度 qa 紧急修复\n⏱️ 预计修复：10-15 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:28:39.219802"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-20T02:09:21.395979\n状态：已调度 qa 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-20T02:09:21.396215"
+    "channel": "wecom",
+    "to": "wecom_webhook_url",
+    "message": "🚨 **🚨 严重错误**\n\n🤖 Agent: test-agent\n❌ 错误：Test assertion failed\n🕐 时间：2026-04-15T01:28:37.973151\n🔧 操作：已调度 qa 紧急修复\n⏱️ 预计修复：10-15 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:28:39.221676"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "🚨 严重错误\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-20T02:09:22.820491\n状态：已调度 qa 紧急修复\n预计修复：10-15 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-20T02:09:22.820905"
+    "channel": "email",
+    "to": "wangyaxuan@example.com",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test-agent\n❌ 错误：Test assertion failed\n🕐 时间：2026-04-15T01:28:39.229594\n🔧 操作：已调度 qa 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:28:39.609177"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-20T02:09:22.827913\n状态：已调度 qa 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-20T02:09:22.828169"
+    "channel": "telegram",
+    "to": "@your_channel",
+    "message": "🚨 **🚨 严重错误**\n\n🤖 Agent: test-agent\n❌ 错误：Test assertion failed\n🕐 时间：2026-04-15T01:28:38.541471\n🔧 操作：已调度 qa 紧急修复\n⏱️ 预计修复：10-15 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:28:39.780540"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "🚨 严重错误\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-20T02:09:30.373903\n状态：已调度 delta 紧急修复\n预计修复：10-15 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-20T02:09:30.374100"
+    "channel": "wecom",
+    "to": "wecom_webhook_url",
+    "message": "🚨 **🚨 严重错误**\n\n🤖 Agent: test-agent\n❌ 错误：Test assertion failed\n🕐 时间：2026-04-15T01:28:38.541471\n🔧 操作：已调度 qa 紧急修复\n⏱️ 预计修复：10-15 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:28:39.782444"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-20T02:09:30.380136\n状态：已调度 delta 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-20T02:09:30.380266"
+    "channel": "email",
+    "to": "wangyaxuan@example.com",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test-agent\n❌ 错误：Test assertion failed\n🕐 时间：2026-04-15T01:28:39.791727\n🔧 操作：已调度 qa 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:28:40.084133"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: \n错误：\n时间：2026-03-20T02:09:31.793481\n状态：已调度 delta 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-20T02:09:31.793970"
+    "channel": "telegram",
+    "to": "@your_channel",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test-agent\n❌ 错误：Test assertion failed\n🕐 时间：2026-04-15T01:28:39.229594\n🔧 操作：已调度 qa 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:28:40.558127"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-20T02:09:31.815603\n状态：已调度 qa 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-20T02:09:31.816204"
+    "channel": "wecom",
+    "to": "wecom_webhook_url",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test-agent\n❌ 错误：Test assertion failed\n🕐 时间：2026-04-15T01:28:39.229594\n🔧 操作：已调度 qa 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:28:40.561348"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-20T02:09:31.825931\n状态：已调度 qa 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-20T02:09:31.826165"
+    "channel": "telegram",
+    "to": "@your_channel",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test-agent\n❌ 错误：Test assertion failed\n🕐 时间：2026-04-15T01:28:39.791727\n🔧 操作：已调度 qa 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:28:41.020617"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "🚨 严重错误\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-20T02:19:35.904440\n状态：已调度 delta 紧急修复\n预计修复：10-15 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-20T02:19:35.904700"
+    "channel": "wecom",
+    "to": "wecom_webhook_url",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test-agent\n❌ 错误：Test assertion failed\n🕐 时间：2026-04-15T01:28:39.791727\n🔧 操作：已调度 qa 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:28:41.023860"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-20T02:19:35.909129\n状态：已调度 delta 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-20T02:19:35.909211"
+    "channel": "email",
+    "to": "wangyaxuan@example.com",
+    "message": "🚨 **🚨 严重错误**\n\n🤖 Agent: test\n❌ 错误：P0 错误\n🕐 时间：2026-04-15T01:28:47.153358\n🔧 操作：已调度 qa 紧急修复\n⏱️ 预计修复：10-15 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:28:47.479857"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: \n错误：\n时间：2026-03-20T02:19:37.180630\n状态：已调度 delta 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-20T02:19:37.181175"
+    "channel": "email",
+    "to": "wangyaxuan@example.com",
+    "message": "🚨 **🚨 严重错误**\n\n🤖 Agent: test\n❌ 错误：P0 错误\n🕐 时间：2026-04-15T01:28:47.251651\n🔧 操作：已调度 qa 紧急修复\n⏱️ 预计修复：10-15 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:28:47.551979"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-20T02:19:37.200354\n状态：已调度 qa 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-20T02:19:37.200617"
+    "channel": "telegram",
+    "to": "@your_channel",
+    "message": "🚨 **🚨 严重错误**\n\n🤖 Agent: test\n❌ 错误：P0 错误\n🕐 时间：2026-04-15T01:28:47.153358\n🔧 操作：已调度 qa 紧急修复\n⏱️ 预计修复：10-15 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:28:48.423320"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-20T02:19:37.210463\n状态：已调度 qa 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-20T02:19:37.210802"
+    "channel": "wecom",
+    "to": "wecom_webhook_url",
+    "message": "🚨 **🚨 严重错误**\n\n🤖 Agent: test\n❌ 错误：P0 错误\n🕐 时间：2026-04-15T01:28:47.153358\n🔧 操作：已调度 qa 紧急修复\n⏱️ 预计修复：10-15 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:28:48.425822"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "🚨 严重错误\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-20T02:20:47.518686\n状态：已调度 test-agent 紧急修复\n预计修复：10-15 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-20T02:20:47.518785"
+    "channel": "telegram",
+    "to": "@your_channel",
+    "message": "🚨 **🚨 严重错误**\n\n🤖 Agent: test\n❌ 错误：P0 错误\n🕐 时间：2026-04-15T01:28:47.251651\n🔧 操作：已调度 qa 紧急修复\n⏱️ 预计修复：10-15 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:28:48.697060"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-20T02:20:47.519908\n状态：已调度 test-agent 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-20T02:20:47.519992"
+    "channel": "wecom",
+    "to": "wecom_webhook_url",
+    "message": "🚨 **🚨 严重错误**\n\n🤖 Agent: test\n❌ 错误：P0 错误\n🕐 时间：2026-04-15T01:28:47.251651\n🔧 操作：已调度 qa 紧急修复\n⏱️ 预计修复：10-15 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:28:48.699901"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-20T02:20:47.522616\n状态：已调度 qa 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-20T02:20:47.522670"
+    "channel": "email",
+    "to": "wangyaxuan@example.com",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test\n❌ 错误：P1 错误\n🕐 时间：2026-04-15T01:28:55.625999\n🔧 操作：已调度 qa 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:28:55.936004"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "🚨 严重错误\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-20T02:20:48.880065\n状态：已调度 qa 紧急修复\n预计修复：10-15 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-20T02:20:48.880269"
+    "channel": "email",
+    "to": "wangyaxuan@example.com",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test\n❌ 错误：P1 错误\n🕐 时间：2026-04-15T01:28:55.835337\n🔧 操作：已调度 qa 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:28:56.163937"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-20T02:20:48.885822\n状态：已调度 qa 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-20T02:20:48.886093"
+    "channel": "telegram",
+    "to": "@your_channel",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test\n❌ 错误：P1 错误\n🕐 时间：2026-04-15T01:28:55.625999\n🔧 操作：已调度 qa 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:28:56.879901"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "🚨 严重错误\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-20T02:21:42.302455\n状态：已调度 delta 紧急修复\n预计修复：10-15 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-20T02:21:42.302701"
+    "channel": "wecom",
+    "to": "wecom_webhook_url",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test\n❌ 错误：P1 错误\n🕐 时间：2026-04-15T01:28:55.625999\n🔧 操作：已调度 qa 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:28:56.882522"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-20T02:21:42.307692\n状态：已调度 delta 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-20T02:21:42.307780"
+    "channel": "telegram",
+    "to": "@your_channel",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test\n❌ 错误：P1 错误\n🕐 时间：2026-04-15T01:28:55.835337\n🔧 操作：已调度 qa 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:28:57.105665"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: \n错误：\n时间：2026-03-20T02:21:43.544002\n状态：已调度 delta 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-20T02:21:43.544722"
+    "channel": "wecom",
+    "to": "wecom_webhook_url",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test\n❌ 错误：P1 错误\n🕐 时间：2026-04-15T01:28:55.835337\n🔧 操作：已调度 qa 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:28:57.107739"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-20T02:21:43.572417\n状态：已调度 qa 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-20T02:21:43.572713"
+    "channel": "email",
+    "to": "wangyaxuan@example.com",
+    "message": "🚨 **🚨 严重错误**\n\n🤖 Agent: test-agent\n❌ 错误：Test assertion failed\n🕐 时间：2026-04-15T01:29:07.619617\n🔧 操作：已调度 test-agent 紧急修复\n⏱️ 预计修复：10-15 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:29:07.996227"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-20T02:21:43.577332\n状态：已调度 qa 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-20T02:21:43.577490"
+    "channel": "telegram",
+    "to": "@your_channel",
+    "message": "🚨 **🚨 严重错误**\n\n🤖 Agent: test-agent\n❌ 错误：Test assertion failed\n🕐 时间：2026-04-15T01:29:07.619617\n🔧 操作：已调度 test-agent 紧急修复\n⏱️ 预计修复：10-15 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:29:09.201100"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "🚨 严重错误\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-22T14:55:56.518352\n状态：已调度 test-agent 紧急修复\n预计修复：10-15 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-22T14:55:56.518472"
+    "channel": "wecom",
+    "to": "wecom_webhook_url",
+    "message": "🚨 **🚨 严重错误**\n\n🤖 Agent: test-agent\n❌ 错误：Test assertion failed\n🕐 时间：2026-04-15T01:29:07.619617\n🔧 操作：已调度 test-agent 紧急修复\n⏱️ 预计修复：10-15 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:29:09.203578"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-22T14:55:56.521807\n状态：已调度 test-agent 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-22T14:55:56.521872"
+    "channel": "email",
+    "to": "wangyaxuan@example.com",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test-agent\n❌ 错误：Test assertion failed\n🕐 时间：2026-04-15T01:29:09.209903\n🔧 操作：已调度 test-agent 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:29:09.507549"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-22T14:55:56.527232\n状态：已调度 qa 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-22T14:55:56.527300"
+    "channel": "telegram",
+    "to": "@your_channel",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test-agent\n❌ 错误：Test assertion failed\n🕐 时间：2026-04-15T01:29:09.209903\n🔧 操作：已调度 test-agent 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:29:10.448777"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "🚨 严重错误\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-22T14:55:58.126294\n状态：已调度 qa 紧急修复\n预计修复：10-15 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-22T14:55:58.126438"
+    "channel": "wecom",
+    "to": "wecom_webhook_url",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test-agent\n❌ 错误：Test assertion failed\n🕐 时间：2026-04-15T01:29:09.209903\n🔧 操作：已调度 test-agent 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:29:10.451642"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-22T14:55:58.132043\n状态：已调度 qa 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-22T14:55:58.132269"
+    "channel": "email",
+    "to": "wangyaxuan@example.com",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test-agent\n❌ 错误：Test assertion failed\n🕐 时间：2026-04-15T01:29:10.465106\n🔧 操作：已调度 qa 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:29:10.759686"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "🚨 严重错误\n\nAgent: test\n错误：P0 错误\n时间：2026-03-22T14:55:59.534694\n状态：已调度 qa 紧急修复\n预计修复：10-15 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-22T14:55:59.535003"
+    "channel": "telegram",
+    "to": "@your_channel",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test-agent\n❌ 错误：Test assertion failed\n🕐 时间：2026-04-15T01:29:10.465106\n🔧 操作：已调度 qa 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:29:11.707994"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test\n错误：P1 错误\n时间：2026-03-22T14:56:00.940705\n状态：已调度 qa 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-22T14:56:00.941140"
+    "channel": "wecom",
+    "to": "wecom_webhook_url",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test-agent\n❌ 错误：Test assertion failed\n🕐 时间：2026-04-15T01:29:10.465106\n🔧 操作：已调度 qa 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:29:11.711166"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: data_source_manager\n错误：数据源 tushare 健康检查失败：您的token不对，请确认。\n时间：2026-03-22T14:59:33.860559\n状态：已切换到备用数据源\n预计修复：自动恢复\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-22T14:59:33.862145"
+    "channel": "email",
+    "to": "wangyaxuan@example.com",
+    "message": "🚨 **🚨 严重错误**\n\n🤖 Agent: test-agent\n❌ 错误：Test assertion failed\n🕐 时间：2026-04-15T01:29:16.865163\n🔧 操作：已调度 qa 紧急修复\n⏱️ 预计修复：10-15 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:29:17.187241"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "🚨 严重错误\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-22T14:59:47.420962\n状态：已调度 test-agent 紧急修复\n预计修复：10-15 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-22T14:59:47.421047"
+    "channel": "telegram",
+    "to": "@your_channel",
+    "message": "🚨 **🚨 严重错误**\n\n🤖 Agent: test-agent\n❌ 错误：Test assertion failed\n🕐 时间：2026-04-15T01:29:16.865163\n🔧 操作：已调度 qa 紧急修复\n⏱️ 预计修复：10-15 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:29:18.158227"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-22T14:59:47.422655\n状态：已调度 test-agent 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-22T14:59:47.422724"
+    "channel": "wecom",
+    "to": "wecom_webhook_url",
+    "message": "🚨 **🚨 严重错误**\n\n🤖 Agent: test-agent\n❌ 错误：Test assertion failed\n🕐 时间：2026-04-15T01:29:16.865163\n🔧 操作：已调度 qa 紧急修复\n⏱️ 预计修复：10-15 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:29:18.162083"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-22T14:59:47.426296\n状态：已调度 qa 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-22T14:59:47.426373"
+    "channel": "email",
+    "to": "wangyaxuan@example.com",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test-agent\n❌ 错误：Test assertion failed\n🕐 时间：2026-04-15T01:29:18.171421\n🔧 操作：已调度 qa 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:29:18.471940"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "🚨 严重错误\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-22T14:59:49.045490\n状态：已调度 qa 紧急修复\n预计修复：10-15 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-22T14:59:49.045663"
+    "channel": "telegram",
+    "to": "@your_channel",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test-agent\n❌ 错误：Test assertion failed\n🕐 时间：2026-04-15T01:29:18.171421\n🔧 操作：已调度 qa 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:29:19.468674"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-22T14:59:49.049829\n状态：已调度 qa 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-22T14:59:49.049976"
+    "channel": "wecom",
+    "to": "wecom_webhook_url",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test-agent\n❌ 错误：Test assertion failed\n🕐 时间：2026-04-15T01:29:18.171421\n🔧 操作：已调度 qa 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:29:19.472473"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "🚨 严重错误\n\nAgent: test\n错误：P0 错误\n时间：2026-03-22T14:59:50.462802\n状态：已调度 qa 紧急修复\n预计修复：10-15 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-22T14:59:50.463332"
+    "channel": "email",
+    "to": "wangyaxuan@example.com",
+    "message": "🚨 **🚨 严重错误**\n\n🤖 Agent: test\n❌ 错误：P0 错误\n🕐 时间：2026-04-15T01:29:24.230114\n🔧 操作：已调度 qa 紧急修复\n⏱️ 预计修复：10-15 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:29:24.574923"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test\n错误：P1 错误\n时间：2026-03-22T14:59:51.891592\n状态：已调度 qa 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-22T14:59:51.892068"
+    "channel": "telegram",
+    "to": "@your_channel",
+    "message": "🚨 **🚨 严重错误**\n\n🤖 Agent: test\n❌ 错误：P0 错误\n🕐 时间：2026-04-15T01:29:24.230114\n🔧 操作：已调度 qa 紧急修复\n⏱️ 预计修复：10-15 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:29:25.791512"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: data_source_manager\n错误：数据源 tushare 健康检查失败：您的token不对，请确认。\n时间：2026-03-22T21:49:37.186410\n状态：已切换到备用数据源\n预计修复：自动恢复\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-22T21:49:37.186723"
+    "channel": "wecom",
+    "to": "wecom_webhook_url",
+    "message": "🚨 **🚨 严重错误**\n\n🤖 Agent: test\n❌ 错误：P0 错误\n🕐 时间：2026-04-15T01:29:24.230114\n🔧 操作：已调度 qa 紧急修复\n⏱️ 预计修复：10-15 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:29:25.794909"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: data_source_manager\n错误：数据源 tushare 健康检查失败：您的token不对，请确认。\n时间：2026-03-22T21:49:37.211671\n状态：已切换到备用数据源\n预计修复：自动恢复\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-22T21:49:37.211771"
+    "channel": "email",
+    "to": "wangyaxuan@example.com",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test\n❌ 错误：P1 错误\n🕐 时间：2026-04-15T01:29:32.806684\n🔧 操作：已调度 qa 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:29:33.215211"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: data_source_manager\n错误：数据源 tushare 健康检查失败：您的token不对，请确认。\n时间：2026-03-23T09:13:01.862821\n状态：已切换到备用数据源\n预计修复：自动恢复\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:13:01.863180"
+    "channel": "telegram",
+    "to": "@your_channel",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test\n❌ 错误：P1 错误\n🕐 时间：2026-04-15T01:29:32.806684\n🔧 操作：已调度 qa 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:29:34.364515"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "🚨 严重错误\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-23T09:13:18.359780\n状态：已调度 test-agent 紧急修复\n预计修复：10-15 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:13:18.359859"
+    "channel": "wecom",
+    "to": "wecom_webhook_url",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test\n❌ 错误：P1 错误\n🕐 时间：2026-04-15T01:29:32.806684\n🔧 操作：已调度 qa 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:29:34.369742"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-23T09:13:18.361448\n状态：已调度 test-agent 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:13:18.361510"
+    "channel": "email",
+    "to": "wangyaxuan@example.com",
+    "message": "🚨 **🚨 严重错误**\n\n🤖 Agent: test-agent\n❌ 错误：Test assertion failed\n🕐 时间：2026-04-15T01:30:51.989959\n🔧 操作：已调度 test-agent 紧急修复\n⏱️ 预计修复：10-15 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:30:52.267440"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-23T09:13:18.364643\n状态：已调度 qa 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:13:18.364694"
+    "channel": "telegram",
+    "to": "@your_channel",
+    "message": "🚨 **🚨 严重错误**\n\n🤖 Agent: test-agent\n❌ 错误：Test assertion failed\n🕐 时间：2026-04-15T01:30:51.989959\n🔧 操作：已调度 test-agent 紧急修复\n⏱️ 预计修复：10-15 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:30:53.252386"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "🚨 严重错误\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-23T09:13:19.759285\n状态：已调度 qa 紧急修复\n预计修复：10-15 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:13:19.759409"
+    "channel": "wecom",
+    "to": "wecom_webhook_url",
+    "message": "🚨 **🚨 严重错误**\n\n🤖 Agent: test-agent\n❌ 错误：Test assertion failed\n🕐 时间：2026-04-15T01:30:51.989959\n🔧 操作：已调度 test-agent 紧急修复\n⏱️ 预计修复：10-15 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:30:53.257274"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-23T09:13:19.763668\n状态：已调度 qa 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:13:19.763844"
+    "channel": "email",
+    "to": "wangyaxuan@example.com",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test-agent\n❌ 错误：Test assertion failed\n🕐 时间：2026-04-15T01:30:53.263800\n🔧 操作：已调度 test-agent 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:30:53.548238"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "🚨 严重错误\n\nAgent: test\n错误：P0 错误\n时间：2026-03-23T09:13:21.119864\n状态：已调度 qa 紧急修复\n预计修复：10-15 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:13:21.120182"
+    "channel": "telegram",
+    "to": "@your_channel",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test-agent\n❌ 错误：Test assertion failed\n🕐 时间：2026-04-15T01:30:53.263800\n🔧 操作：已调度 test-agent 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:30:54.508541"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test\n错误：P1 错误\n时间：2026-03-23T09:13:22.516954\n状态：已调度 qa 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:13:22.517253"
+    "channel": "wecom",
+    "to": "wecom_webhook_url",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test-agent\n❌ 错误：Test assertion failed\n🕐 时间：2026-04-15T01:30:53.263800\n🔧 操作：已调度 test-agent 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:30:54.510595"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "🚨 严重错误\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-23T09:14:29.185184\n状态：已调度 test-agent 紧急修复\n预计修复：10-15 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:14:29.185260"
+    "channel": "email",
+    "to": "wangyaxuan@example.com",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test-agent\n❌ 错误：Test assertion failed\n🕐 时间：2026-04-15T01:30:54.522969\n🔧 操作：已调度 qa 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:30:55.018081"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-23T09:14:29.186877\n状态：已调度 test-agent 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:14:29.186937"
+    "channel": "telegram",
+    "to": "@your_channel",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test-agent\n❌ 错误：Test assertion failed\n🕐 时间：2026-04-15T01:30:54.522969\n🔧 操作：已调度 qa 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:30:55.978522"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-23T09:14:29.190522\n状态：已调度 qa 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:14:29.190599"
+    "channel": "wecom",
+    "to": "wecom_webhook_url",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test-agent\n❌ 错误：Test assertion failed\n🕐 时间：2026-04-15T01:30:54.522969\n🔧 操作：已调度 qa 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:30:55.984295"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "🚨 严重错误\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-23T09:14:30.748034\n状态：已调度 qa 紧急修复\n预计修复：10-15 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:14:30.748227"
+    "channel": "email",
+    "to": "wangyaxuan@example.com",
+    "message": "🚨 **🚨 严重错误**\n\n🤖 Agent: test-agent\n❌ 错误：Test assertion failed\n🕐 时间：2026-04-15T01:30:58.997119\n🔧 操作：已调度 qa 紧急修复\n⏱️ 预计修复：10-15 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:30:59.564762"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-23T09:14:30.753287\n状态：已调度 qa 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:14:30.753436"
+    "channel": "telegram",
+    "to": "@your_channel",
+    "message": "🚨 **🚨 严重错误**\n\n🤖 Agent: test-agent\n❌ 错误：Test assertion failed\n🕐 时间：2026-04-15T01:30:58.997119\n🔧 操作：已调度 qa 紧急修复\n⏱️ 预计修复：10-15 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:31:00.675678"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "🚨 严重错误\n\nAgent: test\n错误：P0 错误\n时间：2026-03-23T09:14:32.147660\n状态：已调度 qa 紧急修复\n预计修复：10-15 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:14:32.147992"
+    "channel": "wecom",
+    "to": "wecom_webhook_url",
+    "message": "🚨 **🚨 严重错误**\n\n🤖 Agent: test-agent\n❌ 错误：Test assertion failed\n🕐 时间：2026-04-15T01:30:58.997119\n🔧 操作：已调度 qa 紧急修复\n⏱️ 预计修复：10-15 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:31:00.682327"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test\n错误：P1 错误\n时间：2026-03-23T09:14:33.542542\n状态：已调度 qa 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:14:33.543044"
+    "channel": "email",
+    "to": "wangyaxuan@example.com",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test-agent\n❌ 错误：Test assertion failed\n🕐 时间：2026-04-15T01:31:00.690851\n🔧 操作：已调度 qa 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:31:01.007574"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: data_source_manager\n错误：数据源 tushare 健康检查失败：您的token不对，请确认。\n时间：2026-03-23T09:16:58.669654\n状态：已切换到备用数据源\n预计修复：自动恢复\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:16:58.669828"
+    "channel": "telegram",
+    "to": "@your_channel",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test-agent\n❌ 错误：Test assertion failed\n🕐 时间：2026-04-15T01:31:00.690851\n🔧 操作：已调度 qa 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:31:01.950930"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "🚨 严重错误\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-23T09:17:12.083255\n状态：已调度 test-agent 紧急修复\n预计修复：10-15 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:17:12.083333"
+    "channel": "wecom",
+    "to": "wecom_webhook_url",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test-agent\n❌ 错误：Test assertion failed\n🕐 时间：2026-04-15T01:31:00.690851\n🔧 操作：已调度 qa 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:31:01.954495"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-23T09:17:12.084974\n状态：已调度 test-agent 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:17:12.085033"
+    "channel": "email",
+    "to": "wangyaxuan@example.com",
+    "message": "🚨 **🚨 严重错误**\n\n🤖 Agent: test\n❌ 错误：P0 错误\n🕐 时间：2026-04-15T01:31:05.062245\n🔧 操作：已调度 qa 紧急修复\n⏱️ 预计修复：10-15 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:31:05.360112"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-23T09:17:12.088200\n状态：已调度 qa 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:17:12.088263"
+    "channel": "telegram",
+    "to": "@your_channel",
+    "message": "🚨 **🚨 严重错误**\n\n🤖 Agent: test\n❌ 错误：P0 错误\n🕐 时间：2026-04-15T01:31:05.062245\n🔧 操作：已调度 qa 紧急修复\n⏱️ 预计修复：10-15 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:31:06.297241"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "🚨 严重错误\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-23T09:17:13.616063\n状态：已调度 qa 紧急修复\n预计修复：10-15 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:17:13.616204"
+    "channel": "wecom",
+    "to": "wecom_webhook_url",
+    "message": "🚨 **🚨 严重错误**\n\n🤖 Agent: test\n❌ 错误：P0 错误\n🕐 时间：2026-04-15T01:31:05.062245\n🔧 操作：已调度 qa 紧急修复\n⏱️ 预计修复：10-15 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:31:06.302321"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-23T09:17:13.620277\n状态：已调度 qa 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:17:13.620430"
+    "channel": "email",
+    "to": "wangyaxuan@example.com",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test\n❌ 错误：P1 错误\n🕐 时间：2026-04-15T01:31:09.537685\n🔧 操作：已调度 qa 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:31:09.810747"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "🚨 严重错误\n\nAgent: test\n错误：P0 错误\n时间：2026-03-23T09:17:15.002269\n状态：已调度 qa 紧急修复\n预计修复：10-15 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:17:15.002878"
+    "channel": "telegram",
+    "to": "@your_channel",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test\n❌ 错误：P1 错误\n🕐 时间：2026-04-15T01:31:09.537685\n🔧 操作：已调度 qa 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:31:10.721096"
   },
   {
     "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test\n错误：P1 错误\n时间：2026-03-23T09:17:16.400757\n状态：已调度 qa 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:17:16.401094"
-  },
-  {
-    "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: data_source_manager\n错误：数据源 tushare 健康检查失败：您的token不对，请确认。\n时间：2026-03-23T09:19:01.970695\n状态：已切换到备用数据源\n预计修复：自动恢复\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:19:01.970896"
-  },
-  {
-    "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "🚨 严重错误\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-23T09:19:15.185788\n状态：已调度 test-agent 紧急修复\n预计修复：10-15 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:19:15.185871"
-  },
-  {
-    "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-23T09:19:15.187552\n状态：已调度 test-agent 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:19:15.187618"
-  },
-  {
-    "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-23T09:19:15.191115\n状态：已调度 qa 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:19:15.191176"
-  },
-  {
-    "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "🚨 严重错误\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-23T09:19:16.597626\n状态：已调度 qa 紧急修复\n预计修复：10-15 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:19:16.597767"
-  },
-  {
-    "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-23T09:19:16.602073\n状态：已调度 qa 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:19:16.602292"
-  },
-  {
-    "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "🚨 严重错误\n\nAgent: test\n错误：P0 错误\n时间：2026-03-23T09:19:17.973270\n状态：已调度 qa 紧急修复\n预计修复：10-15 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:19:17.973583"
-  },
-  {
-    "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test\n错误：P1 错误\n时间：2026-03-23T09:19:19.365883\n状态：已调度 qa 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:19:19.366216"
-  },
-  {
-    "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "🚨 严重错误\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-23T09:22:04.356490\n状态：已调度 test-agent 紧急修复\n预计修复：10-15 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:22:04.356575"
-  },
-  {
-    "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-23T09:22:04.358340\n状态：已调度 test-agent 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:22:04.358414"
-  },
-  {
-    "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-23T09:22:04.362028\n状态：已调度 qa 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:22:04.362091"
-  },
-  {
-    "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "🚨 严重错误\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-23T09:22:05.758863\n状态：已调度 qa 紧急修复\n预计修复：10-15 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:22:05.759027"
-  },
-  {
-    "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-23T09:22:05.763278\n状态：已调度 qa 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:22:05.763363"
-  },
-  {
-    "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "🚨 严重错误\n\nAgent: test\n错误：P0 错误\n时间：2026-03-23T09:22:07.146313\n状态：已调度 qa 紧急修复\n预计修复：10-15 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:22:07.146651"
-  },
-  {
-    "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test\n错误：P1 错误\n时间：2026-03-23T09:22:08.550159\n状态：已调度 qa 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:22:08.550488"
-  },
-  {
-    "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "🚨 严重错误\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-23T09:22:58.252223\n状态：已调度 test-agent 紧急修复\n预计修复：10-15 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:22:58.252317"
-  },
-  {
-    "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-23T09:22:58.254051\n状态：已调度 test-agent 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:22:58.254121"
-  },
-  {
-    "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-23T09:22:58.257519\n状态：已调度 qa 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:22:58.257581"
-  },
-  {
-    "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "🚨 严重错误\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-23T09:22:59.648119\n状态：已调度 qa 紧急修复\n预计修复：10-15 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:22:59.648337"
-  },
-  {
-    "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-23T09:22:59.651607\n状态：已调度 qa 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:22:59.651674"
-  },
-  {
-    "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "🚨 严重错误\n\nAgent: test\n错误：P0 错误\n时间：2026-03-23T09:23:01.017572\n状态：已调度 qa 紧急修复\n预计修复：10-15 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:23:01.018073"
-  },
-  {
-    "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test\n错误：P1 错误\n时间：2026-03-23T09:23:02.419807\n状态：已调度 qa 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:23:02.419976"
-  },
-  {
-    "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "🚨 严重错误\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-23T09:23:41.921435\n状态：已调度 test-agent 紧急修复\n预计修复：10-15 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:23:41.921513"
-  },
-  {
-    "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-23T09:23:41.923307\n状态：已调度 test-agent 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:23:41.923367"
-  },
-  {
-    "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-23T09:23:41.926880\n状态：已调度 qa 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:23:41.926934"
-  },
-  {
-    "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "🚨 严重错误\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-23T09:23:43.486721\n状态：已调度 qa 紧急修复\n预计修复：10-15 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:23:43.486880"
-  },
-  {
-    "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-23T09:23:43.490132\n状态：已调度 qa 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:23:43.490195"
-  },
-  {
-    "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "🚨 严重错误\n\nAgent: test\n错误：P0 错误\n时间：2026-03-23T09:23:44.872497\n状态：已调度 qa 紧急修复\n预计修复：10-15 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:23:44.872825"
-  },
-  {
-    "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test\n错误：P1 错误\n时间：2026-03-23T09:23:46.270173\n状态：已调度 qa 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:23:46.270486"
-  },
-  {
-    "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: data_source_manager\n错误：数据源 tushare 健康检查失败：您的token不对，请确认。\n时间：2026-03-23T09:24:53.411214\n状态：已切换到备用数据源\n预计修复：自动恢复\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:24:53.411480"
-  },
-  {
-    "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "🚨 严重错误\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-23T09:25:06.882691\n状态：已调度 test-agent 紧急修复\n预计修复：10-15 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:25:06.882771"
-  },
-  {
-    "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-23T09:25:06.884836\n状态：已调度 test-agent 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:25:06.884931"
-  },
-  {
-    "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-23T09:25:06.888961\n状态：已调度 qa 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:25:06.889029"
-  },
-  {
-    "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "🚨 严重错误\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-23T09:25:08.291710\n状态：已调度 qa 紧急修复\n预计修复：10-15 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:25:08.291846"
-  },
-  {
-    "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-23T09:25:08.296301\n状态：已调度 qa 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:25:08.296418"
-  },
-  {
-    "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "🚨 严重错误\n\nAgent: test\n错误：P0 错误\n时间：2026-03-23T09:25:09.662967\n状态：已调度 qa 紧急修复\n预计修复：10-15 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:25:09.663377"
-  },
-  {
-    "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test\n错误：P1 错误\n时间：2026-03-23T09:25:11.055991\n状态：已调度 qa 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:25:11.056300"
-  },
-  {
-    "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "🚨 严重错误\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-23T09:31:34.747735\n状态：已调度 test-agent 紧急修复\n预计修复：10-15 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:31:34.747812"
-  },
-  {
-    "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-23T09:31:34.749675\n状态：已调度 test-agent 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:31:34.749738"
-  },
-  {
-    "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-23T09:31:34.753421\n状态：已调度 qa 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:31:34.753495"
-  },
-  {
-    "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "🚨 严重错误\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-23T09:31:36.225395\n状态：已调度 qa 紧急修复\n预计修复：10-15 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:31:36.225541"
-  },
-  {
-    "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-03-23T09:31:36.229857\n状态：已调度 qa 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:31:36.230073"
-  },
-  {
-    "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "🚨 严重错误\n\nAgent: test\n错误：P0 错误\n时间：2026-03-23T09:31:37.604922\n状态：已调度 qa 紧急修复\n预计修复：10-15 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:31:37.605375"
-  },
-  {
-    "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test\n错误：P1 错误\n时间：2026-03-23T09:31:38.994160\n状态：已调度 qa 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:31:38.994476"
-  },
-  {
-    "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: data_source_manager\n错误：数据源 tushare 健康检查失败：您的token不对，请确认。\n时间：2026-03-23T09:51:58.874890\n状态：已切换到备用数据源\n预计修复：自动恢复\n\n详细报告：查看日志文件",
-    "timestamp": "2026-03-23T09:51:58.875087"
-  },
-  {
-    "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "🚨 严重错误\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-04-01T09:18:05.115041\n状态：已调度 test-agent 紧急修复\n预计修复：10-15 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-04-01T09:18:05.115128"
-  },
-  {
-    "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-04-01T09:18:05.116885\n状态：已调度 test-agent 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-04-01T09:18:05.116934"
-  },
-  {
-    "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-04-01T09:18:05.119667\n状态：已调度 qa 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-04-01T09:18:05.119728"
-  },
-  {
-    "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "🚨 严重错误\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-04-01T09:18:05.131591\n状态：已调度 qa 紧急修复\n预计修复：10-15 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-04-01T09:18:05.131647"
-  },
-  {
-    "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test-agent\n错误：Test assertion failed\n时间：2026-04-01T09:18:05.133432\n状态：已调度 qa 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-04-01T09:18:05.133474"
-  },
-  {
-    "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "🚨 严重错误\n\nAgent: test\n错误：P0 错误\n时间：2026-04-01T09:18:05.140320\n状态：已调度 delta 紧急修复\n预计修复：10-15 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-04-01T09:18:05.140378"
-  },
-  {
-    "type": "alert_notification",
-    "channel": "slack",
-    "to": "user:U0AHSM009ML",
-    "message": "⚠️ 功能异常\n\nAgent: test\n错误：P1 错误\n时间：2026-04-01T09:18:05.143794\n状态：已调度 delta 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
-    "timestamp": "2026-04-01T09:18:05.143844"
+    "channel": "wecom",
+    "to": "wecom_webhook_url",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test\n❌ 错误：P1 错误\n🕐 时间：2026-04-15T01:31:09.537685\n🔧 操作：已调度 qa 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:31:10.724160"
   }
 ]

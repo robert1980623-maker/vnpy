@@ -1,0 +1,280 @@
+{
+  "tasks": [
+    {
+      "id": "P0-1",
+      "title": "Delta Consumer 假修复问题",
+      "priority": "P0",
+      "severity": "🔴 致命",
+      "files": [
+        "`delta_consumer.py`"
+      ],
+      "estimated_hours": 2.0,
+      "team": "后端工程组",
+      "status": "completed",
+      "retry_count": 0,
+      "assigned_session": "delta",
+      "created_at": "2026-04-13T14:52:51.189086+08:00",
+      "dispatched_at": null,
+      "completed_at": "2026-04-13T16:15:58.602874+08:00",
+      "error_message": null
+    },
+    {
+      "id": "P0-2",
+      "title": "文件锁 — 消除并发数据丢失",
+      "priority": "P0",
+      "severity": "🔴 致命",
+      "files": [
+        "`delta_consumer.py`",
+        "`manager_interface.py`",
+        "`issue_queue.py`"
+      ],
+      "estimated_hours": 4.0,
+      "team": "后端工程组",
+      "status": "completed",
+      "retry_count": 0,
+      "assigned_session": "delta",
+      "created_at": "2026-04-13T14:52:51.189235+08:00",
+      "dispatched_at": null,
+      "completed_at": "2026-04-13T16:18:58.437174+08:00",
+      "error_message": null
+    },
+    {
+      "id": "P0-3",
+      "title": "Industry Rotation 策略无法运行",
+      "priority": "P0",
+      "severity": "🔴 致命",
+      "files": [
+        "`alpha/strategy/industry_rotation.py`"
+      ],
+      "estimated_hours": 1.0,
+      "team": "策略研究组",
+      "status": "completed",
+      "retry_count": 0,
+      "assigned_session": "charlie",
+      "created_at": "2026-04-13T14:52:51.189246+08:00",
+      "dispatched_at": null,
+      "completed_at": "2026-04-13T16:15:19.566720+08:00",
+      "error_message": null
+    },
+    {
+      "id": "P0-4",
+      "title": "Industry Rotation 估值数据伪造",
+      "priority": "P0",
+      "severity": "🔴 致命",
+      "files": [
+        "`alpha/strategy/industry_rotation.py`"
+      ],
+      "estimated_hours": 4.0,
+      "team": "策略研究组",
+      "status": "completed",
+      "retry_count": 0,
+      "assigned_session": "charlie",
+      "created_at": "2026-04-13T14:52:51.189252+08:00",
+      "dispatched_at": null,
+      "completed_at": "2026-04-13T16:16:55.407429+08:00",
+      "error_message": null
+    },
+    {
+      "id": "P1-1",
+      "title": "统一配置管理",
+      "priority": "P1",
+      "severity": "🟡 高",
+      "files": [
+        "全项目"
+      ],
+      "estimated_hours": 3.0,
+      "team": "后端工程组",
+      "status": "completed",
+      "retry_count": 0,
+      "assigned_session": null,
+      "created_at": "2026-04-13T14:52:51.189455+08:00",
+      "dispatched_at": null,
+      "completed_at": "2026-04-13T19:40:20.066068+08:00",
+      "error_message": null
+    },
+    {
+      "id": "P1-2",
+      "title": "修复 retry_count 双重计数",
+      "priority": "P1",
+      "severity": "🟡 高",
+      "files": [
+        "`delta_consumer.py`"
+      ],
+      "estimated_hours": 0.5,
+      "team": "后端工程组",
+      "status": "completed",
+      "retry_count": 0,
+      "assigned_session": null,
+      "created_at": "2026-04-13T14:52:51.189463+08:00",
+      "dispatched_at": null,
+      "completed_at": "2026-04-13T19:39:38.746231+08:00",
+      "error_message": null
+    },
+    {
+      "id": "P1-3",
+      "title": "统一时区处理",
+      "priority": "P1",
+      "severity": "🟡 高",
+      "files": [
+        "`manager_interface.py`",
+        "`delta_consumer.py`"
+      ],
+      "estimated_hours": 2.0,
+      "team": "后端工程组",
+      "status": "completed",
+      "retry_count": 0,
+      "assigned_session": null,
+      "created_at": "2026-04-13T14:52:51.189468+08:00",
+      "dispatched_at": null,
+      "completed_at": "2026-04-13T19:36:00+08:00",
+      "error_message": "error: unknown option '--session'\n(Did you mean --version?)\n"
+    },
+    {
+      "id": "P1-4",
+      "title": "Cross-Sectional Engine _get_price 索引优化",
+      "priority": "P1",
+      "severity": "🟡 高",
+      "files": [
+        "`alpha/strategy/cross_sectional_engine.py`"
+      ],
+      "estimated_hours": 2.0,
+      "team": "量化工程组",
+      "status": "completed",
+      "retry_count": 0,
+      "assigned_session": null,
+      "created_at": "2026-04-13T14:52:51.189473+08:00",
+      "dispatched_at": null,
+      "completed_at": "2026-04-13T19:36:00+08:00",
+      "error_message": "error: unknown option '--session'\n(Did you mean --version?)\n"
+    },
+    {
+      "id": "P1-5",
+      "title": "缓存 TTL/LRU 限制",
+      "priority": "P1",
+      "severity": "🟡 高",
+      "files": [
+        "`alpha/lab.py`",
+        "`alert_notifier.py`"
+      ],
+      "estimated_hours": 2.0,
+      "team": "后端工程组",
+      "status": "completed",
+      "retry_count": 0,
+      "assigned_session": null,
+      "created_at": "2026-04-13T14:52:51.189478+08:00",
+      "dispatched_at": null,
+      "completed_at": "2026-04-13T19:37:24.001887+08:00",
+      "error_message": null
+    },
+    {
+      "id": "P1-6",
+      "title": "回测仓位计算修复",
+      "priority": "P1",
+      "severity": "🟡 高",
+      "files": [
+        "`alpha/strategy/cross_sectional_engine.py`"
+      ],
+      "estimated_hours": 1.0,
+      "team": "量化工程组",
+      "status": "completed",
+      "retry_count": 0,
+      "assigned_session": null,
+      "created_at": "2026-04-13T14:52:51.189482+08:00",
+      "dispatched_at": null,
+      "completed_at": "2026-04-13T19:36:44.670757+08:00",
+      "error_message": null
+    },
+    {
+      "id": "P2-1",
+      "title": "Issue Queue 迁移 SQLite",
+      "priority": "P2",
+      "severity": "🟢 中",
+      "files": [
+        "`issue_queue.py`"
+      ],
+      "estimated_hours": 8.0,
+      "team": "后端工程组",
+      "status": "completed",
+      "retry_count": 0,
+      "assigned_session": null,
+      "created_at": "2026-04-13T14:52:51.189602+08:00",
+      "dispatched_at": null,
+      "completed_at": "2026-04-13T22:13:33.063044+08:00",
+      "error_message": null
+    },
+    {
+      "id": "P2-2",
+      "title": "回测执行细节完善",
+      "priority": "P2",
+      "severity": "🟢 中",
+      "files": [
+        "`alpha/strategy/cross_sectional_engine.py`"
+      ],
+      "estimated_hours": 16.0,
+      "team": "量化工程组",
+      "status": "completed",
+      "retry_count": 0,
+      "assigned_session": null,
+      "created_at": "2026-04-13T14:52:51.189608+08:00",
+      "dispatched_at": null,
+      "completed_at": "2026-04-13T22:12:17.505374+08:00",
+      "error_message": null
+    },
+    {
+      "id": "P2-3",
+      "title": "端到端集成测试",
+      "priority": "P2",
+      "severity": "🟢 中",
+      "files": [
+        "`alert_notifier.py`"
+      ],
+      "estimated_hours": 8.0,
+      "team": "QA 组",
+      "status": "completed",
+      "retry_count": 0,
+      "assigned_session": null,
+      "created_at": "2026-04-13T14:52:51.189613+08:00",
+      "dispatched_at": null,
+      "completed_at": "2026-04-13T22:22:05.606925+08:00",
+      "error_message": "error: unknown option '--session'\n(Did you mean --version?)\n"
+    },
+    {
+      "id": "P2-4",
+      "title": "告警系统多渠道支持",
+      "priority": "P2",
+      "severity": "🟢 中",
+      "files": [
+        "`alert_notifier.py`"
+      ],
+      "estimated_hours": 2.0,
+      "team": "后端工程组",
+      "status": "completed",
+      "retry_count": 0,
+      "assigned_session": null,
+      "created_at": "2026-04-13T14:52:51.189617+08:00",
+      "dispatched_at": null,
+      "completed_at": "2026-04-13T22:13:05.508972+08:00",
+      "error_message": null
+    },
+    {
+      "id": "P2-5",
+      "title": "行业轮动股票池扩充",
+      "priority": "P2",
+      "severity": "🟢 中",
+      "files": [
+        "`alpha/strategy/industry_rotation.py`"
+      ],
+      "estimated_hours": 8.0,
+      "team": "策略研究组",
+      "status": "completed",
+      "retry_count": 0,
+      "assigned_session": null,
+      "created_at": "2026-04-13T14:52:51.189621+08:00",
+      "dispatched_at": null,
+      "completed_at": "2026-04-13T22:13:35.582982+08:00",
+      "error_message": null
+    }
+  ],
+  "last_check": "2026-04-13T22:19:57.597134+08:00",
+  "week_count": 1
+}

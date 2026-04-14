@@ -106,5 +106,122 @@
     "priority": "urgent",
     "assigned_at": "2026-04-01T09:18:05.141161",
     "status": "pending"
+  },
+  {
+    "issue_id": "test-p0",
+    "agent": "test",
+    "error_type": "TestError",
+    "error_message": "P0 错误",
+    "priority": "urgent",
+    "assigned_at": "2026-04-15T01:21:25.562624",
+    "status": "pending"
+  },
+  {
+    "issue_id": "test-p0",
+    "agent": "test",
+    "error_type": "TestError",
+    "error_message": "P0 错误",
+    "priority": "urgent",
+    "assigned_at": "2026-04-15T01:22:42.903400",
+    "status": "pending"
+  },
+  {
+    "issue_id": "test-p0",
+    "agent": "test",
+    "error_type": "TestError",
+    "error_message": "P0 错误",
+    "priority": "urgent",
+    "assigned_at": "2026-04-15T01:22:54.581396",
+    "status": "pending"
+  },
+  {
+    "issue_id": "test-p0",
+    "agent": "test",
+    "error_type": "TestError",
+    "error_message": "P0 错误",
+    "priority": "urgent",
+    "assigned_at": "2026-04-15T01:24:31.248821",
+    "status": "pending"
+  },
+  {
+    "issue_id": "test-p0",
+    "agent": "test",
+    "error_type": "TestError",
+    "error_message": "P0 错误",
+    "priority": "urgent",
+    "assigned_at": "2026-04-15T01:24:33.916053",
+    "status": "pending"
+  },
+  {
+    "issue_id": "test-p0",
+    "agent": "test",
+    "error_type": "TestError",
+    "error_message": "P0 错误",
+    "priority": "urgent",
+    "assigned_at": "2026-04-15T01:25:35.184771",
+    "status": "pending"
+  },
+  {
+    "issue_id": "test-p0",
+    "agent": "test",
+    "error_type": "TestError",
+    "error_message": "P0 错误",
+    "priority": "urgent",
+    "assigned_at": "2026-04-15T01:26:19.961733",
+    "status": "pending"
+  },
+  {
+    "issue_id": "test-p0",
+    "agent": "test",
+    "error_type": "TestError",
+    "error_message": "P0 错误",
+    "priority": "urgent",
+    "assigned_at": "2026-04-15T01:26:55.090637",
+    "status": "pending"
+  },
+  {
+    "issue_id": "test-p0",
+    "agent": "test",
+    "error_type": "TestError",
+    "error_message": "P0 错误",
+    "priority": "urgent",
+    "assigned_at": "2026-04-15T01:27:37.463245",
+    "status": "pending"
+  },
+  {
+    "issue_id": "test-p0",
+    "agent": "test",
+    "error_type": "TestError",
+    "error_message": "P0 错误",
+    "priority": "urgent",
+    "assigned_at": "2026-04-15T01:28:48.427138",
+    "status": "pending"
+  },
+  {
+    "issue_id": "test-p0",
+    "agent": "test",
+    "error_type": "TestError",
+    "error_message": "P0 错误",
+    "priority": "urgent",
+    "assigned_at": "2026-04-15T01:28:48.701146",
+    "status": "pending"
+  },
+  {
+    "issue_id": "test-p0",
+    "agent": "test",
+    "error_type": "TestError",
+    "error_message": "P0 错误",
+    "priority": "urgent",
+    "assigned_at": "2026-04-15T01:29:25.796294",
+    "status": "pending"
+  },
+  {
+    "issue_id": "test-p0",
+    "agent": "test",
+    "error_type": "TestError",
+    "error_message": "P0 错误",
+    "priority": "urgent",
+    "assigned_at": "2026-04-15T01:31:06.304001",
+    "status": "pending"
   }
 ]

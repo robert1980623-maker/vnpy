@@ -26,7 +26,7 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 # 美股指数配置（symbol 是 akshare 用的，filename 是本地文件名）
 US_INDICES = [
-    {"symbol": "DJI", "filename": "US_DJIA", "name": "道琼斯工业平均指数"},
+    {"symbol": "DJI", "filename": "US_DJI", "name": "道琼斯工业平均指数"},
     {"symbol": "SPX", "filename": "US_SPX", "name": "标普 500"},
     {"symbol": "NDX", "filename": "US_NDX", "name": "纳斯达克 100"},
 ]

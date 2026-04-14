@@ -7,13 +7,94 @@
 - 风险归因分析
 - 交易归因分析
 - 综合绩效报告生成
+
+数据源：AKShare（真实市价）
 """
 
 import json
+import akshare as ak
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Optional
 from dataclasses import dataclass, asdict
+
+
+def _get_current_prices(symbols: List[str]) -> Dict[str, float]:
+    """
+    从 Tushare Pro 获取真实收盘价（主数据源）
+    
+    Args:
+        symbols: 股票代码列表，格式如 "300476", "603893"
+    
+    Returns:
+        {symbol: current_price} 字典
+    """
+    prices = {}
+    today = datetime.now().strftime("%Y%m%d")
+    
+    try:
+        import tushare as ts
+        import os
+        env_path = '/Users/rowang/projects/vnpy/.env'
+        token = None
+        if os.path.exists(env_path):
+            with open(env_path) as f:
+                for line in f:
+                    if 'TUSHARE' in line and '=' in line:
+                        token = line.split('=')[1].strip()
+                        break
+        if token:
+            ts.set_token(token)
+            pro = ts.pro_api()
+        else:
+            print("⚠️ Tushare token 未找到，使用备用 AKShare")
+            raise ValueError("No token")
+        
+        for symbol in symbols:
+            if symbol.startswith('6'):
+                ts_code = f"{symbol}.SH"
+            else:
+                ts_code = f"{symbol}.SZ"
+            
+            df = pro.daily(ts_code=ts_code, start_date=today, end_date=today)
+            if df is not None and len(df) > 0:
+                price = float(df.iloc[0]['close'])
+                prices[symbol] = price
+                print(f"✅ {symbol} 收盘价：¥{price:.2f}")
+            else:
+                # 尝试前一天
+                from datetime import timedelta
+                yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y%m%d")
+                df = pro.daily(ts_code=ts_code, start_date=yesterday, end_date=yesterday)
+                if df is not None and len(df) > 0:
+                    price = float(df.iloc[0]['close'])
+                    prices[symbol] = price
+                    print(f"✅ {symbol} 昨收价：¥{price:.2f}")
+                else:
+                    prices[symbol] = 10.0
+                    print(f"⚠️ {symbol} 获取失败，使用默认价 ¥10.00")
+    except Exception as e:
+        print(f"⚠️ Tushare 获取失败：{e}，切换到 AKShare 备用")
+        # 备用：AKShare
+        try:
+            import akshare as ak
+            for symbol in symbols:
+                try:
+                    df_hist = ak.stock_zh_a_hist(symbol=symbol, period="daily", end_date=today)
+                    if df_hist is not None and not df_hist.empty:
+                        price = float(df_hist.iloc[-1]['收盘'])
+                        prices[symbol] = price
+                        print(f"✅ {symbol} 收盘价(AKShare)：¥{price:.2f}")
+                    else:
+                        prices[symbol] = 10.0
+                        print(f"⚠️ {symbol} 获取失败，使用默认价 ¥10.00")
+                except Exception:
+                    prices[symbol] = 10.0
+                    print(f"⚠️ {symbol} AKShare 也失败，使用默认价 ¥10.00")
+        except Exception:
+            for symbol in symbols:
+                prices[symbol] = 10.0
+    return prices
 
 
 @dataclass
@@ -76,7 +157,7 @@ class PerformanceAttribution:
         return {'hs300': 0.0, 'sh50': 0.0}
 
     def calculate_returns_attribution(self) -> Dict:
-        """计算收益归因"""
+        """计算收益归因 - 使用真实市价"""
         positions = self.account.get_positions()
         if not positions:
             return {
@@ -88,14 +169,24 @@ class PerformanceAttribution:
 
         total_return = 0.0
         total_cost = 0.0
+        total_market_value = 0.0
 
+        # 获取真实市价
+        symbols = [self._get_stock_code(pos["symbol"]) for pos in positions]
+        current_prices = _get_current_prices(symbols)
+        
         for pos in positions:
-            profit = pos["cost"] * (1 + 0.05) - pos["cost"]  # 简化模拟
+            symbol_code = self._get_stock_code(pos["symbol"])
+            current_price = current_prices.get(symbol_code, pos["avg_price"])
+            market_value = pos["quantity"] * current_price
+            profit = market_value - pos["cost"]
             total_return += profit
             total_cost += pos["cost"]
+            total_market_value += market_value
 
-        total_return_rate = total_return / total_cost * 100 if total_cost > 0 else 0
+        total_return_rate = (total_return / total_cost * 100) if total_cost > 0 else 0
 
+        # 简化的归因分解（实际应该用更复杂的模型）
         return {
             'stock_selection': total_return_rate * 0.6,
             'industry_allocation': total_return_rate * 0.25,
@@ -119,7 +210,7 @@ class PerformanceAttribution:
         if not positions:
             return default_result
 
-        total_market_value = sum(pos["cost"] for pos in positions)
+        total_market_value = sum(pos["cost"] for pos in positions)  # 暂时用成本代替市值
         if total_market_value <= 0:
             return default_result
 
@@ -199,9 +290,17 @@ class PerformanceAttribution:
         result = []
         positions = self.account.get_positions()
         
+        
+        # 获取真实市价
+        symbols = [self._get_stock_code(pos["symbol"]) for pos in positions]
+        current_prices = _get_current_prices(symbols)
+        
         for pos in positions:
-            profit = pos["cost"] * 0.05  # 简化模拟5%收益
-            profit_rate = 5.0
+            symbol_code = self._get_stock_code(pos["symbol"])
+            current_price = current_prices.get(symbol_code, pos["avg_price"])
+            market_value = pos["quantity"] * current_price
+            profit = market_value - pos["cost"]
+            profit_rate = (profit / pos["cost"] * 100) if pos["cost"] > 0 else 0
             sector = self._get_sector(pos["symbol"])
 
             result.append({
@@ -210,17 +309,17 @@ class PerformanceAttribution:
                 'sector': sector,
                 'volume': pos["quantity"],
                 'avg_price': round(pos["avg_price"], 2),
-                'current_price': round(pos["avg_price"] * 1.05, 2),  # 假设当前价上涨5%
+                'current_price': round(current_price, 2),
                 'cost': round(pos["cost"], 2),
-                'market_value': round(pos["cost"] * 1.05, 2),
+                'market_value': round(market_value, 2),
                 'profit': round(profit, 2),
                 'profit_rate': round(profit_rate, 2),
                 'weight': 0.0
             })
 
-        total_mv = sum(s['market_value'] for s in result) if result else 1
+        total_mv = sum(s['market_value'] for s in result)
         for s in result:
-            s['weight'] = round(s['market_value'] / total_mv * 100, 1)
+            s['weight'] = round(s['market_value'] / total_mv * 100, 1) if total_mv > 0 else 0
 
         return result
 
@@ -257,8 +356,10 @@ class PerformanceAttribution:
     def generate_comprehensive_report(self) -> str:
         """生成综合归因报告"""
         positions = self.account.get_positions()
-        total_value = self.account.get_total_asset()
-        market_value = self.account.get_position_value()
+        # 使用真实市价计算市值
+        by_stock_data = self.calculate_by_stock()
+        market_value = sum(s['market_value'] for s in by_stock_data)
+        total_value = self.account.get_available_cash() + market_value
 
         returns_attribution = self.calculate_returns_attribution()
         risk_attribution = self.calculate_risk_attribution()

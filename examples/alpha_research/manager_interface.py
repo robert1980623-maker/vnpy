@@ -11,10 +11,17 @@ Manager 接口 (P0-2 增强版 - 状态追踪)
 """
 
 import json
+import sys
 import time
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
+
+# 确保项目根目录在 sys.path 中，以便导入 file_lock（位于 ~/projects/vnpy/）
+_project_root = Path(__file__).resolve().parent.parent.parent
+if str(_project_root) not in sys.path:
+    sys.path.insert(0, str(_project_root))
+
 from issue_queue import IssueQueue, Issue
 from human_report import human_manager_report
 from alert_notifier import AlertNotifier, Alert

@@ -50,6 +50,23 @@ class StockScreenerStrategy(ABC):
         
         # 参数（子类可覆盖）
         self.parameters: Dict[str, Any] = {}
+        
+        # 引擎引用（回测时由引擎设置）
+        self.strategy_engine = None
+    
+    def write_log(self, msg: str) -> None:
+        """写日志"""
+        import logging
+        logging.info(f"[{self.name}] {msg}")
+        print(f"[{self.name}] {msg}")
+    
+    def on_init(self) -> None:
+        """策略初始化回调（回测引擎调用）"""
+        pass
+    
+    def on_bars(self, bars: Dict[str, Any]) -> None:
+        """每日 K 线数据回调（回测引擎调用）"""
+        pass
     
     @abstractmethod
     def screen_stocks(
@@ -142,6 +159,18 @@ class StockScreenerStrategy(ABC):
             "last_rebalance": self._last_rebalance_date.isoformat() if self._last_rebalance_date else None,
             "days_since_rebalance": self._days_since_rebalance
         }
+    
+    def get_portfolio_value(self) -> float:
+        """获取组合价值（默认 0，回测引擎会覆盖）"""
+        return 0.0
+    
+    def get_cash_available(self) -> float:
+        """获取可用现金（默认 0，回测引擎会覆盖）"""
+        return 0.0
+    
+    def update_trade(self, trade) -> None:
+        """成交更新回调（回测引擎调用）"""
+        pass
     
     def set_parameters(self, **kwargs) -> None:
         """

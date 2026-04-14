@@ -3,8 +3,8 @@
 分批下载股票数据（增强版 - 集成 Neo4j 同步 + 自动重试机制）
 
 数据源策略:
-- ✅ 主数据源：Tushare Pro (更稳定可靠)
-- ✅ 备份数据源：Akshare (Tushare 失败时使用)
+- ✅ 主数据源：Tushare Pro (已付费 TOKEN)
+- 🔄 备份数据源：Akshare (Tushare 失败时自动切换)
 
 功能:
 - 每批 5 只股票
@@ -25,6 +25,7 @@ import subprocess
 import time
 import sys
 import logging
+import os
 from datetime import datetime
 from pathlib import Path
 
@@ -128,87 +129,86 @@ def get_stock_list():
         ]
 
 
-@retry_with_backoff(
-    max_retries=RETRY_CONFIG['max_retries'],
-    base_delay=RETRY_CONFIG['base_delay'],
-    max_delay=RETRY_CONFIG['max_delay'],
-    timeout=RETRY_CONFIG['timeout'],
-    log_file=RETRY_CONFIG['log_file']
-)
 def download_with_tushare(stock_code):
     """
-    使用 Tushare 下载股票数据（带自动重试）
+    使用 Tushare Pro 下载股票数据（主数据源）
+    
+    说明：download_data_akshare.py 已配置为 Tushare 优先
+    （通过 TUSHARE_TOKEN 环境变量自动选择）
     
     Returns:
         bool: 是否成功
     """
-    logger.info(f"  📊 使用 Tushare 下载 {stock_code}...")
+    logger.info(f"  📊 使用 Tushare Pro 下载 {stock_code}...")
     
     cmd = [
-        "python3", "download_data_tushare.py",
-        "--code", stock_code
+        "python3", "download_data_akshare.py",
+        "--symbols", stock_code,
+        "--max", "1"
     ]
     
+    # 传递环境变量（包含 TUSHARE_TOKEN）
+    env = os.environ.copy()
     result = subprocess.run(
         cmd,
         cwd=str(Path(__file__).parent),
         capture_output=True,
         text=True,
-        timeout=60
+        timeout=60,
+        env=env
     )
     
     if result.returncode == 0:
         logger.info(f"✅ Tushare {stock_code} 下载成功")
         return True
     else:
-        logger.warning(f"⚠️ Tushare {stock_code} 失败：{result.stderr}")
-        raise Exception(f"Tushare 下载失败：{result.stderr}")
+        logger.error(f"❌ Tushare {stock_code} 失败：{result.stderr[:200]}")
+        raise Exception(f"Tushare 下载失败")
 
 
-@retry_with_backoff(
-    max_retries=RETRY_CONFIG['max_retries'],
-    base_delay=RETRY_CONFIG['base_delay'],
-    max_delay=RETRY_CONFIG['max_delay'],
-    timeout=RETRY_CONFIG['timeout'],
-    log_file=RETRY_CONFIG['log_file']
-)
 def download_with_akshare(stock_code):
     """
-    使用 Akshare 下载股票数据（带自动重试，备份数据源）
+    使用 Akshare 下载股票数据（备份数据源）
     
     Returns:
         bool: 是否成功
     """
-    logger.info(f"  📊 使用 Akshare 下载 {stock_code}...")
+    logger.info(f"  🔄 切换到 Akshare 下载 {stock_code}...")
     
     cmd = [
         "python3", "download_data_akshare.py",
-        "--code", stock_code
+        "--symbols", stock_code,
+        "--max", "1"
     ]
+    
+    # 不传递 TUSHARE_TOKEN，强制使用 AKShare
+    env = os.environ.copy()
+    env.pop('TUSHARE_TOKEN', None)
     
     result = subprocess.run(
         cmd,
         cwd=str(Path(__file__).parent),
         capture_output=True,
         text=True,
-        timeout=60
+        timeout=60,
+        env=env
     )
     
     if result.returncode == 0:
         logger.info(f"✅ Akshare {stock_code} 下载成功")
         return True
     else:
-        logger.error(f"❌ Akshare {stock_code} 失败：{result.stderr}")
-        raise Exception(f"Akshare 下载失败：{result.stderr}")
+        logger.error(f"❌ Akshare {stock_code} 失败：{result.stderr[:200]}")
+        raise Exception(f"Akshare 下载失败")
 
 
 def download_with_dual_source(stock_code):
     """
-    下载单只股票（双数据源策略）
+    下载单只股票（Tushare 优先 + AkShare 备份）
     
     策略:
-    1. 优先使用 Tushare（带重试）
-    2. Tushare 失败时使用 Akshare（带重试）
+    1. 优先使用 Tushare Pro 下载（带重试）
+    2. Tushare 失败则切换到 Akshare（带重试）
     3. 都失败则返回失败
     
     Args:
@@ -217,22 +217,21 @@ def download_with_dual_source(stock_code):
     Returns:
         dict: 股票数据，失败返回 None
     """
-    logger.info(f"\n--- 下载 {stock_code} (双数据源策略) ---")
+    logger.info(f"\n--- 下载 {stock_code} (Tushare 优先) ---")
     
-    # 1. 尝试 Tushare（主数据源，带重试）
+    # 1. 优先尝试 Tushare
     try:
         if download_with_tushare(stock_code):
             return {'symbol': stock_code, 'status': 'success', 'source': 'tushare'}
     except Exception as e:
-        logger.warning(f"⚠️ Tushare 最终失败：{e}")
+        logger.warning(f"⚠️ Tushare 最终失败，切换 AKShare: {e}")
     
-    # 2. Tushare 失败，尝试 Akshare（备份，带重试）
-    logger.info(f"  ⚠️ Tushare 失败，切换到备份数据源 Akshare")
+    # 2. Fallback 到 AKShare
     try:
         if download_with_akshare(stock_code):
             return {'symbol': stock_code, 'status': 'success', 'source': 'akshare'}
     except Exception as e:
-        logger.error(f"❌ Akshare 最终失败：{e}")
+        logger.warning(f"⚠️ AKShare 也失败：{e}")
     
     # 3. 都失败
     logger.error(f"❌ {stock_code} 下载失败（双数据源均失败）")

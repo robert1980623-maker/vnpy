@@ -24,7 +24,7 @@ sys.path.insert(0, str(project_root.parent.parent))
 
 from vnpy.alpha.dataset import StockPool, FundamentalData
 from stock_name_utils import StockNameCache, format_symbol_with_name
-from tushare_fundamental_fetcher import TushareFundamentalFetcher
+from tushare_fundamental_fetcher_v2 import TushareBatchFetcher
 from logger import TaskLogger
 
 
@@ -153,36 +153,20 @@ class DailyStockSelector:
         }
         # 加载股票名称缓存
         self.name_cache = StockNameCache()
-        # 初始化 Tushare 财务数据获取器
-        self.fundamental_fetcher = TushareFundamentalFetcher()
+        # 初始化 Tushare 批量财务数据获取器 v2
+        self.fundamental_fetcher = TushareBatchFetcher()
         
     def load_stocks(self):
-        """加载股票池"""
+        """加载股票池（保留 CSV 原始格式，v2 fetcher 内部会转换）"""
         csv_files = list(self.data_dir.glob('*.csv'))
-        symbols = []
-        for f in csv_files:
-            symbol = f.stem
-            # Handle different naming conventions
-            if symbol.endswith('_SZ'):
-                symbol = symbol.replace('_SZ', '.SZ').replace('_sz', '.SZ')
-            elif symbol.endswith('_SH'):
-                symbol = symbol.replace('_SH', '.SH').replace('_sh', '.SH')
-            elif symbol.endswith('_sz'):
-                symbol = symbol.replace('_SZ', '.SZ').replace('_sz', '.SZ')
-            elif symbol.endswith('_sh'):
-                symbol = symbol.replace('_SH', '.SH').replace('_sh', '.SH')
-            elif symbol.endswith('_z'):
-                symbol = symbol.replace('_z', '.SZ')
-            elif symbol.endswith('_s'):
-                symbol = symbol.replace('_s', '.SH')
-            symbols.append(symbol)
-            print(f"✅ 加载股票池：{len(symbols)} 只股票")
+        symbols = [f.stem for f in csv_files]
+        print(f"✅ 加载股票池：{len(symbols)} 只股票")
         return symbols
         
     def get_real_fundamentals(self, symbols):
-        """从 Tushare 获取真实财务数据"""
+        """从 Tushare 获取真实财务数据（v2 批量接口，~1 秒）"""
         print("\n" + "=" * 70)
-        print(" " * 20 + "获取财务数据 (Tushare)")
+        print(" " * 20 + "获取财务数据 (Tushare v2 批量)")
         print("=" * 70)
         
         fundamentals = self.fundamental_fetcher.get_batch_fundamentals(symbols)

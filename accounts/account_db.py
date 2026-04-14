@@ -38,9 +38,12 @@ INIT_LOCK_FILE = Path(__file__).parent / ".init_db.lock"
 
 
 def get_connection():
-    """获取数据库连接"""
-    conn = sqlite3.connect(DB_PATH)
+    """获取数据库连接（启用 WAL 模式解决 AL-02 并发写入问题）"""
+    conn = sqlite3.connect(DB_PATH, timeout=30)  # 30秒 busy timeout
     conn.row_factory = sqlite3.Row
+    # 启用 WAL 模式：支持并发读写，提升并发性能
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=30000")  # 30秒等待锁
     return conn
 
 

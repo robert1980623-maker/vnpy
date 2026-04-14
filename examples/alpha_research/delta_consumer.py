@@ -37,6 +37,18 @@ class DeltaConsumer:
         """保存任务队列（使用文件锁保证并发安全）"""
         FileLock.locked_write(self.delta_tasks_file, tasks)
     
+    def load_and_save_tasks(self, modify_func) -> List[Dict]:
+        """
+        原子性加载→修改→保存任务队列（解决 DC-02 并发竞争）
+        
+        Args:
+            modify_func: 接收当前任务列表，返回修改后的任务列表
+        
+        Returns:
+            修改后的任务列表
+        """
+        return FileLock.locked_read_write(self.delta_tasks_file, modify_func)
+    
     def get_pending_tasks(self, tasks: List[Dict]) -> List[Dict]:
         """获取待处理任务（包括可重试的失败任务，按优先级排序）"""
         # 包括状态为 'pending' 和 'failed' 但重试次数未达上限的任务
@@ -307,46 +319,48 @@ class DeltaConsumer:
             f.write(log_line)
     
     def run(self, max_tasks_per_run: int = 10):  # P0 整改：增加并发处理 (1→10)
-        """运行一次消费循环"""
+        """运行一次消费循环（原子性读→改→写，解决 DC-02 并发竞争）"""
         self.log("="*60)
         self.log("🚀 Delta Consumer 启动")
         self.log("="*60)
         
-        # 加载任务
-        tasks = self.load_tasks()
-        self.log(f"📋 总任务数：{len(tasks)}")
+        # 使用原子操作处理任务（解决 DC-02）
+        def process_and_update(tasks: List[Dict]) -> List[Dict]:
+            self.log(f"📋 总任务数：{len(tasks)}")
+            
+            # 获取待处理任务
+            pending = self.get_pending_tasks(tasks)
+            self.log(f"⏳ 待处理：{len(pending)}")
+            
+            if not pending:
+                self.log("✅ 无待处理任务")
+                return tasks
+            
+            # 处理任务（每次最多处理 max_tasks_per_run 个）
+            processed = 0
+            success_count = 0
+            
+            for task in pending[:max_tasks_per_run]:
+                success = self.process_task(task)
+                if success:
+                    success_count += 1
+                processed += 1
+            
+            # 清理已完成任务
+            tasks = self.cleanup_completed(tasks)
+            
+            # 统计
+            self.log("="*60)
+            self.log(f"📊 本次处理：{processed} 个任务")
+            self.log(f"✅ 成功：{success_count} 个")
+            self.log(f"❌ 失败：{processed - success_count} 个")
+            self.log(f"📋 剩余待处理：{len(pending) - processed} 个")
+            self.log("="*60)
+            
+            return tasks
         
-        # 获取待处理任务
-        pending = self.get_pending_tasks(tasks)
-        self.log(f"⏳ 待处理：{len(pending)}")
-        
-        if not pending:
-            self.log("✅ 无待处理任务")
-            return
-        
-        # 处理任务（每次最多处理 max_tasks_per_run 个）
-        processed = 0
-        success_count = 0
-        
-        for task in pending[:max_tasks_per_run]:
-            success = self.process_task(task)
-            if success:
-                success_count += 1
-            processed += 1
-        
-        # 清理已完成任务
-        tasks = self.cleanup_completed(tasks)
-        
-        # 保存更新
-        self.save_tasks(tasks)
-        
-        # 统计
-        self.log("="*60)
-        self.log(f"📊 本次处理：{processed} 个任务")
-        self.log(f"✅ 成功：{success_count} 个")
-        self.log(f"❌ 失败：{processed - success_count} 个")
-        self.log(f"📋 剩余待处理：{len(pending) - processed} 个")
-        self.log("="*60)
+        # 原子性执行：加载→处理→保存（单一文件锁保护区）
+        self.load_and_save_tasks(process_and_update)
 
 
 def main():

@@ -1,0 +1,35 @@
+# VNPY 统一配置文件
+# 所有配置项集中在此文件，代码通过 get_config() 读取
+
+delta_consumer:
+  max_retries: 3
+  max_history: 100
+  poll_interval: 30  # 秒
+
+manager:
+  default_timeout_minutes: 30
+  max_retries: 3
+  poll_interval: 5  # 秒
+
+alert:
+  notify_threshold: 3  # 达到此数量的告警后发送通知
+  channels:
+    - type: feishu
+      target: "chat_id:oc_8a2da4516d54e779f8a30d15273347b8"  # 量化交易复盘群
+    - type: email
+      target: "wangyaxuan@example.com"
+    - type: telegram
+      target: "@your_channel"
+    - type: wecom
+      target: "wecom_webhook_url"  # 企业微信机器人 Webhook URL
+
+glm_analyzer:
+  timeout: 30  # 秒
+  fallback_confidence: 0.5
+  model_url: "http://localhost:1234/v1/chat/completions"
+  model_name: "glm-4.7-flash"
+
+scheduler:
+  max_retries: 5
+  retry_interval_seconds: 60
+  feishu_group_id: "oc_8a2da4516d54e779f8a30d15273347b8"

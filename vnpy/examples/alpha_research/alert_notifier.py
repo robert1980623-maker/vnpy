@@ -14,6 +14,7 @@ from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Optional
 from dataclasses import dataclass, asdict
+from collections import OrderedDict
 
 
 @dataclass
@@ -30,10 +31,43 @@ class Alert:
     estimated_fix: str = ""
 
 
+class LRUCache:
+    """LRU 缓存实现，限制最大容量防止内存无限增长"""
+    
+    def __init__(self, max_size: int = 1000):
+        self._cache = OrderedDict()
+        self._max_size = max_size
+    
+    def get(self, key):
+        if key in self._cache:
+            self._cache.move_to_end(key)
+            return self._cache[key]
+        return None
+    
+    def put(self, key, value):
+        if key in self._cache:
+            self._cache.move_to_end(key)
+        self._cache[key] = value
+        if len(self._cache) > self._max_size:
+            self._cache.popitem(last=False)
+    
+    def clear(self):
+        self._cache.clear()
+    
+    def __len__(self):
+        return len(self._cache)
+    
+    def values(self):
+        return list(self._cache.values())
+    
+    def __iter__(self):
+        return iter(self._cache.values())
+
+
 class AlertNotifier:
     """告警通知器"""
     
-    def __init__(self):
+    def __init__(self, max_pending_alerts: int = 1000):
         self.alert_log_dir = Path('./logs/alerts/')
         self.alert_log_dir.mkdir(parents=True, exist_ok=True)
         
@@ -45,8 +79,13 @@ class AlertNotifier:
             'P3': False,  # 不通知
         }
         
-        # 告警汇总
-        self.pending_alerts: List[Alert] = []
+        # 告警汇总（LRU 缓存，限制最大数量）
+        self._pending_alerts_cache = LRUCache(max_size=max_pending_alerts)
+    
+    @property
+    def pending_alerts(self) -> List[Alert]:
+        """获取所有待处理告警"""
+        return self._pending_alerts_cache.values()
     
     def should_notify(self, severity: str) -> bool:
         """判断是否应该通知"""
@@ -95,8 +134,9 @@ class AlertNotifier:
             # 发送到 Slack/用户
             self._notify_user(alert)
         
-        # 添加到待处理列表
-        self.pending_alerts.append(alert)
+        # 添加到待处理列表（使用时间戳作为 key 以支持 LRU 淘汰）
+        cache_key = f"{alert.timestamp}_{alert.agent}_{alert.error}"
+        self._pending_alerts_cache.put(cache_key, alert)
     
     def _log_alert(self, alert: Alert):
         """记录告警日志"""
@@ -147,12 +187,12 @@ Agent: {alert.agent}
     
     def send_summary_report(self, period: str = "hourly"):
         """发送汇总报告（P2/P3 级别）"""
-        if not self.pending_alerts:
+        if not self._pending_alerts_cache:
             return
         
         # 筛选 P2/P3 告警
         low_priority_alerts = [
-            a for a in self.pending_alerts 
+            a for a in self._pending_alerts_cache 
             if a.severity in ['P2', 'P3']
         ]
         
@@ -194,10 +234,13 @@ Agent: {alert.agent}
     
     def clear_resolved(self):
         """清除已解决的告警"""
-        self.pending_alerts = [
-            a for a in self.pending_alerts 
-            if a.status != 'resolved'
-        ]
+        # 重建缓存，只保留未解决的告警
+        remaining = {}
+        for key, alert in self._pending_alerts_cache._cache.items():
+            if alert.status != 'resolved':
+                remaining[key] = alert
+        self._pending_alerts_cache._cache.clear()
+        self._pending_alerts_cache._cache.update(remaining)
 
 
 # 快捷函数

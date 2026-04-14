@@ -714,9 +714,15 @@ def execute_trading(date=None, dry_run=False):
     print("=" * 70)
 
     for stock in plan.get("sell", []):
-        symbol = stock.get("symbol")
-        name = stock.get("name", "")
-        reason = stock.get("reason", "")
+        # 兼容字符串和字典两种格式
+        if isinstance(stock, str):
+            symbol = stock
+            name = ""
+            reason = ""
+        else:
+            symbol = stock.get("symbol", "")
+            name = stock.get("name", "")
+            reason = stock.get("reason", "")
 
         print(f"\n【卖出】{symbol} {name} (理由：{reason})")
 

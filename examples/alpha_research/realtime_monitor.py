@@ -268,11 +268,11 @@ class RealtimeMonitor:
             symbol = pos['symbol']
             price_data = prices.get(symbol, {})
             current_price = price_data.get('price', pos['current_price'])
-            cost_price = pos['avg_price']
+            cost_price = pos.get('avg_price') or pos.get('avg_cost', 0)
             
             # 计算盈亏率
             profit_rate = (current_price - cost_price) / cost_price
-            market_value = pos['volume'] * current_price
+            market_value = pos.get('quantity', 0) * current_price
             position_ratio = market_value / total_assets if total_assets > 0 else 0
             
             # 止盈止损检查
@@ -474,9 +474,9 @@ class RealtimeMonitor:
                 old_price = pos['current_price']
                 new_price = prices[symbol]['price']
                 pos['current_price'] = new_price
-                pos['market_value'] = pos['volume'] * new_price
-                pos['profit'] = pos['market_value'] - pos['cost']
-                pos['profit_rate'] = pos['profit'] / pos['cost'] if pos['cost'] > 0 else 0
+                pos['market_value'] = pos.get('quantity', 0) * new_price
+                pos['profit'] = pos['market_value'] - pos.get('cost_basis', 0)
+                pos['profit_rate'] = pos['profit'] / pos.get('cost_basis', 1) if pos.get('cost_basis', 0) > 0 else 0
                 
                 if abs(new_price - old_price) / old_price > 0.01:  # 变化超过 1%
                     print(f"  📈 {symbol}: ¥{old_price:.2f} → ¥{new_price:.2f} ({(new_price-old_price)/old_price*100:+.1f}%)")

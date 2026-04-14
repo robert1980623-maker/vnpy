@@ -66,6 +66,18 @@ class CrossSectionalBacktestingEngine:
         self.positions: dict[str, float] = defaultdict(float)  # vt_symbol -> volume
         self.target_positions: dict[str, float] = defaultdict(float)  # vt_symbol -> target_volume
 
+        # T+1 交易规则：记录每只股票的买入日期
+        self._buy_dates: dict[str, date] = {}  # vt_symbol -> buy date
+
+        # 流动性限制：记录每只股票的成交量（用于部分成交）
+        self._daily_volumes: dict[str, float] = {}  # vt_symbol -> volume
+
+        # 涨跌停限制：记录每只股票的涨停价/跌停价
+        self._limit_prices: dict[str, tuple[float, float]] = {}  # vt_symbol -> (upper_limit, lower_limit)
+
+        # 滑点参数（默认万分之5）
+        self.slippage_rate: float = 0.0005
+
         # 资金
         self.cash: float = 0
         self.frozen_cash: float = 0
@@ -152,8 +164,11 @@ class CrossSectionalBacktestingEngine:
     def _organize_signals(self) -> None:
         """组织信号数据"""
         # 从实验室加载信号数据
-        # 假设有全市场的信号数据
-        all_signals = self.lab.load_signals()  # 需要从 AlphaLab 添加此方法
+        if not hasattr(self.lab, 'load_signals'):
+            logger.debug("AlphaLab 无 load_signals 方法，跳过信号数据加载")
+            return
+
+        all_signals = self.lab.load_signals()
 
         if all_signals.is_empty():
             logger.warning("信号数据为空")
@@ -276,6 +291,132 @@ class CrossSectionalBacktestingEngine:
                 return sorted_dts[i - 1]
         return None
 
+    def _is_chi_next(self, vt_symbol: str) -> bool:
+        """判断是否为创业板股票（300开头）"""
+        symbol = extract_vt_symbol(vt_symbol)[0]
+        return symbol.startswith("300")
+
+    def _is_st_stock(self, vt_symbol: str, bar: Optional[BarData] = None) -> bool:
+        """判断是否为 ST 股票"""
+        # 实际项目中应从数据源获取 ST 状态，这里简化处理
+        # 如果 bar 数据包含 ST 标记则使用，否则返回 False
+        if bar and hasattr(bar, "symbol"):
+            symbol = bar.symbol.upper()
+            return "ST" in symbol or "*ST" in symbol or "S*" in symbol
+        return False
+
+    def _get_limit_prices(self, vt_symbol: str, preclose: float, bar: Optional[BarData] = None) -> tuple[float, float]:
+        """计算涨跌停价格
+        
+        Args:
+            vt_symbol: 股票代码
+            preclose: 前收盘价
+            bar: 当日 K 线数据（用于判断是否为 ST）
+            
+        Returns:
+            (upper_limit, lower_limit) 涨停价和跌停价
+        """
+        if preclose <= 0:
+            return (float('inf'), 0.0)
+        
+        # 判断股票类型
+        is_st = self._is_st_stock(vt_symbol, bar)
+        is_chi_next = self._is_chi_next(vt_symbol)
+        
+        if is_st:
+            limit_rate = 0.05  # ST 股 ±5%
+        elif is_chi_next:
+            limit_rate = 0.20  # 创业板 ±20%
+        else:
+            limit_rate = 0.10  # A 股主板 ±10%
+        
+        upper_limit = preclose * (1 + limit_rate)
+        lower_limit = preclose * (1 - limit_rate)
+        
+        return (upper_limit, lower_limit)
+
+    def _round_to_trading_unit(self, volume: float) -> float:
+        """调整为最小交易单位（100股）"""
+        if volume <= 0:
+            return 0.0
+        return int(volume // 100) * 100
+
+    def _can_sell(self, vt_symbol: str, current_date: date) -> bool:
+        """T+1 交易规则检查：当日买入的股票不能当日卖出
+        
+        Args:
+            vt_symbol: 股票代码
+            current_date: 当前日期
+            
+        Returns:
+            True 可以卖出，False 不能卖出
+        """
+        if vt_symbol not in self._buy_dates:
+            # 从未买入过，可以卖出（持仓来自其他来源）
+            return True
+        buy_date = self._buy_dates[vt_symbol]
+        return buy_date < current_date
+
+    def _apply_liquidity_constraint(
+        self, 
+        vt_symbol: str, 
+        target_volume: float, 
+        direction: Direction,
+        dt: datetime
+    ) -> float:
+        """流动性约束：当成交量不足时部分成交
+        
+        Args:
+            vt_symbol: 股票代码
+            target_volume: 目标成交量
+            direction: 交易方向
+            dt: 当前时间
+            
+        Returns:
+            实际可成交数量
+        """
+        if target_volume <= 0:
+            return 0.0
+        
+        # 获取当日成交量
+        key = (dt, vt_symbol)
+        if key in self.history_data:
+            bar = self.history_data[key]
+            daily_volume = bar.volume
+        else:
+            # 如果没有当日数据，使用记录的成交量
+            daily_volume = self._daily_volumes.get(vt_symbol, float('inf'))
+        
+        if daily_volume <= 0:
+            return 0.0
+        
+        # 对于卖出，限制为当日成交量的 10% 以内（避免对市场造成过大冲击）
+        if direction == Direction.SHORT:
+            max_sell_volume = daily_volume * 0.10
+            return min(target_volume, max_sell_volume)
+        
+        # 买入不受成交量限制（A股二级市场买入不影响流动性）
+        return target_volume
+
+    def _calculate_slippage(self, price: float, volume: float, direction: Direction) -> float:
+        """计算滑点成本
+        
+        Args:
+            price: 成交价格
+            volume: 成交数量
+            direction: 交易方向
+            
+        Returns:
+            滑点成本（正数表示成本，负数表示收益）
+        """
+        if price <= 0 or volume <= 0:
+            return 0.0
+        # 滑点 = 价格 * 滑点率
+        # 买入时：滑点使成本增加（正）
+        # 卖出时：滑点使收益减少（正，即成本）
+        slippage_cost = price * self.slippage_rate * volume
+        return slippage_cost
+
     # ========== 策略引擎接口方法 ==========
 
     def get_signal(self) -> pl.DataFrame:
@@ -294,8 +435,71 @@ class CrossSectionalBacktestingEngine:
         price: float,
         volume: float
     ) -> list[str]:
-        """发送订单"""
+        """发送订单
+        
+        应用以下执行细节：
+        1. 涨跌停限制
+        2. 最小交易单位（100股）
+        3. T+1 交易规则
+        4. 流动性约束（部分成交）
+        5. 滑点模拟
+        """
         vt_orderids: list[str] = []
+        current_date = self.datetime.date() if self.datetime else None
+
+        # ========== 涨跌停限制 ==========
+        # 获取前收盘价
+        preclose = 0.0
+        prev_dt = self._get_prev_trading_day(self.datetime) if self.datetime else None
+        if prev_dt:
+            prev_key = (prev_dt, vt_symbol)
+            if prev_key in self.history_data:
+                preclose = self.history_data[prev_key].close_price
+
+        # 获取当日 K 线数据（用于判断 ST）
+        bar = None
+        if self.datetime:
+            bar_key = (self.datetime, vt_symbol)
+            bar = self.history_data.get(bar_key)
+
+        # 计算涨跌停价格
+        upper_limit, lower_limit = self._get_limit_prices(vt_symbol, preclose, bar)
+        self._limit_prices[vt_symbol] = (upper_limit, lower_limit)
+
+        # 应用涨跌停限制
+        if direction == Direction.LONG:
+            # 买入：不能高于涨停价
+            exec_price = min(price, upper_limit)
+        else:
+            # 卖出：不能低于跌停价
+            exec_price = max(price, lower_limit)
+
+        # 如果涨跌停价无效（价格为0或涨跌停价不合法），使用原始价格
+        if exec_price <= 0:
+            exec_price = price
+
+        # ========== 最小交易单位（100股） ==========
+        volume = self._round_to_trading_unit(volume)
+        if volume <= 0:
+            logger.warning(f"{vt_symbol} 目标成交量 {volume} 调整为0，跳过交易")
+            return vt_orderids
+
+        # ========== T+1 交易规则 ==========
+        # 卖出时检查 T+1 限制
+        if direction == Direction.SHORT:
+            if current_date and not self._can_sell(vt_symbol, current_date):
+                logger.warning(f"{vt_symbol} 处于 T+1 限制，当日不能卖出")
+                return vt_orderids
+
+        # ========== 流动性约束（部分成交） ==========
+        volume = self._apply_liquidity_constraint(vt_symbol, volume, direction, self.datetime)
+
+        if volume <= 0:
+            logger.warning(f"{vt_symbol} 流动性不足，实际成交量为0，跳过交易")
+            return vt_orderids
+
+        # ========== 滑点模拟 ==========
+        slippage_cost = self._calculate_slippage(exec_price, volume, direction)
 
         # 创建订单
         order = OrderData(
@@ -304,9 +508,9 @@ class CrossSectionalBacktestingEngine:
             orderid=f"BACKTEST_{self.trade_count}",
             direction=direction,
             offset=offset,
-            price=price,
+            price=exec_price,
             volume=volume,
-            traded=volume,  # 回测中假设全部成交
+            traded=volume,
             status=Status.ALLTRADED,
             datetime=self.datetime,
             gateway_name=self.gateway_name
@@ -320,7 +524,7 @@ class CrossSectionalBacktestingEngine:
             tradeid=f"TRADE_{self.trade_count}",
             direction=direction,
             offset=offset,
-            price=price,
+            price=exec_price,
             volume=volume,
             datetime=order.datetime,
             gateway_name=self.gateway_name
@@ -329,19 +533,38 @@ class CrossSectionalBacktestingEngine:
         # 更新持仓
         if direction == Direction.LONG:
             self.positions[vt_symbol] += volume
+            # 记录买入日期（T+1 规则）
+            if current_date:
+                self._buy_dates[vt_symbol] = current_date
         else:
             self.positions[vt_symbol] -= volume
 
-        # 更新资金
-        turnover = price * volume
+        # 更新资金（含滑点成本）
+        turnover = exec_price * volume
         if direction == Direction.LONG:
-            self.cash -= turnover
+            # 买入：检查可用资金
+            required_cash = turnover + slippage_cost
+            if self.cash < required_cash:
+                logger.warning(f"{vt_symbol} 可用资金不足：需要 {required_cash:.2f}，当前 {self.cash:.2f}，跳过交易")
+                return vt_orderids
+            self.cash -= required_cash
         else:
-            self.cash += turnover
+            self.cash += (turnover - slippage_cost)
+
+        # 更新当日成交量记录
+        if bar:
+            self._daily_volumes[vt_symbol] = bar.volume
 
         # 记录成交
         self.trades[trade.tradeid] = trade
         self.trade_count += 1
+
+        # 日志记录
+        logger.info(
+            f"交易执行 | {vt_symbol} | {'买入' if direction == Direction.LONG else '卖出'} | "
+            f"价格: {exec_price:.2f} | 数量: {volume} | "
+            f"滑点成本: {slippage_cost:.2f}"
+        )
 
         # 通知策略
         if self.strategy:
@@ -419,6 +642,10 @@ class CrossSectionalBacktestingEngine:
         """计算统计指标"""
         logger.info("开始计算统计指标")
 
+        # 如果还没计算结果，先计算
+        if self.daily_df is None:
+            self.calculate_result()
+        
         if self.daily_df is None:
             logger.warning("每日结果为空，无法计算统计指标")
             return {}
@@ -446,7 +673,8 @@ class CrossSectionalBacktestingEngine:
 
         # 回撤统计
         df_with_dd = df.with_columns(
-            highwater=pl.col("balance").cum_max(),
+            highwater=pl.col("balance").cum_max()
+        ).with_columns(
             drawdown=(pl.col("balance") / pl.col("highwater") - 1) * 100
         )
 
@@ -526,7 +754,8 @@ class CrossSectionalBacktestingEngine:
 
         # 回撤
         df_with_dd = df.with_columns(
-            highwater=pl.col("balance").cum_max(),
+            highwater=pl.col("balance").cum_max()
+        ).with_columns(
             drawdown=(pl.col("balance") / pl.col("highwater") - 1) * 100
         )
 
@@ -561,15 +790,15 @@ class CrossSectionalDailyResult:
         self.date = dt.date()
 
         self.trade_count: int = 0
-        self.turnover: float = 0
-        self.commission: float = 0
-        self.trading_pnl: float = 0
-        self.holding_pnl: float = 0
-        self.total_pnl: float = 0
-        self.net_pnl: float = 0
+        self.turnover: float = 0.0
+        self.commission: float = 0.0
+        self.trading_pnl: float = 0.0
+        self.holding_pnl: float = 0.0
+        self.total_pnl: float = 0.0
+        self.net_pnl: float = 0.0
 
-        self.balance: float = 0
-        self.return_pct: float = 0
+        self.balance: float = 0.0
+        self.return_pct: float = 0.0
 
         self.positions: dict[str, float] = {}
         self.close_prices: dict[str, float] = {}

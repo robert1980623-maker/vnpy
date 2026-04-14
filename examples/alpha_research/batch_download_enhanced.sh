@@ -10,7 +10,7 @@ export TUSHARE_TOKEN
 BATCH_SIZE=10         # 每批数量
 BATCH_DELAY=30        # 批次间隔（秒）
 MAX_RETRIES=1         # 重试次数
-TOTAL_STOCKS=30       # 总下载数量
+TOTAL_STOCKS=100      # 总下载数量（优化：从30增加到100，3-4天覆盖全部325只）
 
 # 计算日期范围（macOS 兼容）
 TODAY=$(date +%Y%m%d)

@@ -75,10 +75,20 @@ class DataFreshnessMonitor:
                     continue
                 
                 data_date = last_line[1]
-                data_datetime = datetime.strptime(data_date, '%Y-%m-%d')
+                # 支持两种日期格式：2026-04-08 (ISO) 和 20260408 (Tushare)
+                try:
+                    data_datetime = datetime.strptime(data_date, '%Y-%m-%d')
+                except ValueError:
+                    try:
+                        data_datetime = datetime.strptime(data_date, '%Y%m%d')
+                    except ValueError:
+                        # 无法解析日期格式，跳过该文件
+                        continue
                 age_hours = (self.check_time - data_datetime).total_seconds() / 3600
                 
-                if age_hours <= self.max_age_hours:
+                # 市场数据允许48小时滞后（覆盖周末和节假日）
+                effective_max_age = max(self.max_age_hours, 48)
+                if age_hours <= effective_max_age:
                     fresh_count += 1
                 else:
                     stale_count += 1

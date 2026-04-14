@@ -15,7 +15,7 @@ import json
 from pathlib import Path
 
 from vnpy.alpha.lab import AlphaLab
-from vnpy.alpha.strategy.stock_screener_strategy import StockScreenerStrategy
+from alpha.strategy.stock_screener_strategy import StockScreenerStrategy
 
 # 可选导入 Interval
 try:
@@ -133,6 +133,9 @@ class CrossSectionalEngine:
         self._end: datetime = None
         self._current_date: datetime = None
         self._bars_dict: Dict[str, List] = {}
+        
+        # 价格索引 {date: {vt_symbol: close_price}}，避免每日×每只股票线性搜索
+        self._price_index: Dict[datetime, Dict[str, float]] = {}
     
     def set_parameters(
         self,
@@ -198,10 +201,23 @@ class CrossSectionalEngine:
             )
             if bars:
                 self._bars_dict[vt_symbol] = bars
+        
+        # 构建价格索引，回测开始时一次性构建
+        self._build_price_index()
+    
+    def _build_price_index(self) -> None:
+        """构建 {date: {vt_symbol: close_price}} 索引，避免每日×每只股票线性搜索"""
+        self._price_index.clear()
+        for vt_symbol, bars in self._bars_dict.items():
+            for bar in bars:
+                d = bar.datetime
+                if d not in self._price_index:
+                    self._price_index[d] = {}
+                self._price_index[d][vt_symbol] = bar.close_price
     
     def _get_price(self, vt_symbol: str, date: datetime) -> Optional[float]:
         """
-        获取指定日期的收盘价
+        通过索引获取指定日期的收盘价，O(1) 查找
         
         Args:
             vt_symbol: 股票代码
@@ -210,15 +226,7 @@ class CrossSectionalEngine:
         Returns:
             Optional[float]: 收盘价
         """
-        if vt_symbol not in self._bars_dict:
-            return None
-        
-        bars = self._bars_dict[vt_symbol]
-        for bar in bars:
-            if bar.datetime.date() == date.date():
-                return bar.close_price
-        
-        return None
+        return self._price_index.get(date, {}).get(vt_symbol)
     
     def _calculate_commission(self, amount: float) -> float:
         """
@@ -368,11 +376,19 @@ class CrossSectionalEngine:
             if vt_symbol not in target_stocks:
                 self._execute_sell(vt_symbol, date)
         
+        # 计算当前总资产（现金 + 市值）
+        total_market_value = 0.0
+        for vt_symbol, position in self._positions.items():
+            current_price = self._get_price(vt_symbol, date)
+            if current_price:
+                total_market_value += position.market_value(current_price)
+        total_assets = self._cash + total_market_value
+
         # 买入新股票
         for vt_symbol in target_stocks:
             if vt_symbol not in self._positions:
-                # 计算买入金额
-                target_amount = self.initial_capital * target_position_size
+                # 计算买入金额（基于当前总资产，而非初始资金）
+                target_amount = total_assets * target_position_size
                 price = self._get_price(vt_symbol, date)
                 
                 if price and price > 0:

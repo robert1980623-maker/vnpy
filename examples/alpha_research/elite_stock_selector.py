@@ -69,22 +69,22 @@ class EliteStockSelector:
             reasons = []
             
             # 策略 1: 价值股 (PE<20, ROE>10%, 股息率>2%)
-            if data.get('pe', 100) < 20 and data.get('roe', 0) > 10 and data.get('dividend_yield', 0) > 2:
+            if (data.get('pe') or 100) < 20 and (data.get('roe') or 0) > 10 and (data.get('dividend_yield') or 0) > 2:
                 strategies.append('价值')
                 reasons.append(f"PE={data['pe']:.1f}, ROE={data['roe']:.1f}%, 股息率={data['dividend_yield']:.1f}%")
             
             # 策略 2: 成长股 (营收增长>25%, 利润增长>30%)
-            if data.get('revenue_growth', 0) > 25 and data.get('profit_growth', 0) > 30:
+            if (data.get('revenue_growth') or 0) > 25 and (data.get('profit_growth') or 0) > 30:
                 strategies.append('成长')
                 reasons.append(f"营收增长={data['revenue_growth']:.1f}%, 利润增长={data['profit_growth']:.1f}%")
             
             # 策略 3: 质量股 (ROE>15%)
-            if data.get('roe', 0) > 15:
+            if (data.get('roe') or 0) > 15:
                 strategies.append('质量')
                 reasons.append(f"ROE={data['roe']:.1f}%")
             
             # 策略 4: 高息股 (股息率>3%)
-            if data.get('dividend_yield', 0) > 3:
+            if (data.get('dividend_yield') or 0) > 3:
                 strategies.append('高息')
                 reasons.append(f"股息率={data['dividend_yield']:.1f}%")
             

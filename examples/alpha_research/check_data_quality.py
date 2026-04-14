@@ -80,8 +80,10 @@ class DataQualityChecker:
             'min_price': 0.5,             # 最低价格
             'max_price': 1000.0,          # 最高价格
             'max_gap_days': 10,           # 最大允许缺失天数 (考虑长假)
-            'required_columns': ['vt_symbol', 'datetime', 'open_price', 'high_price', 
-                               'low_price', 'close_price', 'volume', 'turnover']
+            'required_columns': ['symbol', 'date', 'open', 'high', 'low', 'close', 'volume'],
+            'required_columns_new': ['vt_symbol', 'datetime', 'open_price', 'high_price', 
+                               'low_price', 'close_price', 'volume', 'turnover'],
+            'required_columns_tushare': ['ts_code', 'trade_date', 'open', 'high', 'low', 'close', 'vol']
         }
         
         # 板块识别规则
@@ -101,6 +103,15 @@ class DataQualityChecker:
             '8': 'bse',                # 北交所
             '4': 'bse',
         }
+    
+    def _safe_float(self, value, default=0.0):
+        """安全地将值转换为 float，处理空字符串和 None"""
+        if value is None or value == '':
+            return default
+        try:
+            return float(value)
+        except (ValueError, TypeError):
+            return default
     
     def _get_board(self, symbol: str) -> str:
         """根据股票代码识别板块"""
@@ -212,22 +223,27 @@ class DataQualityChecker:
                 reader = csv.DictReader(f)
                 
                 # 检查列
-                required_cols = set(self.config['required_columns'])
+                # 支持三种列名格式
+                required_cols_old = set(self.config['required_columns'])
+                required_cols_new = set(self.config['required_columns_new'])
+                required_cols_tushare = set(self.config['required_columns_tushare'])
                 actual_cols = set(reader.fieldnames) if reader.fieldnames else set()
-                if required_cols != actual_cols:
-                    missing = required_cols - actual_cols
-                    extra = actual_cols - required_cols
+                
+                # 检查是否匹配任一格式
+                if actual_cols != required_cols_old and actual_cols != required_cols_new and actual_cols != required_cols_tushare:
+                    missing = required_cols_old - actual_cols
+                    extra = actual_cols - required_cols_old
                     desc_parts = []
                     if missing:
-                        desc_parts.append(f'缺少: {missing}')
+                        desc_parts.append(f'缺少：{missing}')
                     if extra:
-                        desc_parts.append(f'多余: {extra}')
+                        desc_parts.append(f'多余：{extra}')
                     self.issues.append(QualityIssue(
                         symbol=symbol,
                         issue_type='wrong_columns',
-                        description=f'列名不匹配: {", ".join(desc_parts)}',
+                        description=f'列名不匹配：{", ".join(desc_parts)}',
                         severity='critical',
-                        expected=str(self.config['required_columns']),
+                        expected='多种格式支持',
                         actual=str(reader.fieldnames)
                     ))
                     errors += 1
@@ -296,8 +312,8 @@ class DataQualityChecker:
                 prev_close = None
                 
                 for row in reader:
-                    close_price = float(row.get('close_price', row.get('close', 0)))
-                    volume = float(row.get('volume', 0))
+                    close_price = self._safe_float(row.get('close_price') or row.get('close', 0))
+                    volume = self._safe_float(row.get('volume', 0))
                     
                     # 检查价格范围
                     if close_price < self.config['min_price']:
@@ -371,7 +387,19 @@ class DataQualityChecker:
             
             with open(csv_file, 'r', encoding='utf-8') as f:
                 reader = csv.DictReader(f)
-                dates = [datetime.strptime(row['datetime'], '%Y-%m-%d') if len(row['datetime']) == 10 else datetime.strptime(row['datetime'], '%Y%m%d') for row in reader]
+                # 支持 datetime 和 date 两种列名
+                dates = []
+                for row in reader:
+                    date_str = row.get('datetime') or row.get('date', '')
+                    if not date_str:
+                        continue
+                    try:
+                        if len(date_str) == 10:
+                            dates.append(datetime.strptime(date_str, '%Y-%m-%d'))
+                        elif len(date_str) == 8:
+                            dates.append(datetime.strptime(date_str, '%Y%m%d'))
+                    except ValueError:
+                        continue
                 
                 # 检查日期连续性
                 for i in range(1, len(dates)):
@@ -418,10 +446,10 @@ class DataQualityChecker:
                 reader = csv.DictReader(f)
                 
                 for row in reader:
-                    open_p = float(row.get('open_price', row.get('open', 0)))
-                    high_p = float(row.get('high_price', row.get('high', 0)))
-                    low_p = float(row.get('low_price', row.get('low', 0)))
-                    close_p = float(row.get('close_price', row.get('close', 0)))
+                    open_p = self._safe_float(row.get('open_price') or row.get('open', 0))
+                    high_p = self._safe_float(row.get('high_price') or row.get('high', 0))
+                    low_p = self._safe_float(row.get('low_price') or row.get('low', 0))
+                    close_p = self._safe_float(row.get('close_price') or row.get('close', 0))
                     
                     # 检查 OHLC 逻辑
                     if not (low_p <= open_p <= high_p and low_p <= close_p <= high_p):
@@ -437,8 +465,8 @@ class DataQualityChecker:
                         inconsistencies += 1
                     
                     # 优化的量价匹配检查
-                    volume = float(row.get('volume', 0))
-                    turnover = float(row.get('turnover', 0))
+                    volume = self._safe_float(row.get('volume', 0))
+                    turnover = self._safe_float(row.get('turnover', 0))
                     
                     if volume > 0 and turnover > 0:
                         # 使用 (开盘 + 收盘)/2 作为预期均价

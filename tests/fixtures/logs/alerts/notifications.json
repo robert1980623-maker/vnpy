@@ -89,5 +89,152 @@
     "to": "user:U0AHSM009ML",
     "message": "⚠️ 功能异常\n\nAgent: test\n错误：测试错误\n时间：2026-04-01T09:18:05.226296\n状态：已调度 delta 修复\n预计修复：10 分钟\n\n详细报告：查看日志文件",
     "timestamp": "2026-04-01T09:18:05.226400"
+  },
+  {
+    "type": "alert_notification",
+    "channel": "email",
+    "to": "wangyaxuan@example.com",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test\n❌ 错误：测试错误\n🕐 时间：2026-04-15T01:16:10.072448\n🔧 操作：已调度 qa 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:16:10.523546"
+  },
+  {
+    "type": "alert_notification",
+    "channel": "telegram",
+    "to": "@your_channel",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test\n❌ 错误：测试错误\n🕐 时间：2026-04-15T01:16:10.072448\n🔧 操作：已调度 qa 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:16:11.493802"
+  },
+  {
+    "type": "alert_notification",
+    "channel": "wecom",
+    "to": "wecom_webhook_url",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test\n❌ 错误：测试错误\n🕐 时间：2026-04-15T01:16:10.072448\n🔧 操作：已调度 qa 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:16:11.497778"
+  },
+  {
+    "type": "alert_notification",
+    "channel": "email",
+    "to": "wangyaxuan@example.com",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test\n❌ 错误：测试错误\n🕐 时间：2026-04-15T01:22:36.594834\n🔧 操作：已调度 qa 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:22:36.917900"
+  },
+  {
+    "type": "alert_notification",
+    "channel": "telegram",
+    "to": "@your_channel",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test\n❌ 错误：测试错误\n🕐 时间：2026-04-15T01:22:36.594834\n🔧 操作：已调度 qa 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:22:37.904446"
+  },
+  {
+    "type": "alert_notification",
+    "channel": "wecom",
+    "to": "wecom_webhook_url",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test\n❌ 错误：测试错误\n🕐 时间：2026-04-15T01:22:36.594834\n🔧 操作：已调度 qa 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:22:37.907912"
+  },
+  {
+    "type": "alert_notification",
+    "channel": "email",
+    "to": "wangyaxuan@example.com",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test\n❌ 错误：测试错误\n🕐 时间：2026-04-15T01:23:18.512287\n🔧 操作：已调度 qa 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:23:18.821429"
+  },
+  {
+    "type": "alert_notification",
+    "channel": "telegram",
+    "to": "@your_channel",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test\n❌ 错误：测试错误\n🕐 时间：2026-04-15T01:23:18.512287\n🔧 操作：已调度 qa 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:23:19.876810"
+  },
+  {
+    "type": "alert_notification",
+    "channel": "wecom",
+    "to": "wecom_webhook_url",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test\n❌ 错误：测试错误\n🕐 时间：2026-04-15T01:23:18.512287\n🔧 操作：已调度 qa 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:23:19.878146"
+  },
+  {
+    "type": "alert_notification",
+    "channel": "email",
+    "to": "wangyaxuan@example.com",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test\n❌ 错误：测试错误\n🕐 时间：2026-04-15T01:26:25.219164\n🔧 操作：已调度 qa 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:26:25.527516"
+  },
+  {
+    "type": "alert_notification",
+    "channel": "telegram",
+    "to": "@your_channel",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test\n❌ 错误：测试错误\n🕐 时间：2026-04-15T01:26:25.219164\n🔧 操作：已调度 qa 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:26:26.478715"
+  },
+  {
+    "type": "alert_notification",
+    "channel": "wecom",
+    "to": "wecom_webhook_url",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test\n❌ 错误：测试错误\n🕐 时间：2026-04-15T01:26:25.219164\n🔧 操作：已调度 qa 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:26:26.482193"
+  },
+  {
+    "type": "alert_notification",
+    "channel": "email",
+    "to": "wangyaxuan@example.com",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test\n❌ 错误：测试错误\n🕐 时间：2026-04-15T01:29:33.982421\n🔧 操作：已调度 qa 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:29:34.288255"
+  },
+  {
+    "type": "alert_notification",
+    "channel": "telegram",
+    "to": "@your_channel",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test\n❌ 错误：测试错误\n🕐 时间：2026-04-15T01:29:33.982421\n🔧 操作：已调度 qa 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:29:35.375938"
+  },
+  {
+    "type": "alert_notification",
+    "channel": "wecom",
+    "to": "wecom_webhook_url",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test\n❌ 错误：测试错误\n🕐 时间：2026-04-15T01:29:33.982421\n🔧 操作：已调度 qa 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:29:35.379653"
+  },
+  {
+    "type": "alert_notification",
+    "channel": "email",
+    "to": "wangyaxuan@example.com",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test\n❌ 错误：测试错误\n🕐 时间：2026-04-15T01:30:10.308570\n🔧 操作：已调度 qa 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:30:10.657172"
+  },
+  {
+    "type": "alert_notification",
+    "channel": "telegram",
+    "to": "@your_channel",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test\n❌ 错误：测试错误\n🕐 时间：2026-04-15T01:30:10.308570\n🔧 操作：已调度 qa 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:30:11.635942"
+  },
+  {
+    "type": "alert_notification",
+    "channel": "wecom",
+    "to": "wecom_webhook_url",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test\n❌ 错误：测试错误\n🕐 时间：2026-04-15T01:30:10.308570\n🔧 操作：已调度 qa 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:30:11.639827"
+  },
+  {
+    "type": "alert_notification",
+    "channel": "email",
+    "to": "wangyaxuan@example.com",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test\n❌ 错误：测试错误\n🕐 时间：2026-04-15T01:31:34.437531\n🔧 操作：已调度 qa 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:31:34.821692"
+  },
+  {
+    "type": "alert_notification",
+    "channel": "telegram",
+    "to": "@your_channel",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test\n❌ 错误：测试错误\n🕐 时间：2026-04-15T01:31:34.437531\n🔧 操作：已调度 qa 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:31:35.817718"
+  },
+  {
+    "type": "alert_notification",
+    "channel": "wecom",
+    "to": "wecom_webhook_url",
+    "message": "⚠️ **⚠️ 功能异常**\n\n🤖 Agent: test\n❌ 错误：测试错误\n🕐 时间：2026-04-15T01:31:34.437531\n🔧 操作：已调度 qa 修复\n⏱️ 预计修复：10 分钟\n\n详细报告：查看 logs/alerts/",
+    "timestamp": "2026-04-15T01:31:35.821505"
   }
 ]

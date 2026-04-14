@@ -115,5 +115,59 @@
     "priority": "high",
     "assigned_at": "2026-04-01T09:18:05.226970",
     "status": "pending"
+  },
+  {
+    "issue_id": "issue_20260415_012233_69a96867",
+    "agent": "test",
+    "error_type": "TestError",
+    "error_message": "测试错误",
+    "priority": "high",
+    "assigned_at": "2026-04-15T01:22:37.909064",
+    "status": "pending"
+  },
+  {
+    "issue_id": "issue_20260415_012314_6f3adf47",
+    "agent": "test",
+    "error_type": "TestError",
+    "error_message": "测试错误",
+    "priority": "high",
+    "assigned_at": "2026-04-15T01:23:19.878820",
+    "status": "pending"
+  },
+  {
+    "issue_id": "issue_20260415_012620_26420213",
+    "agent": "test",
+    "error_type": "TestError",
+    "error_message": "测试错误",
+    "priority": "high",
+    "assigned_at": "2026-04-15T01:26:26.483226",
+    "status": "pending"
+  },
+  {
+    "issue_id": "issue_20260415_012930_43019d67",
+    "agent": "test",
+    "error_type": "TestError",
+    "error_message": "测试错误",
+    "priority": "high",
+    "assigned_at": "2026-04-15T01:29:35.380895",
+    "status": "pending"
+  },
+  {
+    "issue_id": "issue_20260415_013007_d761bc57",
+    "agent": "test",
+    "error_type": "TestError",
+    "error_message": "测试错误",
+    "priority": "high",
+    "assigned_at": "2026-04-15T01:30:11.640509",
+    "status": "pending"
+  },
+  {
+    "issue_id": "issue_20260415_013131_026e0ced",
+    "agent": "test",
+    "error_type": "TestError",
+    "error_message": "测试错误",
+    "priority": "high",
+    "assigned_at": "2026-04-15T01:31:35.822721",
+    "status": "pending"
   }
 ]
