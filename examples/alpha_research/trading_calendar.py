@@ -12,6 +12,7 @@ import requests
 from datetime import datetime, timedelta
 from pathlib import Path
 import json
+import pandas as pd
 
 class TradingCalendar:
     """交易日历管理器"""
@@ -38,55 +39,46 @@ class TradingCalendar:
         
         try:
             import akshare as ak
-            # 获取中国节假日
-            df = ak.holiday_info()
-            holidays = set(df['日期'].tolist()) if not df.empty else set()
+            # 获取所有历史交易日（新浪财经）
+            df = ak.tool_trade_date_hist_sina()
             
-            # 生成交易日列表（简单版本：排除周末和节假日）
-            trading_days = []
-            start = datetime(year, 1, 1)
-            end = datetime(year, 12, 31)
+            if df is None or df.empty:
+                raise ValueError("AKShare 返回空数据")
             
-            current = start
-            while current <= end:
-                # 排除周末
-                if current.weekday() < 5:
-                    date_str = current.strftime('%Y-%m-%d')
-                    if date_str not in holidays:
-                        trading_days.append(date_str)
-                current += timedelta(days=1)
+            # 确保日期列存在
+            date_col = 'trade_date'
+            if date_col not in df.columns:
+                raise ValueError(f"AKShare 返回的数据中没有 trade_date 列: {df.columns.tolist()}")
+            
+            # 转换日期列
+            df['trade_date'] = pd.to_datetime(df['trade_date'])
+            
+            # 过滤指定年份
+            start_date = datetime(year, 1, 1)
+            end_date = datetime(year, 12, 31)
+            
+            mask = (df['trade_date'] >= start_date) & (df['trade_date'] <= end_date)
+            filtered_df = df[mask]
+            
+            trading_days = filtered_df['trade_date'].dt.strftime('%Y-%m-%d').tolist()
+            
+            if not trading_days:
+                raise ValueError(f"AKShare 返回的 {year} 年交易日数据为空")
             
             self.calendar = {
-                'trading_days': trading_days,
-                'holidays': list(holidays),
-                'updated_at': datetime.now().timestamp()
+                'trading_days': sorted(trading_days),
+                'updated_at': datetime.now().timestamp(),
+                'source': 'akshare_sina'
             }
             self._save_calendar()
+            print(f"✅ 从 AKShare 获取 {year} 年交易日历成功，共 {len(trading_days)} 个交易日")
             
         except Exception as e:
             print(f"⚠️ 获取交易日历失败：{e}")
-            # 使用简单逻辑
-            self._simple_calendar()
-    
-    def _simple_calendar(self):
-        """简单交易日历（仅排除周末）"""
-        year = datetime.now().year
-        trading_days = []
-        
-        start = datetime(year, 1, 1)
-        end = datetime(year, 12, 31)
-        current = start
-        
-        while current <= end:
-            if current.weekday() < 5:  # 周一到周五
-                trading_days.append(current.strftime('%Y-%m-%d'))
-            current += timedelta(days=1)
-        
-        self.calendar = {
-            'trading_days': trading_days,
-            'updated_at': datetime.now().timestamp()
-        }
-        self._save_calendar()
+            # AL-05 修复：不再使用假数据，而是抛出错误
+            raise RuntimeError(
+                f"无法获取真实的 A 股交易日历（{year}年），请检查网络或安装 akshare: {e}"
+            )
     
     def _save_calendar(self):
         """保存交易日历"""
