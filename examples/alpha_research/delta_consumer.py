@@ -16,6 +16,8 @@ from datetime import datetime
 from typing import List, Dict, Optional
 from manager_interface import QuantManager
 from issue_queue import IssueQueue, Issue
+from file_lock import FileLock
+from vnpy_config import get_delta_consumer_config
 
 
 class DeltaConsumer:
@@ -26,19 +28,14 @@ class DeltaConsumer:
         self.issue_queue = IssueQueue()
         self.manager = QuantManager()
         self.processing_log = Path('./issues/processing/delta_consumer.log')
-        
+    
     def load_tasks(self) -> List[Dict]:
-        """加载任务队列"""
-        if not self.delta_tasks_file.exists():
-            return []
-        
-        with open(self.delta_tasks_file, 'r', encoding='utf-8') as f:
-            return json.load(f)
+        """加载任务队列（使用文件锁保证并发安全）"""
+        return FileLock.locked_read(self.delta_tasks_file) or []
     
     def save_tasks(self, tasks: List[Dict]):
-        """保存任务队列"""
-        with open(self.delta_tasks_file, 'w', encoding='utf-8') as f:
-            json.dump(tasks, f, ensure_ascii=False, indent=2)
+        """保存任务队列（使用文件锁保证并发安全）"""
+        FileLock.locked_write(self.delta_tasks_file, tasks)
     
     def get_pending_tasks(self, tasks: List[Dict]) -> List[Dict]:
         """获取待处理任务（包括可重试的失败任务，按优先级排序）"""
@@ -48,7 +45,7 @@ class DeltaConsumer:
         for task in tasks:
             status = task.get('status', 'pending')
             retry_count = task.get('retry_count', 0)
-            max_retries = 3  # 最多重试 3 次
+            max_retries = get_delta_consumer_config()["max_retries"]  # 最多重试 3 次
             
             if status == 'pending':
                 # 直接添加待处理任务
@@ -80,17 +77,20 @@ class DeltaConsumer:
         error_message = task.get('error_message')
         agent = task.get('agent')
         
-        # P1 整改：失败重试机制
-        retry_count = task.get('retry_count', 0)
-        max_retries = 3  # 最多重试 3 次
+        # P1 修复：失败重试机制 - 只在一处 +1
+        max_retries = get_delta_consumer_config()["max_retries"]
         
-        # 如果是失败的任务，重置状态为 pending 并增加重试次数
+        # ✅ 只在一处增加 retry_count：处理时认为是重试尝试
+        # 注意：不要在状态是 'failed' 时重复 +1，避免双重计数
         if task.get('status') == 'failed':
-            retry_count = task.get('retry_count', 0) + 1
-            task['retry_count'] = retry_count
+            # 已经是 failed 状态，说明是重试，不需要再 +1
             task['status'] = 'pending'  # 重置状态为 pending 以便处理
             task['last_retry_at'] = datetime.now().isoformat()
-            self.log(f"🔄 重试失败任务：{issue_id} (重试 {retry_count}/{max_retries})")
+            self.log(f"🔄 重试失败任务：{issue_id} (重试 {task.get('retry_count', 0)}/{max_retries})")
+        
+        # 处理前 +1（这才是唯一的计数点）
+        task['retry_count'] = task.get('retry_count', 0) + 1
+        retry_count = task['retry_count']
         
         self.log(f"🔧 开始处理：{issue_id}")
         self.log(f"   Agent: {agent}")
@@ -107,45 +107,30 @@ class DeltaConsumer:
                 resolution=f'Delta 正在修复 (重试 {retry_count})' if retry_count > 0 else 'Delta 正在修复'
             )
             
-            # 2. 调用 Delta 修复（通过脚本或 session）
-            # 这里简化为直接执行修复逻辑
-            # 实际应该调用 Delta Agent
-            success, resolution = self.invoke_delta_fix(task)
+            # 2. 调用 Delta 诊断（不执行修复）
+            fix_type, suggestion, confidence = self.diagnose_error(task)
             
-            if success:
-                # 3. 更新 Issue 为 resolved
-                self.issue_queue.update_status(
-                    issue_id,
-                    'resolved',
-                    resolution=resolution
-                )
-                
-                # 4. 更新任务状态
-                task['status'] = 'completed'
-                task['completed_at'] = datetime.now().isoformat()
-                task['resolution'] = resolution
-                
-                self.log(f"✅ 修复成功：{resolution[:50]}...")
-                return True
-            else:
-                # 修复失败，检查是否可以重试
-                current_retry_count = task.get('retry_count', 0)
-                if current_retry_count < max_retries:
-                    # 重试
-                    task['retry_count'] = current_retry_count + 1
-                    task['last_retry_at'] = datetime.now().isoformat()
-                    task['status'] = 'pending'  # 保持 pending，下次再试
-                    self.log(f"⚠️ 修复失败，将重试 ({current_retry_count + 1}/{max_retries})")
-                else:
-                    # 超过最大重试次数，标记为 failed
-                    task['status'] = 'failed'
-                    task['failed_at'] = datetime.now().isoformat()
-                    task['failure_reason'] = f"{resolution} (重试{max_retries}次失败)"
-                    self.log(f"❌ 超过最大重试次数，标记为失败")
-                
-                self.log(f"❌ 修复失败：{resolution[:50]}...")
-                return False
-                
+            self.log(f"   诊断类型：{fix_type}")
+            self.log(f"   置信度：{confidence:.0%}")
+            self.log(f"   建议：{suggestion[:60]}...")
+            
+            # 诊断后更新 Issue 为 diagnosed（待人工确认或真实修复）
+            self.issue_queue.update_status(
+                issue_id,
+                'diagnosed',
+                resolution=f"[{fix_type}] {suggestion} (置信度 {confidence:.0%})"
+            )
+            
+            # 诊断完成，任务状态标记为 diagnosed
+            task['status'] = 'diagnosed'
+            task['diagnosed_at'] = datetime.now().isoformat()
+            task['fix_type'] = fix_type
+            task['suggestion'] = suggestion
+            task['confidence'] = confidence
+            
+            self.log(f"✅ 诊断完成：{fix_type}，待执行真实修复")
+            return True
+            
         except Exception as e:
             self.log(f"❌ 处理异常：{e}")
             task['status'] = 'error'
@@ -239,74 +224,63 @@ class DeltaConsumer:
         return True, f"分析报告已生成：{report_file} (只分析，未执行)"
     
 
-    def invoke_delta_fix(self, task: Dict) -> tuple[bool, str]:
-        """调用 Delta 修复（简化版）"""
-        # 这里应该通过 sessions_spawn 调用 Delta
-        # 暂时简化为模拟修复
+    def diagnose_error(self, task: Dict) -> tuple[str, str, float]:
+        """
+        诊断错误类型，返回修复建议（不执行修复）
         
+        Returns:
+            tuple[fix_type, suggestion, confidence]
+            - fix_type: 错误类型标识符
+            - suggestion: 修复建议描述
+            - confidence: 诊断置信度 0.0-1.0
+        """
         error_type = task.get('error_type', '')
         error_msg = task.get('error_message', '')
-        task_details = task.get('task_details', {})
         execution_mode = task.get('execution_mode', 'fix')
         
         # 分析任务 - 生成报告不执行
         if error_type == 'engineering_analysis' or execution_mode == 'analysis_only':
-            return self._generate_analysis_report(task)
+            return 'analysis', '生成分析报告（analysis_only 模式，不执行修复）', 1.0
         
-        # 自动修复常见错误
-        # P1 整改：完善错误类型识别
-        
+        # 诊断 14 种错误类型
         if "NoneType" in error_msg and ">" in error_msg:
-            # None 值比较问题 - 添加 None 检查
-            return True, "已添加 None 值检查，使用默认值替代"
+            return 'none_check', '添加 None 值检查，使用默认值替代或在前置条件验证', 0.85
         
         elif "unexpected keyword argument" in error_msg:
-            # 参数兼容性问题 - 使用 .get() 提供默认值
-            return True, "已修复参数兼容性，使用 .get() 提供默认值"
+            return 'param_compat', '检查参数名是否与函数签名匹配，使用 .get() 提供默认值', 0.90
         
         elif "object.__init__() takes exactly one argument" in error_msg:
-            # __init__ 调用问题 - 检查 super() 调用
-            return True, "已修复 __init__ 方法，修正 super() 调用"
+            return 'init_super', '检查 super() 调用是否正确传递 self 参数', 0.95
         
         elif "KeyError" in error_msg:
-            # 键缺失 - 使用 .get() 或添加默认值
-            return True, "已修复 KeyError，使用 .get() 提供默认值"
+            return 'key_missing', '使用 .get() 或 setdefault() 避免 KeyError，提供默认值', 0.90
         
         elif "AttributeError" in error_msg and "has no attribute" in error_msg:
-            # 属性缺失 - 添加属性检查或使用 getattr
-            return True, "已修复 AttributeError，使用 getattr() 提供默认值"
+            return 'attr_missing', '使用 hasattr() 检查属性或使用 getattr(obj, attr, default)', 0.88
         
         elif "IndexError" in error_msg and "list index out of range" in error_msg:
-            # 列表索引越界 - 添加边界检查
-            return True, "已修复 IndexError，添加列表边界检查"
+            return 'index_bounds', '添加列表边界检查或使用 try-except 捕获 IndexError', 0.92
         
         elif "ValueError" in error_msg and "could not convert" in error_msg:
-            # 类型转换错误 - 添加异常处理
-            return True, "已修复 ValueError，添加类型转换异常处理"
+            return 'type_convert', '添加类型转换前的有效性检查，使用 try-except 捕获', 0.87
         
         elif "TypeError" in error_msg and "unsupported operand type" in error_msg:
-            # 类型不支持 - 添加类型检查
-            return True, "已修复 TypeError，添加操作数类型检查"
+            return 'type_operand', '检查操作数类型是否支持该操作，添加类型检查', 0.85
         
         elif "FileNotFoundError" in error_msg or "No such file" in error_msg:
-            # 文件不存在 - 检查路径或创建目录
-            return True, "已修复 FileNotFoundError，检查文件路径并创建必要目录"
+            return 'path_missing', '检查文件路径是否正确，使用 Path.exists() 验证，创建必要目录', 0.93
         
         elif "PermissionError" in error_msg or "Permission denied" in error_msg:
-            # 权限错误 - 检查文件权限
-            return True, "已修复 PermissionError，检查并修复文件权限"
+            return 'permission_denied', '检查文件/目录权限设置，使用 chmod/chown 修复', 0.80
         
         elif "TimeoutError" in error_msg or "timeout" in error_msg.lower():
-            # 超时错误 - 增加重试或延长超时
-            return True, "已修复 TimeoutError，增加重试机制"
+            return 'timeout_retry', '增加重试机制或延长超时时间，检查网络/服务稳定性', 0.82
         
         elif "ImportError" in error_msg or "ModuleNotFoundError" in error_msg:
-            # 导入错误 - 检查依赖
-            return True, "已修复 ImportError，检查并安装缺失的依赖包"
+            return 'import_dep', '检查依赖包是否安装，使用 pip install 补充缺失包', 0.95
         
         else:
-            # 其他错误需要人工干预
-            return False, "需要人工审查的复杂错误"
+            return 'complex_error', '复杂错误，需要人工审查和定位问题根因', 0.50
     
     def cleanup_completed(self, tasks: List[Dict], max_history: int = 50):
         """清理已完成任务（保留最近 N 个）"""
