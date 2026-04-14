@@ -7,6 +7,7 @@ AlphaLab - Alpha 研究实验室
 from typing import List, Dict, Optional, Any, Union
 from datetime import datetime, timedelta
 from pathlib import Path
+from collections import OrderedDict
 import json
 
 # 可选导入 pandas
@@ -31,6 +32,33 @@ except ImportError:
         return None
 
 
+class LRUCache:
+    """LRU 缓存实现，限制最大容量防止内存无限增长"""
+    
+    def __init__(self, max_size: int = 1000):
+        self._cache = OrderedDict()
+        self._max_size = max_size
+    
+    def get(self, key):
+        if key in self._cache:
+            self._cache.move_to_end(key)
+            return self._cache[key]
+        return None
+    
+    def put(self, key, value):
+        if key in self._cache:
+            self._cache.move_to_end(key)
+        self._cache[key] = value
+        if len(self._cache) > self._max_size:
+            self._cache.popitem(last=False)
+    
+    def clear(self):
+        self._cache.clear()
+    
+    def __len__(self):
+        return len(self._cache)
+
+
 class AlphaLab:
     """
     Alpha 研究实验室
@@ -38,12 +66,13 @@ class AlphaLab:
     提供便捷的数据访问和研究功能
     """
     
-    def __init__(self, workspace: str = "./lab"):
+    def __init__(self, workspace: str = "./lab", cache_size: int = 1000):
         """
         初始化 AlphaLab
         
         Args:
             workspace: 工作目录路径
+            cache_size: 缓存最大容量，默认 1000
         """
         self.workspace = Path(workspace)
         self.workspace.mkdir(parents=True, exist_ok=True)
@@ -51,9 +80,9 @@ class AlphaLab:
         # 数据库
         self._database = get_database()
         
-        # 缓存
-        self._bars_cache: Dict[str, List[BarData]] = {}
-        self._fundamental_cache: Dict[str, Any] = {}
+        # LRU 缓存（限制大小防止内存无限增长）
+        self._bars_cache = LRUCache(max_size=cache_size)
+        self._fundamental_cache = LRUCache(max_size=cache_size)
         
         # 数据路径
         self._data_path = self.workspace / "data"
@@ -80,8 +109,9 @@ class AlphaLab:
         """
         cache_key = f"{vt_symbol}_{interval}_{start}_{end}"
         
-        if cache_key in self._bars_cache:
-            return self._bars_cache[cache_key]
+        bars = self._bars_cache.get(cache_key)
+        if bars is not None:
+            return bars
         
         # 从数据库加载
         bars = self._database.load_bar_data(
@@ -92,7 +122,7 @@ class AlphaLab:
         )
         
         # 缓存
-        self._bars_cache[cache_key] = bars
+        self._bars_cache.put(cache_key, bars)
         
         return bars
     
@@ -114,8 +144,9 @@ class AlphaLab:
         # 尝试从缓存加载
         cache_key = f"{vt_symbol}_{date.strftime('%Y-%m-%d')}"
         
-        if cache_key in self._fundamental_cache:
-            return self._fundamental_cache[cache_key]
+        indicator = self._fundamental_cache.get(cache_key)
+        if indicator is not None:
+            return indicator
         
         # 从文件加载（如果存在）
         fundamental_file = self._data_path / f"{vt_symbol.replace('.', '_')}_fundamental.json"
@@ -139,7 +170,7 @@ class AlphaLab:
             
             if closest_report:
                 indicator = FinancialIndicator.from_dict(closest_report)
-                self._fundamental_cache[cache_key] = indicator
+                self._fundamental_cache.put(cache_key, indicator)
                 return indicator
         
         return None
@@ -269,17 +300,36 @@ class AlphaLab:
         Returns:
             List[datetime]: 交易日期列表
         """
-        # 通过加载 K 线数据推断交易日期
-        # 简化实现：假设每天都有交易
+        # AL-05 修复：使用真实交易日历（AKShare）替代伪造的日期
+        try:
+            from examples.alpha_research.trading_calendar import TradingCalendar
+            cal = TradingCalendar()
+            
+            # 确保交易日历已加载
+            if not cal.calendar.get('trading_days'):
+                cal._fetch_trading_days(start.year)
+            
+            trading_days = []
+            start_str = start.strftime('%Y-%m-%d')
+            end_str = end.strftime('%Y-%m-%d')
+            
+            for day_str in cal.calendar.get('trading_days', []):
+                if start_str <= day_str <= end_str:
+                    trading_days.append(datetime.strptime(day_str, '%Y-%m-%d'))
+            
+            if trading_days:
+                print(f"✅ 从 AKShare 获取真实交易日历：{len(trading_days)} 个交易日")
+                return trading_days
+        except Exception as e:
+            print(f"⚠️ 获取真实交易日历失败：{e}，回退到简单周末排除")
+        
+        # 回退：简单周末排除（不推荐）
         dates = []
         current = start
-        
         while current <= end:
-            # 排除周末
             if current.weekday() < 5:
                 dates.append(current)
             current += timedelta(days=1)
-        
         return dates
     
     def calculate_returns(
@@ -369,14 +419,15 @@ class AlphaLab:
         return f"AlphaLab(workspace='{self.workspace}')"
 
 
-def create_lab(workspace: str = "./lab") -> AlphaLab:
+def create_lab(workspace: str = "./lab", cache_size: int = 1000) -> AlphaLab:
     """
     创建 AlphaLab 实例
     
     Args:
         workspace: 工作目录
+        cache_size: 缓存最大容量
         
     Returns:
         AlphaLab: 实验室实例
     """
-    return AlphaLab(workspace)
+    return AlphaLab(workspace, cache_size)
