@@ -1,7 +1,0 @@
-{
-  "date": "2026-03-23",
-  "reviews": [
-    {"agent": "qa", "status": "approved", "notes": "代码质量达标"}
-  ],
-  "overall_status": "approved"
-}

@@ -1,9 +1,0 @@
-{
-  "date": "2026-03-23",
-  "selected_stocks": [
-    {"symbol": "600519.SH", "name": "贵州茅台", "reason": "突破新高"},
-    {"symbol": "000858.SZ", "name": "五粮液", "reason": "量价齐升"}
-  ],
-  "strategy": "momentum",
-  "approved": true
-}

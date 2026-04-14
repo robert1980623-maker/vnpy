@@ -46,3 +46,18 @@ examples/alpha_research/data/news/
 examples/alpha_research/config/*.json
 !examples/alpha_research/config/*.example.json
 .env
+
+# 大数据目录
+lab/data/daily/
+cache/
+.vnpy_analysis/
+reports/
+logs/
+
+# 测试临时目录
+examples/.test_dva_*/
+examples/.test_*/
+
+# 测试数据库
+issues.db
+accounts/trading.db
