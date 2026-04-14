@@ -4,13 +4,37 @@ SQLite 持久化封装
 """
 import sqlite3
 import json
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 from dataclasses import dataclass, asdict
 
 
+# 添加项目根目录到路径以便导入 file_lock
+_project_root = Path(__file__).resolve().parent.parent
+if str(_project_root) not in sys.path:
+    sys.path.insert(0, str(_project_root))
+
+try:
+    from file_lock import FileLock
+except ImportError:
+    # 如果 file_lock 不可用，提供一个空的替代（用于 Windows 等情况）
+    class FileLock:
+        @staticmethod
+        def locked_write(filepath, data):
+            with open(filepath, 'w') as f:
+                json.dump(data, f)
+        @staticmethod
+        def locked_read(filepath):
+            if not Path(filepath).exists():
+                return None
+            with open(filepath, 'r') as f:
+                return json.load(f)
+
+
 DB_PATH = Path(__file__).parent / "trading.db"
+INIT_LOCK_FILE = Path(__file__).parent / ".init_db.lock"
 
 
 def get_connection():
@@ -21,7 +45,34 @@ def get_connection():
 
 
 def init_db():
-    """初始化数据库"""
+    """初始化数据库（使用文件锁防止并发初始化）"""
+    # 使用文件锁确保只有一个进程能初始化数据库
+    lock_file = INIT_LOCK_FILE
+    lock_file.touch(exist_ok=True)
+    
+    if sys.platform == 'win32':
+        import threading
+        global _init_db_locks
+        if '_init_db_locks' not in globals():
+            _init_db_locks = {}
+        with threading.Lock():
+            if lock_file not in _init_db_locks:
+                _init_db_locks[lock_file] = threading.Lock()
+            lock = _init_db_locks[lock_file]
+        with lock:
+            return _init_db_unlocked()
+    else:
+        import fcntl
+        with open(lock_file, 'w') as f:
+            fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+            try:
+                return _init_db_unlocked()
+            finally:
+                fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+
+
+def _init_db_unlocked():
+    """初始化数据库（内部函数，无锁保护，调用前必须已持有锁）"""
     schema_path = Path(__file__).parent / "schema.sql"
     with open(schema_path) as f:
         schema = f.read()
