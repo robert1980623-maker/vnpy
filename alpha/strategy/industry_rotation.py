@@ -16,6 +16,7 @@
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+import logging
 import math
 import os
 
@@ -25,6 +26,8 @@ from vnpy.trader.constant import Interval, Direction, Offset
 from alpha.strategy.stock_screener_strategy import StockScreenerStrategy
 from vnpy.trader.object import BarData
 from vnpy.trader.constant import Interval
+
+logger = logging.getLogger(__name__)
 
 
 # ========== TushareFundamentalFetcher 兼容类 ==========
@@ -36,7 +39,10 @@ def safe_float(value, default=None):
     if value is None or value == '' or (isinstance(value, float) and str(value) == 'nan'):
         return default
     try:
-        return float(value)
+        result = float(value)
+        if math.isinf(result):
+            return default
+        return result
     except (ValueError, TypeError):
         return default
 
@@ -174,6 +180,12 @@ class ValuationFetcher:
             pass
         
         # 最后 fallback：返回行业平均估值（不可信但不让程序崩溃）
+        logger.warning(
+            "Valuation cache penetration for %s: all data sources (Tushare/AKShare) failed, "
+            "using hardcoded fallback values (PE=15.0, PB=2.0, div=1.5). "
+            "Results based on this symbol's valuation are NOT trustworthy.",
+            symbol
+        )
         return (15.0, 2.0, 1.5, 'fallback')
 
 
@@ -243,9 +255,13 @@ def _normalize_symbol(code: str, target_market: str = None) -> str:
         if len(code) == 6:
             # 上海：600xxx, 601xxx, 603xxx, 605xxx, 688xxx
             # 深圳：000xxx, 001xxx, 002xxx, 003xxx, 300xxx
+            # 北交所：83xxxx, 87xxxx, 88xxxx, 43xxxx
+            first_two = code[:2]
             first_three = code[:3]
             if first_three in ('600', '601', '603', '605', '688'):
                 return f"{code}.SSE"
+            elif first_two in ('83', '87', '88', '43'):
+                return f"{code}.BSE"
             else:
                 return f"{code}.SZSE"
     
@@ -649,6 +665,11 @@ class IndustryRotationStrategy(StockScreenerStrategy):
         # 获取行业成分股
         industry_stocks = self._industry_data.get(industry, [])
         if not industry_stocks:
+            logger.warning(
+                "Industry valuation fallback for '%s': no stocks defined in industry pool, "
+                "using hardcoded defaults (PE=15.0, PB=2.0).",
+                industry
+            )
             return (15.0, 2.0)  # 默认值
         
         # 从成分股计算平均估值
@@ -680,6 +701,8 @@ class IndustryRotationStrategy(StockScreenerStrategy):
     def _calculate_industry_turnover(self, stocks: List[str], bars: Dict[str, BarData]) -> float:
         """计算行业换手率（简化：使用成交量）"""
         total_volume = sum(bars[s].volume for s in stocks if s in bars)
+        if total_volume == 0:
+            return 0.0
         return total_volume / 1_000_000  # 简化处理
     
     def _normalize_momentum(self, momentum: float) -> float:
