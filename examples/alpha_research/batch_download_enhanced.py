@@ -92,31 +92,68 @@ def get_stock_list():
     logger.info("获取股票列表...")
     logger.info("=" * 60)
 
+    # Phase 3 Fix 6: 统一股票格式为 code.exchange
+    def normalize(code: str) -> str:
+        """标准化股票代码格式"""
+        if '.' in code:
+            return code
+        if code.startswith('6'):
+            return f"{code}.SSE"
+        return f"{code}.SZSE"
+
     # 直接 import 调用（不再用 subprocess）
     try:
         from download_data_akshare import download_index_components
         stocks = download_index_components("000300")
         if stocks:
+            # 统一格式
+            stocks = [normalize(s) for s in stocks]
             logger.info(f"✅ 获取到 {len(stocks)} 只股票")
             return stocks[:TOTAL_STOCKS]
     except Exception as e:
         logger.warning(f"⚠️ 获取股票列表失败：{e}")
 
     logger.warning("⚠️ 使用默认股票列表")
-    return [
+    # 默认列表也用统一格式
+    default_codes = [
         '000630', '000807', '000975', '000999', '001391',
         '002028', '002384', '002422', '002463', '002600',
         '002625', '300251', '300394', '300418', '300442',
         '300476', '300502', '300803', '300832', '300866'
     ]
+    return [normalize(c) for c in default_codes]
 
+
+# Phase 3 Fix 4: Neo4j 连接复用（全局单例）
+_neo4j_instance = None
+
+def get_neo4j_sync():
+    """获取 Neo4j 同步器单例"""
+    global _neo4j_instance
+    if _neo4j_instance is None and NEO4J_AVAILABLE:
+        try:
+            _neo4j_instance = Neo4jSync()
+        except Exception as e:
+            logger.error(f"❌ Neo4j 初始化失败：{e}")
+            _neo4j_instance = None
+    return _neo4j_instance
+
+def close_neo4j():
+    """关闭 Neo4j 连接"""
+    global _neo4j_instance
+    if _neo4j_instance is not None:
+        try:
+            _neo4j_instance.close()
+        except Exception:
+            pass
+        _neo4j_instance = None
 
 def sync_to_neo4j(stock_data):
-    """同步股票数据到 Neo4j（增量同步）"""
-    if not NEO4J_AVAILABLE:
+    """同步股票数据到 Neo4j（使用复用连接）"""
+    sync = get_neo4j_sync()
+    if not sync:
         return
     try:
-        sync = Neo4jSync()
         sync.sync_stock_data({
             'symbol': stock_data['symbol'],
             'datetime': datetime.now(),
@@ -124,18 +161,26 @@ def sync_to_neo4j(stock_data):
             'volume': 0,
             'source': stock_data.get('source', 'unknown')
         })
-        sync.close()
         logger.info(f"✅ {stock_data['symbol']} 已同步到 Neo4j (数据源：{stock_data['source']})")
     except Exception as e:
         logger.error(f"❌ {stock_data['symbol']} Neo4j 同步失败：{e}")
 
 
-def verify_data_consistency(stock_code):
-    """验证数据一致性"""
+def verify_data_consistency(stock_code, data_dir=None):
+    """验证数据一致性
+    
+    Phase 3 Fix 5: 统一数据目录路径
+    """
     try:
-        data_dir = Path(__file__).parent / 'data' / 'tushare'
-        if not data_dir.exists():
+        # 使用传入的 data_dir 或默认 akshare/bars
+        if data_dir is None:
             data_dir = Path(__file__).parent / 'data' / 'akshare' / 'bars'
+        else:
+            data_dir = Path(data_dir)
+
+        if not data_dir.exists():
+            logger.warning(f"⚠️ 数据目录不存在: {data_dir}")
+            return False
 
         files = list(data_dir.glob(f"{stock_code}.*")) + list(data_dir.glob(f"{stock_code}.csv"))
 
@@ -268,6 +313,9 @@ def main():
         "失败": stats['failed'],
         "跳过": stats['skipped'],
     })
+    
+    # Phase 3 Fix 4: 关闭 Neo4j 连接
+    close_neo4j()
 
 
 if __name__ == "__main__":
@@ -275,7 +323,9 @@ if __name__ == "__main__":
         main()
     except KeyboardInterrupt:
         logger.info("\n⚠️ 用户中断")
+        close_neo4j()  # 确保中断时也关闭连接
     except Exception as e:
         logger.error(f"❌ 程序异常：{e}")
         notify_task_error("数据下载", str(e))
+        close_neo4j()  # 确保异常时也关闭连接
         raise
