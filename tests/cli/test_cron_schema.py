@@ -213,7 +213,7 @@ class TestRealCronConfig:
 
         # Verify groups exist
         groups = {t.group for t in result.tasks}
-        assert 'data_download' in groups
+        assert 'data' in groups
         assert 'monitor' in groups
         assert 'trading' in groups
         assert 'report' in groups

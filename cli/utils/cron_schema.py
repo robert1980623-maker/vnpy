@@ -24,7 +24,7 @@ class TaskNotification(BaseModel):
 
 class CronTask(BaseModel):
     """A single cron task definition."""
-    id: str = Field(..., pattern=r'^[a-z][a-z0-9_]*$')
+    id: str = Field(..., pattern=r'^[a-z][a-z0-9_-]*$')
     group: str
     name: str
     schedule: str  # cron expression "0 9 * * *"
