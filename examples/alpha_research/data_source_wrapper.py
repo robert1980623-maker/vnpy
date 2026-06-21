@@ -14,7 +14,9 @@ import time
 import pandas as pd
 from typing import Optional, List, Dict, Any
 from datetime import datetime
+from pathlib import Path
 from data_source_manager import DataSourceManager
+from config_loader import get_tushare_token, init_tushare
 
 
 class DataSourceFetcher:
@@ -33,29 +35,8 @@ class DataSourceFetcher:
     
     def _init_data_sources(self):
         """初始化数据源客户端"""
-        # Tushare
-        tushare_token = os.environ.get('TUSHARE_TOKEN', '').strip()
-        if not tushare_token:
-            env_path = Path(__file__).parent / '.env'
-            if env_path.exists():
-                try:
-                    for line in open(env_path):
-                        line = line.strip()
-                        if line.startswith('TUSHARE_TOKEN=') and not line.startswith('#'):
-                            tushare_token = line.split('=', 1)[1].strip().strip('"').strip("'")
-                            if tushare_token:
-                                print(f"✓ TUSHARE_TOKEN 从 .env 文件加载")
-                            break
-                except Exception:
-                    pass
-        if tushare_token:
-            import tushare as ts
-            ts.set_token(tushare_token)
-            self.tushare_pro = ts.pro_api()
-            print("✅ Tushare Pro 已初始化")
-        else:
-            self.tushare_pro = None
-            print("⚠️ Tushare Token 未配置")
+        # Tushare - 使用统一的 config_loader
+        self.tushare_pro = init_tushare()
         
         # AKShare (不需要初始化)
         try:

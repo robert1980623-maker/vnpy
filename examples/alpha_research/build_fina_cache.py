@@ -60,20 +60,8 @@ def main():
     cache_dir.mkdir(parents=True, exist_ok=True)
     
     # 初始化 Tushare
-    token = os.environ.get('TUSHARE_TOKEN', '').strip()
-    if not token:
-        env_path = Path(__file__).parent / '.env'
-        if env_path.exists():
-            try:
-                for line in open(env_path):
-                    line = line.strip()
-                    if line.startswith('TUSHARE_TOKEN=') and not line.startswith('#'):
-                        token = line.split('=', 1)[1].strip().strip('"').strip("'")
-                        if token:
-                            print("✓ TUSHARE_TOKEN 从 .env 文件加载")
-                        break
-            except Exception:
-                pass
+    from config_loader import get_tushare_token
+    token = get_tushare_token()
     if not token:
         print("❌ 请设置环境变量 TUSHARE_TOKEN 或在 .env 文件中配置")
         return

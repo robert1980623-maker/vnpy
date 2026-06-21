@@ -24,10 +24,13 @@
 import subprocess
 import time
 import sys
+import json
 import logging
 import os
 from datetime import datetime
 from pathlib import Path
+
+import pandas as pd
 
 # 通知工具
 from notification_utils import TaskNotifier, notify_task_start, notify_task_complete, notify_task_error
@@ -39,6 +42,44 @@ from retry_utils import (
     get_retry_monitor,
     RetryMonitor
 )
+
+# 失败队列管理
+def load_failed_downloads() -> dict:
+    """加载失败队列"""
+    if FAILED_DOWNLOADS_FILE.exists():
+        try:
+            with open(FAILED_DOWNLOADS_FILE, 'r') as f:
+                return json.load(f)
+        except:
+            return {}
+    return {}
+
+def save_failed_downloads(failed: dict):
+    """保存失败队列"""
+    with open(FAILED_DOWNLOADS_FILE, 'w') as f:
+        json.dump(failed, f, indent=2)
+
+def add_to_failed_queue(symbol: str, error: str):
+    """添加失败股票到队列"""
+    failed = load_failed_downloads()
+    if symbol not in failed:
+        failed[symbol] = {'error': error, 'count': 1, 'last_try': datetime.now().isoformat()}
+    else:
+        failed[symbol]['count'] += 1
+        failed[symbol]['last_try'] = datetime.now().isoformat()
+    save_failed_downloads(failed)
+
+def remove_from_failed_queue(symbol: str):
+    """从失败队列移除（成功后调用）"""
+    failed = load_failed_downloads()
+    if symbol in failed:
+        del failed[symbol]
+        save_failed_downloads(failed)
+
+def get_retry_candidates() -> list:
+    """获取可重试的股票（未超过最大重试次数）"""
+    failed = load_failed_downloads()
+    return [s for s, info in failed.items() if info['count'] < MAX_RETRY_COUNT]
 
 # 添加 world_model 模块路径
 sys.path.insert(0, str(Path(__file__).parent / 'world_model'))
@@ -52,9 +93,13 @@ except ImportError:
 
 # 配置
 BATCH_SIZE = 5
-BATCH_DELAY = 30
-STOCK_DELAY = 3
+BATCH_DELAY = 5  # 优化：30→5秒（Tushare限频200次/分钟，实际利用率10%）
+STOCK_DELAY = 1  # 优化：3→1秒
 TOTAL_STOCKS = 20
+
+# 失败队列配置
+FAILED_DOWNLOADS_FILE = Path(__file__).parent / 'failed_downloads.json'
+MAX_RETRY_COUNT = 3
 
 # 重试配置（新增）
 RETRY_CONFIG = {
@@ -225,19 +270,22 @@ def download_with_dual_source(stock_code):
     # 1. 优先尝试 Tushare
     try:
         if download_with_tushare(stock_code):
+            remove_from_failed_queue(stock_code)
             return {'symbol': stock_code, 'status': 'success', 'source': 'tushare'}
     except Exception as e:
         logger.warning(f"⚠️ Tushare 最终失败，切换 AKShare: {e}")
-    
+
     # 2. Fallback 到 AKShare
     try:
         if download_with_akshare(stock_code):
+            remove_from_failed_queue(stock_code)
             return {'symbol': stock_code, 'status': 'success', 'source': 'akshare'}
     except Exception as e:
         logger.warning(f"⚠️ AKShare 也失败：{e}")
-    
+
     # 3. 都失败
     logger.error(f"❌ {stock_code} 下载失败（双数据源均失败）")
+    add_to_failed_queue(stock_code, "Tushare + AKShare 双数据源均失败")
     return {'symbol': stock_code, 'status': 'failed', 'source': 'none'}
 
 
@@ -390,7 +438,40 @@ def main():
     
     # 获取股票列表
     stocks = get_stock_list()
-    
+
+    # 优先重试上次失败的股票
+    retry_candidates = get_retry_candidates()
+    if retry_candidates:
+        logger.info(f"🔄 发现 {len(retry_candidates)} 只上次失败股票，优先重试")
+        retry_set = set(retry_candidates)
+        stocks = retry_candidates + [s for s in stocks if s not in retry_set]
+
+    # 增量检测：跳过已有最新数据的股票
+    filtered_stocks = []
+    skipped = 0
+    for stock in stocks:
+        csv_path = Path(f"data/akshare/bars/{stock}.csv")
+        if csv_path.exists():
+            try:
+                df = pd.read_csv(csv_path)
+                if not df.empty and 'date' in df.columns:
+                    last_date = pd.to_datetime(df['date'].iloc[-1]).date()
+                    today = datetime.now().date()
+                    if last_date >= today:
+                        skipped += 1
+                        continue
+            except Exception:
+                pass
+        filtered_stocks.append(stock)
+
+    if skipped > 0:
+        logger.info(f"⏭️  跳过 {skipped} 只已有最新数据的股票")
+    stocks = filtered_stocks
+
+    if not stocks:
+        logger.info("✅ 所有股票数据已是最新，无需下载")
+        return
+
     # 分批下载
     batch_num = 1
     for i in range(0, len(stocks), BATCH_SIZE):
