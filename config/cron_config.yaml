@@ -1,0 +1,351 @@
+# =============================================================================
+# VNPY 统一 Cron 任务配置
+# =============================================================================
+# 用于 `vnpy cron install/validate/list` 命令
+# 合并自 16 个 setup_*_cron.py 脚本
+#
+# 版本: 1.1
+# 最后更新: 2026-06-21
+# =============================================================================
+
+version: "1.1"
+default_tz: Asia/Shanghai
+default_model: qwen3.7-plus
+
+# 全局变量 (可在任务中通过 ${VAR} 引用)
+vars:
+  VNPY_DIR: /Users/rowang/projects/vnpy
+  PYTHON: python3
+  SCRIPTS_DIR: examples/alpha_research
+
+# =============================================================================
+# 任务列表 (按 group 分组，共 31 个任务，合并自 16 个 setup_*.py)
+# =============================================================================
+tasks:
+
+  # ============== 数据下载组 ==============
+  # 来源: setup_data_agent_cron.py, setup_elite_cron.py, setup_comprehensive_cron.py
+
+  - id: data-download-daily-akshare
+    name: 凌晨 A 股数据下载
+    group: data
+    schedule: "0 1 * * *"
+    command: "cd ${VNPY_DIR}/${SCRIPTS_DIR} && ${PYTHON} download_data_akshare.py --end $(date +\\%Y-\\%m-\\%d)"
+    timeout: 600
+    enabled: true
+    retry:
+      max_attempts: 3
+      backoff: exponential
+      initial_delay: 60
+    tags: [download, akshare, daily]
+    source: setup_data_agent_cron.py, setup_elite_cron.py
+
+  - id: data-download-daily-afternoon
+    name: 下午 A 股数据下载
+    group: data
+    schedule: "0 17 * * *"
+    command: "cd ${VNPY_DIR}/${SCRIPTS_DIR} && ${PYTHON} download_data_akshare.py --end $(date +\\%Y-\\%m-\\%d)"
+    timeout: 600
+    enabled: true
+    tags: [download, akshare, intraday]
+    source: setup_elite_cron.py, setup_daily_download_1700_cron.py
+
+  - id: data-download-policy
+    name: 政策面数据下载
+    group: data
+    schedule: "0 3 * * *"
+    command: "cd ${VNPY_DIR}/${SCRIPTS_DIR} && ${PYTHON} download_policy_data.py"
+    timeout: 300
+    enabled: true
+    tags: [download, policy]
+    source: setup_comprehensive_cron.py
+
+  - id: data-download-geopolitics
+    name: 国际形势数据下载
+    group: data
+    schedule: "0 4 * * *"
+    command: "cd ${VNPY_DIR}/${SCRIPTS_DIR} && ${PYTHON} download_geopolitics_data.py"
+    timeout: 300
+    enabled: true
+    tags: [download, geopolitics]
+    source: setup_comprehensive_cron.py
+
+  - id: data-download-news-morning
+    name: 早间新闻下载
+    group: data
+    schedule: "0 6 * * *"
+    command: "cd ${VNPY_DIR}/${SCRIPTS_DIR} && ${PYTHON} download_news_data.py --session morning"
+    timeout: 300
+    enabled: true
+    tags: [download, news]
+
+  - id: data-download-news-evening
+    name: 晚间新闻下载
+    group: data
+    schedule: "0 18 * * *"
+    command: "cd ${VNPY_DIR}/${SCRIPTS_DIR} && ${PYTHON} download_news_data.py --session evening"
+    timeout: 300
+    enabled: true
+    tags: [download, news]
+
+  # ============== 监控组 ==============
+  # 来源: setup_elite_cron.py, setup_data_freshness_cron.py, setup_missing_agents_cron.py,
+  #        setup_task_monitor_cron.py, setup_quality_check_cron.py, setup_compliance_cron.py,
+  #        setup_virtual_account_cron.py, setup_remaining_cron.py
+
+  - id: monitor-realtime-hourly
+    name: 每小时实时监控
+    group: monitor
+    schedule: "0 * * * *"
+    command: "cd ${VNPY_DIR}/${SCRIPTS_DIR} && ${PYTHON} realtime_monitor.py --once"
+    timeout: 300
+    enabled: true
+    tags: [monitor, realtime]
+    source: setup_elite_cron.py
+
+  - id: monitor-data-freshness
+    name: 数据新鲜度检查
+    group: monitor
+    schedule: "0 * * * *"
+    command: "cd ${VNPY_DIR}/${SCRIPTS_DIR} && ${PYTHON} stale_data_updater.py --check-only"
+    timeout: 120
+    enabled: true
+    tags: [monitor, freshness]
+    source: setup_data_freshness_cron.py
+
+  - id: monitor-stale-data-update
+    name: 陈旧数据自动更新
+    group: monitor
+    schedule: "30 16 * * *"
+    command: "cd ${VNPY_DIR}/${SCRIPTS_DIR} && ${PYTHON} stale_data_updater.py --auto"
+    timeout: 600
+    enabled: true
+    tags: [monitor, freshness, auto-fix]
+    source: setup_data_freshness_cron.py
+
+  - id: monitor-compliance-pre-trade
+    name: 交易前合规检查
+    group: monitor
+    schedule: "25 9 * * 1-5"
+    command: "cd ${VNPY_DIR}/${SCRIPTS_DIR} && ${PYTHON} compliance_checker.py"
+    timeout: 300
+    enabled: true
+    tags: [monitor, compliance]
+    source: setup_compliance_cron.py
+
+  - id: monitor-compliance-holding
+    name: 持仓合规检查
+    group: monitor
+    schedule: "*/30 * * * *"
+    command: "cd ${VNPY_DIR}/${SCRIPTS_DIR} && ${PYTHON} compliance_checker.py --holding"
+    timeout: 60
+    enabled: true
+    tags: [monitor, compliance, holding]
+    source: setup_compliance_cron.py
+
+  - id: monitor-risk-officer
+    name: 首席风险官每日检查
+    group: monitor
+    schedule: "0 10 * * 1-5"
+    command: "cd ${VNPY_DIR}/${SCRIPTS_DIR} && ${PYTHON} chief_risk_officer.py"
+    timeout: 300
+    enabled: true
+    tags: [monitor, risk]
+    source: setup_missing_agents_cron.py
+
+  - id: monitor-task-check
+    name: 任务监控检查
+    group: monitor
+    schedule: "0 9,17 * * *"
+    command: "cd ${VNPY_DIR}/${SCRIPTS_DIR} && ${PYTHON} task_monitor.py"
+    timeout: 300
+    enabled: true
+    tags: [monitor, tasks]
+    source: setup_task_monitor_cron.py
+
+  - id: monitor-data-quality
+    name: 数据质量检查
+    group: monitor
+    schedule: "0 23 * * *"
+    command: "cd ${VNPY_DIR}/${SCRIPTS_DIR} && ${PYTHON} check_data_quality.py"
+    timeout: 600
+    enabled: true
+    tags: [monitor, quality]
+    source: setup_quality_check_cron.py
+
+  - id: monitor-virtual-account
+    name: 虚拟账户同步
+    group: monitor
+    schedule: "*/15 * * * *"
+    command: "cd ${VNPY_DIR}/${SCRIPTS_DIR} && ${PYTHON} virtual_account.py"
+    timeout: 120
+    enabled: true
+    tags: [monitor, account]
+
+  - id: monitor-agent-health
+    name: Agent 健康检查
+    group: monitor
+    schedule: "*/30 * * * *"
+    command: "cd ${VNPY_DIR}/${SCRIPTS_DIR} && ${PYTHON} agent_health_check.py"
+    timeout: 120
+    enabled: true
+    tags: [monitor, health, critical]
+    source: setup_remaining_cron.py
+
+  - id: monitor-manager-issue-check
+    name: Manager 问题队列检查
+    group: monitor
+    schedule: "*/30 * * * *"
+    command: "cd ${VNPY_DIR}/${SCRIPTS_DIR} && ${PYTHON} manager_interface.py --check-issues"
+    timeout: 300
+    enabled: true
+    tags: [monitor, manager]
+    source: setup_validation_cron.py
+
+  # ============== 交易组 ==============
+  # 来源: setup_elite_cron.py, setup_limit_up_cron.py, setup_missing_agents_cron.py,
+  #        setup_comprehensive_cron.py
+
+  - id: trade-elite-screener
+    name: 精英选股
+    group: trading
+    schedule: "0 9 * * 1-5"
+    command: "cd ${VNPY_DIR}/${SCRIPTS_DIR} && ${PYTHON} elite_stock_selector.py"
+    timeout: 600
+    enabled: true
+    model: qwen3-max
+    tags: [trade, screener]
+    source: setup_elite_cron.py
+
+  - id: trade-limit-up
+    name: 涨停策略
+    group: trading
+    schedule: "0 17 * * 1-5"
+    command: "cd ${VNPY_DIR}/${SCRIPTS_DIR} && ${PYTHON} limit_up_strategy_runner.py --auto --notify"
+    timeout: 300
+    enabled: true
+    tags: [trade, limit-up]
+    source: setup_limit_up_cron.py
+
+  - id: trade-stop-loss-check
+    name: 严格止盈止损检查
+    group: trading
+    schedule: "0 15 * * 1-5"
+    command: "cd ${VNPY_DIR}/${SCRIPTS_DIR} && ${PYTHON} strict_stop_loss.py"
+    timeout: 300
+    enabled: true
+    tags: [trade, stop-loss]
+    source: setup_elite_cron.py
+
+  - id: trade-stop-loss-executor
+    name: 止盈止损执行
+    group: trading
+    schedule: "0 16 * * 1-5"
+    command: "cd ${VNPY_DIR}/${SCRIPTS_DIR} && ${PYTHON} stop_loss_executor.py"
+    timeout: 300
+    enabled: true
+    tags: [trade, stop-loss, executor]
+    source: setup_missing_agents_cron.py
+
+  - id: trade-rebalance
+    name: 每日调仓
+    group: trading
+    schedule: "30 17 * * 1-5"
+    command: "cd ${VNPY_DIR}/${SCRIPTS_DIR} && ${PYTHON} rebalance_portfolio.py"
+    timeout: 600
+    enabled: true
+    model: qwen3-max
+    tags: [trade, rebalance]
+    source: setup_elite_cron.py
+
+  - id: trade-comprehensive-analyzer
+    name: 综合消息面分析
+    group: trading
+    schedule: "0 5 * * *"
+    command: "cd ${VNPY_DIR}/${SCRIPTS_DIR} && ${PYTHON} comprehensive_analyzer.py"
+    timeout: 600
+    enabled: true
+    model: qwen3-max
+    tags: [trade, analysis]
+    source: setup_comprehensive_cron.py
+
+  - id: trade-news-analyzer
+    name: 新闻分析
+    group: trading
+    schedule: "0 6,18 * * *"
+    command: "cd ${VNPY_DIR}/${SCRIPTS_DIR} && ${PYTHON} news_analyzer.py"
+    timeout: 300
+    enabled: true
+    tags: [trade, news]
+
+  # ============== 报告组 ==============
+  # 来源: setup_elite_cron.py, setup_validation_cron.py, setup_update_cron.py,
+  #        setup_remaining_cron.py, setup_virtual_account_cron.py
+
+  - id: report-pre-stock-validation
+    name: 选股前数据验证
+    group: report
+    schedule: "30 8 * * 1-5"
+    command: "cd ${VNPY_DIR}/${SCRIPTS_DIR} && ${PYTHON} data_validator.py --validate --pre-stock"
+    timeout: 300
+    enabled: true
+    tags: [report, validation]
+    source: setup_validation_cron.py
+
+  - id: report-hourly
+    name: 每小时增强报告
+    group: report
+    schedule: "5 * * * *"
+    command: "cd ${VNPY_DIR}/${SCRIPTS_DIR} && ${PYTHON} hourly_enhanced_report.py"
+    timeout: 300
+    enabled: true
+    tags: [report, hourly]
+
+  - id: report-daily-review
+    name: 每日复盘
+    group: report
+    schedule: "0 20 * * 1-5"
+    command: "cd ${VNPY_DIR}/${SCRIPTS_DIR} && ${PYTHON} daily_review.py"
+    timeout: 600
+    enabled: true
+    model: qwen3-max
+    tags: [report, daily-review]
+    source: setup_elite_cron.py
+
+  - id: report-validation
+    name: 数据验证报告
+    group: report
+    schedule: "0 2 * * *"
+    command: "cd ${VNPY_DIR}/${SCRIPTS_DIR} && ${PYTHON} data_validator.py"
+    timeout: 600
+    enabled: true
+    tags: [report, validation]
+
+  - id: report-update-date
+    name: 更新下载日期
+    group: report
+    schedule: "0 18 * * *"
+    command: "cd ${VNPY_DIR}/${SCRIPTS_DIR} && ${PYTHON} update_download_date.py"
+    timeout: 300
+    enabled: true
+    tags: [report, housekeeping]
+
+  - id: report-performance-attribution
+    name: 绩效归因报告
+    group: report
+    schedule: "0 21 * * 1-5"
+    command: "cd ${VNPY_DIR}/${SCRIPTS_DIR} && ${PYTHON} performance_attribution.py"
+    timeout: 300
+    enabled: true
+    tags: [report, performance]
+    source: setup_remaining_cron.py
+
+  - id: report-weekly-summary
+    name: 每周总结
+    group: report
+    schedule: "0 10 * * 6"
+    command: "cd ${VNPY_DIR}/${SCRIPTS_DIR} && ${PYTHON} generate_reports.py --weekly"
+    timeout: 600
+    enabled: true
+    tags: [report, weekly]
+    source: setup_virtual_account_cron.py
