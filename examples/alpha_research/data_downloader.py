@@ -15,6 +15,7 @@
     results = downloader.download_batch(['000001.SZSE', '000002.SZSE'])
 """
 
+import asyncio
 import json
 import logging
 import os
@@ -52,6 +53,29 @@ class RateLimiter:
             wait = self.interval - (now - self._last_call)
             if wait > 0:
                 time.sleep(wait)
+            self._last_call = time.time()
+
+
+class AsyncRateLimiter:
+    """
+    异步令牌桶限流器（asyncio 协程安全）
+
+    用于控制异步 API 调用频率，避免触发数据源限频。
+    与 RateLimiter 逻辑一致，但使用 asyncio.Lock + asyncio.sleep。
+    """
+
+    def __init__(self, max_per_minute: int = 180):
+        self.interval = 60.0 / max_per_minute
+        self._lock = asyncio.Lock()
+        self._last_call = 0.0
+
+    async def wait(self):
+        """异步等待直到可以发起下一次调用"""
+        async with self._lock:
+            now = time.time()
+            wait = self.interval - (now - self._last_call)
+            if wait > 0:
+                await asyncio.sleep(wait)
             self._last_call = time.time()
 
 # 导入底层下载函数（直接调用，不开子进程）
@@ -524,3 +548,139 @@ class DataDownloader:
         """返回下载统计"""
         with self._stats_lock:
             return dict(self._stats)
+
+    # ---------- 异步下载（asyncio） ----------
+
+    # 类级别共享的异步限流器（与同步限流器独立，各自限频）
+    _async_rate_limiter = AsyncRateLimiter(max_per_minute=180)
+
+    async def _download_one_async(self, symbol: str) -> DownloadResult:
+        """
+        异步下载单只股票
+
+        使用 asyncio.to_thread 包装同步的数据源调用，
+        使用 AsyncRateLimiter 控制调用频率。
+
+        重试策略与 _download_one 完全一致：
+        - attempt 1: Tushare（主数据源）
+        - attempt 2: AKShare（备用）
+        - attempt 3: Baostock（备选）
+
+        Returns:
+            DownloadResult
+        """
+        start_time = time.time()
+        last_error = None
+        delay = self.base_delay
+
+        sources: List[Tuple[str, Callable]] = []
+        if USE_TUSHARE:
+            sources.append(('tushare', get_stock_bars_tushare))
+        sources.append(('akshare', get_stock_bars_akshare))
+        sources.append(('baostock', get_stock_bars_baostock))
+
+        for attempt in range(self.max_retries):
+            # 异步限频控制
+            await self._async_rate_limiter.wait()
+
+            source_name, source_fn = sources[attempt % len(sources)]
+            try:
+                # 使用 asyncio.to_thread 将同步调用放入线程池
+                bars = await asyncio.to_thread(source_fn, symbol, None, None)
+                if bars is not None and not bars.empty:
+                    await asyncio.to_thread(self._save_bars, symbol, bars)
+                    await asyncio.to_thread(remove_from_failed_queue, symbol)
+                    return DownloadResult(
+                        symbol=symbol,
+                        status='success',
+                        source=source_name,
+                        rows=len(bars),
+                        duration=time.time() - start_time,
+                    )
+            except Exception as e:
+                last_error = f"{source_name} attempt {attempt + 1}: {e}"
+                logger.debug(last_error)
+
+            # 重试前等待（指数退避）— 异步版本不阻塞事件循环
+            if attempt < self.max_retries - 1:
+                await asyncio.sleep(min(delay, self.max_delay))
+                delay *= 2
+
+        # 全部失败
+        await asyncio.to_thread(add_to_failed_queue, symbol, last_error or "未知错误")
+        return DownloadResult(
+            symbol=symbol,
+            status='failed',
+            source='none',
+            duration=time.time() - start_time,
+            error=last_error or "未知错误",
+        )
+
+    async def download_batch_async(
+        self,
+        symbols: List[str],
+        incremental: bool = True,
+    ) -> List[DownloadResult]:
+        """
+        异步批量下载股票数据
+
+        使用 asyncio.gather 并发执行所有下载任务，
+        配合 AsyncRateLimiter 控制总调用频率。
+
+        Args:
+            symbols: 股票代码列表
+            incremental: 是否启用增量检测（跳过已有最新数据）
+
+        Returns:
+            List[DownloadResult]: 每只股票的下载结果列表
+
+        示例:
+            import asyncio
+            from data_downloader import DataDownloader, DownloaderConfig
+
+            async def main():
+                config = DownloaderConfig()
+                downloader = DataDownloader(config)
+                results = await downloader.download_batch_async(
+                    ['000001.SZSE', '000002.SZSE']
+                )
+
+            asyncio.run(main())
+        """
+        # 增量过滤（同步操作，不需要异步）
+        if incremental:
+            symbols = self.filter_fresh(symbols)
+
+        if not symbols:
+            logger.info("✅ 所有股票数据已是最新，无需下载")
+            return []
+
+        logger.info(f"📥 准备异步下载 {len(symbols)} 只股票")
+
+        # 使用 asyncio.gather 并发执行所有下载
+        tasks = [self._download_one_async(s) for s in symbols]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # 处理异常结果
+        processed = []
+        for i, result in enumerate(results):
+            if isinstance(result, Exception):
+                result = DownloadResult(
+                    symbol=symbols[i],
+                    status='failed',
+                    source='none',
+                    error=str(result),
+                )
+                await asyncio.to_thread(add_to_failed_queue, symbols[i], str(result))
+            self._update_stats(result)
+            processed.append(result)
+
+        # 汇总
+        stats = self.get_stats()
+        logger.info(
+            f"✅ 异步下载完成: 成功 {stats['success']}/{stats['total']} "
+            f"(Tushare={stats['tushare']}, AKShare={stats['akshare']}, "
+            f"Baostock={stats['baostock']}, 失败={stats['failed']}, "
+            f"跳过={stats['skipped']})"
+        )
+        return processed

@@ -16,8 +16,9 @@ import time
 import subprocess
 from datetime import datetime, timedelta
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, AsyncMock
 
+import asyncio
 import pandas as pd
 import pytest
 
@@ -25,7 +26,13 @@ import pytest
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / 'examples' / 'alpha_research'))
 
-from data_downloader import RateLimiter, DataDownloader, DownloaderConfig, DownloadResult
+from data_downloader import (
+    RateLimiter,
+    AsyncRateLimiter,
+    DataDownloader,
+    DownloaderConfig,
+    DownloadResult,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -209,3 +216,165 @@ class TestDownloadSingle:
         assert result.status == 'failed'
         assert result.source == 'none'
         assert 'error' in result.error.lower() or 'attempt' in result.error.lower()
+
+
+# ---------------------------------------------------------------------------
+# AsyncRateLimiter 测试
+# ---------------------------------------------------------------------------
+class TestAsyncRateLimiter:
+    """AsyncRateLimiter 异步限频控制测试"""
+
+    @pytest.mark.asyncio
+    async def test_async_rate_limiter_wait(self):
+        """验证异步 180/min 限频：两次 await 间隔应 >= 60/180 ≈ 0.333 秒"""
+        limiter = AsyncRateLimiter(max_per_minute=180)
+        expected_interval = 60.0 / 180  # ≈ 0.3333 秒
+
+        # 第一次 wait()：_last_call=0，无需等待，仅设置 _last_call
+        await limiter.wait()
+        t0 = time.time()
+
+        # 第二次 wait()：应等待约 expected_interval 秒
+        await limiter.wait()
+        elapsed = time.time() - t0
+
+        # 允许 20% 误差（系统调度抖动）
+        assert elapsed >= expected_interval * 0.8, (
+            f"异步限频间隔过短: {elapsed:.3f}s < {expected_interval * 0.8:.3f}s"
+        )
+        assert elapsed < expected_interval * 2 + 0.1, (
+            f"异步限频间隔过长: {elapsed:.3f}s"
+        )
+
+    @pytest.mark.asyncio
+    async def test_async_rate_limiter_concurrent(self):
+        """验证并发协程受限频控制，不会同时执行"""
+        limiter = AsyncRateLimiter(max_per_minute=600)  # 间隔 0.1s
+        timestamps = []
+
+        async def record():
+            await limiter.wait()
+            timestamps.append(time.time())
+
+        # 并发启动 5 个协程
+        await asyncio.gather(*[record() for _ in range(5)])
+
+        # 相邻调用间隔应 >= 0.08s（0.1s * 0.8 容差）
+        for i in range(1, len(timestamps)):
+            gap = timestamps[i] - timestamps[i - 1]
+            assert gap >= 0.08, f"并发限频失效: 间隔 {gap:.3f}s < 0.08s"
+
+
+# ---------------------------------------------------------------------------
+# _download_one_async 测试
+# ---------------------------------------------------------------------------
+class TestDownloadOneAsync:
+    """_download_one_async() 异步下载逻辑测试"""
+
+    @pytest.fixture
+    def downloader(self, tmp_path):
+        """创建一个使用临时目录的 DataDownloader 实例"""
+        config = DownloaderConfig(
+            data_dir=str(tmp_path),
+            max_retries=3,
+            base_delay=0.01,
+            max_delay=0.05,
+        )
+        return DataDownloader(config=config)
+
+    @pytest.mark.asyncio
+    @patch('data_downloader.get_stock_bars_akshare')
+    @patch('data_downloader.USE_TUSHARE', True)
+    async def test_download_one_async_success(self, mock_akshare, downloader, tmp_path):
+        """异步下载单只股票成功"""
+        symbol = '000010.SZSE'
+        fake_df = pd.DataFrame({
+            'date': ['2026-06-20', '2026-06-21'],
+            'open': [10.0, 10.5],
+            'close': [10.5, 11.0],
+            'volume': [1000, 1200],
+        })
+
+        with patch('data_downloader.get_stock_bars_tushare', return_value=fake_df):
+            with patch.object(downloader._async_rate_limiter, 'wait', new=AsyncMock()):
+                result = await downloader._download_one_async(symbol)
+
+        assert result.status == 'success'
+        assert result.source == 'tushare'
+        assert result.rows == 2
+        assert result.symbol == symbol
+        csv_path = tmp_path / f"{symbol}.csv"
+        assert csv_path.exists()
+
+    @pytest.mark.asyncio
+    @patch('data_downloader.get_stock_bars_baostock')
+    @patch('data_downloader.get_stock_bars_akshare')
+    @patch('data_downloader.get_stock_bars_tushare')
+    @patch('data_downloader.USE_TUSHARE', True)
+    async def test_download_one_async_retry(self, mock_tushare, mock_akshare,
+                                            mock_baostock, downloader):
+        """异步重试逻辑：Tushare 失败 → AKShare 失败 → Baostock 成功"""
+        symbol = '000011.SZSE'
+        fake_df = pd.DataFrame({
+            'date': ['2026-06-21'],
+            'open': [20.0],
+            'close': [21.0],
+            'volume': [500],
+        })
+
+        mock_tushare.side_effect = Exception("Tushare async timeout")
+        mock_akshare.return_value = pd.DataFrame()
+        mock_baostock.return_value = fake_df
+
+        with patch.object(downloader._async_rate_limiter, 'wait', new=AsyncMock()):
+            with patch('asyncio.sleep', new=AsyncMock()):
+                result = await downloader._download_one_async(symbol)
+
+        assert result.status == 'success', f"预期成功，实际: {result.status}, error={result.error}"
+        assert result.source == 'baostock'
+        assert result.rows == 1
+
+
+# ---------------------------------------------------------------------------
+# download_batch_async 测试
+# ---------------------------------------------------------------------------
+class TestDownloadBatchAsync:
+    """download_batch_async() 异步批量下载测试"""
+
+    @pytest.fixture
+    def downloader(self, tmp_path):
+        config = DownloaderConfig(
+            data_dir=str(tmp_path),
+            max_retries=1,
+            base_delay=0.01,
+            max_delay=0.01,
+        )
+        return DataDownloader(config=config)
+
+    @pytest.mark.asyncio
+    @patch('data_downloader.get_stock_bars_akshare')
+    @patch('data_downloader.USE_TUSHARE', True)
+    async def test_download_batch_async(self, mock_akshare, downloader, tmp_path):
+        """异步批量下载多只股票"""
+        symbols = ['000020.SZSE', '000021.SZSE', '000022.SZSE']
+
+        def fake_bars(symbol, *args):
+            return pd.DataFrame({
+                'date': ['2026-06-21'],
+                'open': [10.0],
+                'close': [11.0],
+                'volume': [100],
+            })
+
+        with patch('data_downloader.get_stock_bars_tushare', side_effect=fake_bars):
+            with patch.object(downloader._async_rate_limiter, 'wait', new=AsyncMock()):
+                results = await downloader.download_batch_async(
+                    symbols, incremental=False
+                )
+
+        assert len(results) == 3
+        assert all(r.status == 'success' for r in results)
+        assert all(r.source == 'tushare' for r in results)
+        # 验证 CSV 文件都已写入
+        for s in symbols:
+            assert (tmp_path / f"{s}.csv").exists()
