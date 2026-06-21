@@ -38,6 +38,11 @@ temp/
 
 # 数据文件（体积大，可重新下载）
 examples/alpha_research/data/akshare/bars/*.csv
+examples/alpha_research/lab/test/daily/*.parquet
+examples/alpha_research/.coverage
+
+# 数据库文件（运行时生成）
+*.db
 examples/alpha_research/data/policy/
 examples/alpha_research/data/geopolitics/
 examples/alpha_research/data/news/
