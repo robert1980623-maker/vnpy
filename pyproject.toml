@@ -9,6 +9,23 @@ description = "VNPY 量化交易系统"
 requires-python = ">=3.9"
 dependencies = [
     "click>=8.0",
+    "pyyaml>=6.0",
+    "pydantic>=2.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "pytest-mock>=3.10",
+    "coverage>=7.0",
+]
+dev = [
+    "ruff>=0.6.0",
+    "mypy>=1.10",
+    "types-PyYAML",
+    "types-click",
+    "build>=1.0",
 ]
 
 [project.scripts]
@@ -16,3 +33,54 @@ vnpy = "cli.main:main"
 
 [tool.setuptools.packages.find]
 include = ["cli*", "vnpy*", "core*", "alpha*"]
+
+# =============================================================================
+# Tool configurations
+# =============================================================================
+
+[tool.pytest.ini_options]
+testpaths = ["tests/unit", "tests/cli", "tests/integration"]
+addopts = "-ra -q --strict-markers"
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+[tool.coverage.run]
+source = ["alpha", "cli", "core", "vnpy"]
+omit = [
+    "*/tests/*",
+    "*/test_*",
+    "*/venv/*",
+    "*/examples/*",
+    "*/scripts/*",
+    "*/docs/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+]
+precision = 2
+show_missing = true
+
+[tool.ruff]
+target-version = "py39"
+line-length = 100
+extend-exclude = ["venv", "examples", "docs"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+ignore = ["E501", "B008"]  # E501: line-too-long (formatter 负责)
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+no_strict_optional = true
+show_error_codes = true
+files = ["alpha", "cli", "core"]
