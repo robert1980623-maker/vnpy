@@ -149,11 +149,13 @@ class EnhancedDownloader:
         
         for symbol in symbols:
             code = symbol.split('.')[0] if '.' in symbol else symbol
-            suffix = symbol.split('.')[1].lower() if '.' in symbol else ''
+            suffix = symbol.split('.')[1] if '.' in symbol else ''
+            suffix_lower = suffix.lower()
+            suffix_upper = suffix.upper()
             possible_files = [
+                DATA_DIR / f'{code}_{suffix_lower}.csv' if suffix else None,
+                DATA_DIR / f'{code}_{suffix_upper}.csv' if suffix else None,
                 DATA_DIR / f'{code}.csv',
-                DATA_DIR / f'{code}_{suffix}.csv' if suffix else None,
-                DATA_DIR / f'{code.upper()}.csv'
             ]
             possible_files = [f for f in possible_files if f]  # filter None
             
@@ -172,8 +174,8 @@ class EnhancedDownloader:
                                     break
                             if not date_col:
                                 date_col = df_temp.columns[1]
-                            # 获取最新日期
-                            last_row_date = pd.to_datetime(df_temp.iloc[-1][date_col])
+                            # 获取最新日期（CSV 按日期倒序排列，第一行最新）
+                            last_row_date = pd.to_datetime(df_temp.iloc[0][date_col])
                             valid_files.append((f, df_temp, last_row_date))
                     except Exception:
                         continue
@@ -208,8 +210,8 @@ class EnhancedDownloader:
                 if not date_col:
                     date_col = df.columns[1]
                 
-                # 读取最后一行（最新数据）
-                last_date_str = df.iloc[-1][date_col]
+                # 读取第一行（最新数据，CSV 按日期倒序排列）
+                last_date_str = df.iloc[0][date_col]
                 last_date = pd.to_datetime(last_date_str)
                 
                 # 检查日期是否匹配期望
@@ -272,9 +274,9 @@ class EnhancedDownloader:
         if not symbols:
             self.log("📋 持仓为空，使用 HS300 成分股作为下载列表...")
             try:
-                import tushare as ts
-                df = ts.index_stock('000300')
-                symbols = df['code'].tolist()[:50]  # 取前50只
+                import akshare as ak
+                df = ak.index_stock_cons(symbol='000300')
+                symbols = df['品种代码'].tolist()[:50]  # 取前50只
                 self.log(f"✅ 从 HS300 获取 {len(symbols)} 只股票")
             except Exception as e:
                 self.log(f"⚠️ HS300 获取失败：{e}")

@@ -29,7 +29,20 @@ class TushareProDownloader:
         self.data_dir.mkdir(parents=True, exist_ok=True)
         
         # 初始化 Tushare
-        token = os.environ.get('TUSHARE_TOKEN', '')
+        token = os.environ.get('TUSHARE_TOKEN', '').strip()
+        if not token:
+            env_path = Path(__file__).parent / '.env'
+            if env_path.exists():
+                try:
+                    for line in open(env_path):
+                        line = line.strip()
+                        if line.startswith('TUSHARE_TOKEN=') and not line.startswith('#'):
+                            token = line.split('=', 1)[1].strip().strip('"').strip("'")
+                            if token:
+                                print(f"✓ TUSHARE_TOKEN 从 .env 文件加载")
+                            break
+                except Exception:
+                    pass
         if token:
             ts.set_token(token)
             self.pro = ts.pro_api()
@@ -71,8 +84,20 @@ class TushareProDownloader:
     
     def _get_csv_file(self, symbol: str) -> Path:
         """获取 CSV 文件路径"""
-        code = symbol.split('.')[0]
-        suffix = symbol.split('.')[1].lower()
+        # 处理多种格式：000001.SZSE / 000001_SZ / 000001
+        if '.' in symbol:
+            code = symbol.split('.')[0]
+            suffix = symbol.split('.')[1].lower()
+        elif '_' in symbol:
+            code = symbol.split('_')[0]
+            suffix = symbol.split('_')[1].lower()
+        else:
+            # 纯数字代码，根据前缀判断交易所
+            code = symbol
+            if symbol.startswith('6') or symbol.startswith('9'):
+                suffix = 'sh'
+            else:
+                suffix = 'sz'
         return self.data_dir / f'{code}_{suffix}.csv'
     
     def download_daily_bars(self, symbols: List[str], trade_date: str = None,
@@ -267,7 +292,7 @@ def main():
         if account_file.exists():
             with open(account_file, 'r', encoding='utf-8') as f:
                 account = json.load(f)
-                symbols = [pos['symbol'] for pos in account.get('positions', [])]
+                symbols = [pos['stock_code'] for pos in account.get('positions', [])]
         else:
             print("❌ 账户文件不存在")
             return

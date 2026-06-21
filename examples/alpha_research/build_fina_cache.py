@@ -6,11 +6,15 @@
 写入本地 JSON 缓存，之后选股直接读缓存，0 秒。
 
 用法:
-    TUSHARE_TOKEN=xxx python3 build_fina_cache.py
+    TUSHARE_TOKEN=xxx python3 build_fina_cache.py [--force]
+
+参数:
+    --force   跳过旧缓存确认，强制重建
 """
 
 import os
 import json
+import sys
 import time
 from pathlib import Path
 from datetime import datetime, timedelta
@@ -49,13 +53,29 @@ def safe_float(value, default=None):
 
 
 def main():
+    # 解析参数
+    force = '--force' in sys.argv
+
     cache_dir = Path('./cache/fundamental')
     cache_dir.mkdir(parents=True, exist_ok=True)
     
     # 初始化 Tushare
-    token = os.environ.get('TUSHARE_TOKEN', '')
+    token = os.environ.get('TUSHARE_TOKEN', '').strip()
     if not token:
-        print("❌ 请设置环境变量 TUSHARE_TOKEN")
+        env_path = Path(__file__).parent / '.env'
+        if env_path.exists():
+            try:
+                for line in open(env_path):
+                    line = line.strip()
+                    if line.startswith('TUSHARE_TOKEN=') and not line.startswith('#'):
+                        token = line.split('=', 1)[1].strip().strip('"').strip("'")
+                        if token:
+                            print("✓ TUSHARE_TOKEN 从 .env 文件加载")
+                        break
+            except Exception:
+                pass
+    if not token:
+        print("❌ 请设置环境变量 TUSHARE_TOKEN 或在 .env 文件中配置")
         return
     
     import tushare as ts
@@ -81,10 +101,13 @@ def main():
         with open(cache_file, 'r') as f:
             old_cache = json.load(f)
         print(f"⚠️  已存在缓存 {current_quarter} ({len(old_cache)} 只)")
-        resp = input("是否重建？(y/N): ").strip().lower()
-        if resp != 'y':
-            print("跳过重建")
-            return
+        if force:
+            print("   --force 模式，强制重建")
+        else:
+            resp = input("是否重建？(y/N): ").strip().lower()
+            if resp != 'y':
+                print("跳过重建")
+                return
     
     # 批量拉取
     cache = {}

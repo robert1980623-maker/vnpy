@@ -90,11 +90,27 @@ def get_stock_list():
     logger.info("获取股票列表...")
     logger.info("=" * 60)
     
-    # 优先使用 Tushare
+    # 优先使用 Akshare (无需 token，更稳定)
     cmd = [
         "python3", "-c",
-        "import tushare as ts; df = ts.index_stock('000300'); "
-        "print(','.join(df['code'].tolist()[:20]))"
+        "import akshare as ak; df = ak.index_stock_cons(symbol='000300'); "
+        "print(','.join(df['品种代码'].tolist()[:20]))"
+    ]
+    
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        if result.returncode == 0 and result.stdout.strip():
+            stocks = result.stdout.strip().split(',')
+            logger.info(f"✅ Akshare 获取到 {len(stocks)} 只股票")
+            return stocks
+    except Exception as e:
+        logger.warning(f"⚠️ Akshare 获取失败，切换到 Tushare: {e}")
+    
+    # Akshare 失败，使用 Tushare (使用 index_member API)
+    cmd = [
+        "python3", "-c",
+        "import tushare as ts; pro = ts.pro_api(); df = pro.index_member(index_code='000300.SH'); "
+        "print(','.join(df['con_code'].unique().tolist()[:20]))"
     ]
     
     try:
@@ -104,29 +120,16 @@ def get_stock_list():
             logger.info(f"✅ Tushare 获取到 {len(stocks)} 只股票")
             return stocks
     except Exception as e:
-        logger.warning(f"⚠️ Tushare 获取失败，切换到 Akshare: {e}")
+        logger.warning(f"⚠️ Tushare 获取失败：{e}")
     
-    # Tushare 失败，使用 Akshare
-    cmd = [
-        "python3", "-c",
-        "import akshare as ak; df = ak.index_stock_cons(symbol='000300'); "
-        "print(','.join(df['品种代码'].tolist()[:20]))"
+    # 都失败，使用默认列表
+    logger.warning("⚠️ 使用默认股票列表")
+    return [
+        '000630', '000807', '000975', '000999', '001391',
+        '002028', '002384', '002422', '002463', '002600',
+        '002625', '300251', '300394', '300418', '300442',
+        '300476', '300502', '300803', '300832', '300866'
     ]
-    
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-        stocks = result.stdout.strip().split(',')
-        logger.info(f"✅ Akshare 获取到 {len(stocks)} 只股票")
-        return stocks
-    except Exception as e:
-        logger.warning(f"⚠️ Akshare 获取失败：{e}")
-        # 使用默认列表
-        return [
-            '000630', '000807', '000975', '000999', '001391',
-            '002028', '002384', '002422', '002463', '002600',
-            '002625', '300251', '300394', '300418', '300442',
-            '300476', '300502', '300803', '300832', '300866'
-        ]
 
 
 def download_with_tushare(stock_code):

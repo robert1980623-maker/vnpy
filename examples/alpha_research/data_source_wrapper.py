@@ -34,7 +34,20 @@ class DataSourceFetcher:
     def _init_data_sources(self):
         """初始化数据源客户端"""
         # Tushare
-        tushare_token = os.environ.get('TUSHARE_TOKEN', '')
+        tushare_token = os.environ.get('TUSHARE_TOKEN', '').strip()
+        if not tushare_token:
+            env_path = Path(__file__).parent / '.env'
+            if env_path.exists():
+                try:
+                    for line in open(env_path):
+                        line = line.strip()
+                        if line.startswith('TUSHARE_TOKEN=') and not line.startswith('#'):
+                            tushare_token = line.split('=', 1)[1].strip().strip('"').strip("'")
+                            if tushare_token:
+                                print(f"✓ TUSHARE_TOKEN 从 .env 文件加载")
+                            break
+                except Exception:
+                    pass
         if tushare_token:
             import tushare as ts
             ts.set_token(tushare_token)

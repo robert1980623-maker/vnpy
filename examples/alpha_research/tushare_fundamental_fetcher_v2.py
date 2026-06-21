@@ -54,9 +54,34 @@ class TushareBatchFetcher:
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         
-        token = os.environ.get('TUSHARE_TOKEN', '')
+        token = os.environ.get('TUSHARE_TOKEN', '').strip()
+        
+        # Fallback: load from .env file (needed when running in cron/isolated sessions)
         if not token:
-            raise ValueError("环境变量 TUSHARE_TOKEN 未设置")
+            env_path = Path(__file__).parent / '.env'
+            if env_path.exists():
+                try:
+                    from dotenv import dotenv_values
+                    env_vars = dotenv_values(str(env_path))
+                    token = env_vars.get('TUSHARE_TOKEN', '').strip()
+                    if token:
+                        print(f"✓ TUSHARE_TOKEN 从 .env 文件加载")
+                except ImportError:
+                    # If dotenv not available, try manual parsing
+                    try:
+                        with open(env_path) as f:
+                            for line in f:
+                                line = line.strip()
+                                if line.startswith('TUSHARE_TOKEN=') and not line.startswith('#'):
+                                    token = line.split('=', 1)[1].strip().strip('"').strip("'")
+                                    if token:
+                                        print(f"✓ TUSHARE_TOKEN 从 .env 文件加载（手动解析）")
+                                    break
+                    except Exception:
+                        pass
+        
+        if not token:
+            raise ValueError("环境变量 TUSHARE_TOKEN 未设置（也未在 .env 文件中找到）")
         
         import tushare as ts
         ts.set_token(token)
@@ -185,19 +210,46 @@ class TushareBatchFetcher:
         return {}
     
     # ------------------------------------------------------------------ #
-    #  交易日查询
+    #  交易日查询 (带缓存)
     # ------------------------------------------------------------------ #
     def _find_latest_trading_date(self) -> str:
-        """找最近的交易日"""
+        """找最近的交易日 (带 24 小时缓存)"""
+        # 先查缓存
+        cache_file = self.cache_dir / "trading_date_cache.json"
+        if cache_file.exists():
+            try:
+                with open(cache_file, 'r') as f:
+                    cache = json.load(f)
+                cached_date = cache.get('latest_date', '')
+                cached_at = cache.get('cached_at', 0)
+                # 缓存有效期 24 小时
+                if cached_date and (datetime.now().timestamp() - cached_at) < 86400:
+                    print(f"    📅 交易日缓存命中：{cached_date}")
+                    return cached_date
+            except Exception as e:
+                print(f"    ⚠️  读取交易日缓存失败：{e}")
+        
+        # 缓存未命中，执行查询
+        print(f"    📅 查询最近交易日...", end=' ')
         for d in range(0, 7):
             date = (datetime.now() - timedelta(days=d)).strftime('%Y%m%d')
             try:
                 df = self.pro.daily_basic(trade_date=date, fields='ts_code')
                 if df is not None and len(df) > 0:
+                    # 写入缓存
+                    with open(cache_file, 'w') as f:
+                        json.dump({
+                            'latest_date': date,
+                            'cached_at': datetime.now().timestamp()
+                        }, f)
+                    print(f"✅ {date} (已缓存)")
                     return date
             except Exception:
                 continue
-        return datetime.now().strftime('%Y%m%d')
+        
+        fallback_date = datetime.now().strftime('%Y%m%d')
+        print(f"⚠️  使用当前日期：{fallback_date}")
+        return fallback_date
     
     # ------------------------------------------------------------------ #
     #  单只查询（兼容旧接口）

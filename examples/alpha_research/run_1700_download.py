@@ -81,10 +81,12 @@ try:
         
         if csv_file.exists():
             existing = pd.read_csv(csv_file)
-            # 去重: 如果同一天已存在则跳过
-            if 'datetime' in existing.columns and existing['datetime'].astype(str).str.contains(row['trade_date']).any():
-                skipped += 1
-                continue
+            # 去重: 精确匹配日期（修复 str.contains 的误匹配问题）
+            if 'datetime' in existing.columns:
+                existing_dates = existing['datetime'].astype(str).str.replace('.0', '', regex=False).str.replace('-', '', regex=False)
+                if (existing_dates == str(row['trade_date'])).any():
+                    skipped += 1
+                    continue
             combined = pd.concat([existing, new_df], ignore_index=True)
             combined.to_csv(csv_file, index=False)
         else:
@@ -159,8 +161,9 @@ try:
             parquet_updated += 1
         except Exception as e:
             parquet_errors += 1
-            if parquet_errors <= 5:
-                print(f"    ⚠️ Parquet 转换失败 {csv_file.name}: {e}")
+            # 记录前 20 个错误，方便排查
+            if parquet_errors <= 20:
+                print(f"    ⚠️ Parquet 转换失败 {csv_file.name}: {type(e).__name__}: {e}")
     
     log_task("A股全市场日线", "success", {
         'records': len(daily),
