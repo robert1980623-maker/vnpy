@@ -84,6 +84,20 @@ class AlphaLab:
         if file_path.exists():
             old_df: pl.DataFrame = pl.read_parquet(file_path)
 
+            # Fix datetime type mismatch (String vs Datetime)
+            if old_df["datetime"].dtype != new_df["datetime"].dtype:
+                if old_df["datetime"].dtype == pl.String:
+                    old_df = old_df.with_columns(pl.col("datetime").str.to_datetime("%Y%m%d", strict=False))
+                elif new_df["datetime"].dtype == pl.String:
+                    new_df = new_df.with_columns(pl.col("datetime").str.to_datetime("%Y%m%d", strict=False))
+
+            # Fix numeric type mismatches (Int64 vs Float64)
+            for col in ["open", "high", "low", "close", "volume", "turnover", "open_interest"]:
+                if col in old_df.columns and col in new_df.columns:
+                    if old_df[col].dtype != new_df[col].dtype:
+                        old_df = old_df.with_columns(pl.col(col).cast(pl.Float64))
+                        new_df = new_df.with_columns(pl.col(col).cast(pl.Float64))
+
             new_df = pl.concat([old_df, new_df])
 
             new_df = new_df.unique(subset=["datetime"])

@@ -48,6 +48,10 @@ class AgentReporter:
             'warnings': 0,
             'errors': 0
         }
+
+    def _detect_template(self):
+        """检测默认模板"""
+        return "default"
     
     def add_section(self, title: str, data: Dict | List, format_type: str = 'table'):
         """

@@ -50,7 +50,20 @@ class TushareFundamentalFetcher:
         self.cache_meta_file = self.cache_dir / 'cache_meta.json'
         
         # 初始化 Tushare
-        token = os.environ.get('TUSHARE_TOKEN', '')
+        token = os.environ.get('TUSHARE_TOKEN', '').strip()
+        if not token:
+            env_path = Path(__file__).parent / '.env'
+            if env_path.exists():
+                try:
+                    for line in open(env_path):
+                        line = line.strip()
+                        if line.startswith('TUSHARE_TOKEN=') and not line.startswith('#'):
+                            token = line.split('=', 1)[1].strip().strip('"').strip("'")
+                            if token:
+                                print(f"✓ TUSHARE_TOKEN 从 .env 文件加载")
+                            break
+                except Exception:
+                    pass
         if token:
             import tushare as ts
             ts.set_token(token)
