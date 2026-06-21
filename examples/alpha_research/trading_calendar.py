@@ -130,14 +130,23 @@ class TradingCalendar:
         修复：检查的是"最近交易日"的数据，不是"今天"
         - 如果今天是交易日且 >= 16:00，今天的数据已发布
         - 如果今天不是交易日（或 < 16:00），昨天是交易日的话，昨天数据已发布
+        
+        新逻辑：
+        - 如果今天 > 最近交易日（即今天是周末/节假日），最近交易日数据已发布
+        - 如果今天 == 最近交易日（即今天是交易日）：
+          - >= 16:00：今天数据已发布
+          - < 16:00：昨天数据已发布（如果昨天是交易日）
         """
         if date is None:
             date = datetime.now()
         
         today_str = date.strftime('%Y-%m-%d')
-        trading_days = self.calendar.get('trading_days', [])
+        trading_days = sorted(self.calendar.get('trading_days', []))
         
-        # 找到最近一个交易日
+        if not trading_days:
+            return False
+        
+        # 找到最近一个交易日（<= 今天）
         recent_days = [d for d in trading_days if d <= today_str]
         if not recent_days:
             return False
@@ -152,7 +161,19 @@ class TradingCalendar:
         if last_trading_day < today_str:
             return True
         
-        # 今天早于 16:00，还没发布
+        # 今天是交易日但 < 16:00：检查昨天是否是交易日
+        # 如果昨天是交易日，昨天的数据已发布
+        # 如果昨天不是交易日（如周一），找前一个交易日
+        from datetime import timedelta
+        yesterday = (date - timedelta(days=1)).strftime('%Y-%m-%d')
+        
+        # 找昨天的交易日状态
+        prev_trading_days = [d for d in trading_days if d < today_str]
+        if prev_trading_days:
+            # 有之前的交易日，数据已发布
+            return True
+        
+        # 没有之前的交易日（极端情况），返回 False
         return False
 
 

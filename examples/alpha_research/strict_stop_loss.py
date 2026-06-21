@@ -19,16 +19,38 @@ class StrictStopLoss:
     
     def __init__(self, account_file: str = './accounts/virtual_2026_account.json'):
         self.account_file = Path(account_file)
+        self.config_file = Path('./config/trading_strategy_v2.json')
         self.data_dir = Path('./data/akshare/bars')
-        self.stop_loss_threshold = -0.15  # -15% 止损
-        self.take_profit_threshold = 0.30  # +30% 止盈
-        self.warning_threshold = -0.10  # -10% 预警
+        self._load_thresholds()
         self.actions = {
-            'stop_loss': [],      # 止损卖出
-            'take_profit': [],    # 止盈建议
-            'warning': [],        # 预警关注
-            'hold': []            # 继续持有
+            'stop_loss': [],
+            'take_profit': [],
+            'warning': [],
+            'hold': []
         }
+    
+    def _load_thresholds(self):
+        """从配置文件加载止损/止盈阈值，修复：之前硬编码为-15%/+30%"""
+        defaults = {
+            'stop_loss_threshold': -0.05,   # 止损 -5%（从-15%修复）
+            'take_profit_threshold': 0.15,  # 止盈 +15%（从30%修复）
+            'warning_threshold': -0.03,     # 预警 -3%（新增）
+        }
+        if self.config_file.exists():
+            try:
+                with open(self.config_file, 'r', encoding='utf-8') as f:
+                    cfg = json.load(f)
+                sl = cfg.get('stop_loss', {})
+                defaults['stop_loss_threshold'] = sl.get('hard_stop_loss', -0.05)
+                defaults['take_profit_threshold'] = sl.get('take_profit', 0.15)
+                defaults['warning_threshold'] = sl.get('warning_level', -0.03)
+            except:
+                pass
+        self.stop_loss_threshold = defaults['stop_loss_threshold']
+        self.take_profit_threshold = defaults['take_profit_threshold']
+        self.warning_threshold = defaults['warning_threshold']
+        print(f"✅ 严格止损阈值：止损={self.stop_loss_threshold*100:.0f}%, "
+              f"止盈={self.take_profit_threshold*100:.0f}%, 预警={self.warning_threshold*100:.0f}%")
         
     def load_account(self):
         """加载账户"""
@@ -53,30 +75,24 @@ class StrictStopLoss:
         return prices
     
     def check_positions(self, account, prices):
-        """检查持仓盈亏"""
+        """检查持仓盈亏 — 修复：兼容 stock_code/cost_price 字段，显示动态阈值"""
         print("=" * 70)
         print(" " * 20 + "止盈止损检查")
         print("=" * 70)
-        print(f"止损线：-15%  |  止盈线：+30%  |  预警线：-10%")
+        print(f"止损线：{self.stop_loss_threshold*100:.0f}%  |  "
+              f"止盈线：{self.take_profit_threshold*100:.0f}%  |  "
+              f"预警线：{self.warning_threshold*100:.0f}%")
         print()
         
         for pos in account['positions']:
-            symbol = pos['symbol']
-            current_price = prices.get(symbol, pos['current_price'])
-            cost_price = pos['avg_price']
-            
-            # 计算盈亏率
-            profit_rate = (current_price - cost_price) / cost_price
-            
-            pos_info = {
-                'symbol': symbol,
-                'volume': pos['volume'],
-                'cost_price': cost_price,
-                'current_price': current_price,
-                'profit_rate': profit_rate,
-                'profit_amount': pos['volume'] * (current_price - cost_price),
-                'market_value': pos['volume'] * current_price
-            }
+            # 修复：兼容 symbol/stock_name/stock_code
+            symbol = pos.get('symbol') or pos.get('stock_name') or pos.get('stock_code') or 'Unknown'
+            # 修复：兼容 avg_price/cost_price
+            cost_price = pos.get('avg_price') or pos.get('cost_price', 0)
+            # 修复：兼容 current_price 字段
+            current_price = prices.get(symbol, pos.get('current_price', 0))
+            # 修复：兼容 volume/quantity
+            volume = pos.get('volume', pos.get('quantity', 0))
             
             # 判断操作
             if profit_rate <= self.stop_loss_threshold:
@@ -116,19 +132,23 @@ class StrictStopLoss:
         
         prices = self.get_current_prices()
         
-        for pos in self.actions['stop_loss']:
-            symbol = pos['symbol']
-            sell_price = prices.get(symbol, pos['current_price'])
-            sell_value = pos['volume'] * sell_price
+        for pos_info in self.actions['stop_loss']:
+            symbol = pos_info['symbol']
+            sell_price = prices.get(symbol, pos_info['current_price'])
+            volume = pos_info['volume']
+            sell_value = volume * sell_price
             
-            print(f"  卖出 {symbol}: {pos['volume']} 股 × ¥{sell_price:.2f} = ¥{sell_value:,.2f}")
-            print(f"    亏损：¥{pos['profit_amount']:,.2f} ({pos['profit_rate']*100:.1f}%)")
+            print(f"  卖出 {symbol}: {volume} 股 × ¥{sell_price:.2f} = ¥{sell_value:,.2f}")
+            print(f"    亏损：¥{pos_info['profit_amount']:,.2f} ({pos_info['profit_rate']*100:.1f}%)")
             
             # 更新账户
             account['cash'] += sell_value
             
-            # 从持仓中移除
-            account['positions'] = [p for p in account['positions'] if p['symbol'] != symbol]
+            # 从持仓中移除（修复：兼容多种标识字段）
+            account['positions'] = [
+                p for p in account['positions']
+                if (p.get('symbol') or p.get('stock_name') or p.get('stock_code')) != symbol
+            ]
         
         print(f"\n✅ 止损完成：卖出 {len(self.actions['stop_loss'])} 只股票")
         return account

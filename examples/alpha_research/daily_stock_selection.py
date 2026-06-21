@@ -181,32 +181,43 @@ class DailyStockSelector:
         for symbol in symbols:
             data = fundamentals.get(symbol, {})
             
-            # 跳过数据不完整的股票
-            if not data.get('pe') or not data.get('roe'):
+            # 跳过数据不完整的股票（至少需要 PE）
+            if not data.get('pe') or data.get('pe') <= 0:
                 continue
             
             strategies = []
             reasons = []
             
-            # 策略 1: 价值股 (PE<20, ROE>10%, 股息率>2%)
-            if data.get('pe', 100) < 20 and data.get('roe', 0) > 10 and (data.get('dividend_yield') or 0) > 2:
+            roe = data.get('roe')
+            pb = data.get('pb')
+            dv = data.get('dividend_yield') or 0
+            
+            # 策略 1: 价值股 (PE<20, PB<3, 股息率>2%)
+            # 优先使用 PB 替代 ROE（ROE 数据经常缺失）
+            if data.get('pe', 100) < 20 and pb and 0 < pb < 3 and dv > 2:
                 strategies.append('价值')
-                reasons.append(f"PE={data['pe']:.1f}, ROE={data['roe']:.1f}%, 股息率={data['dividend_yield']:.1f}%")
+                reasons.append(f"PE={data['pe']:.1f}, PB={pb:.1f}, 股息率={dv:.1f}%")
+            elif data.get('pe', 100) < 20 and roe and roe > 10 and dv > 2:
+                strategies.append('价值')
+                reasons.append(f"PE={data['pe']:.1f}, ROE={roe:.1f}%, 股息率={dv:.1f}%")
             
             # 策略 2: 成长股 (营收增长>25%, 利润增长>30%)
             if (data.get('revenue_growth') or 0) > 25 and (data.get('profit_growth') or 0) > 30:
                 strategies.append('成长')
                 reasons.append(f"营收增长={data['revenue_growth']:.1f}%, 利润增长={data['profit_growth']:.1f}%")
             
-            # 策略 3: 质量股 (ROE>15%)
-            if data.get('roe', 0) > 15:
+            # 策略 3: 质量股 (ROE>15% 或 PB<1)
+            if roe and roe > 15:
                 strategies.append('质量')
-                reasons.append(f"ROE={data['roe']:.1f}%")
+                reasons.append(f"ROE={roe:.1f}%")
+            elif pb and 0 < pb < 1:
+                strategies.append('破净')
+                reasons.append(f"PB={pb:.1f}")
             
             # 策略 4: 高息股 (股息率>3%)
-            if (data.get('dividend_yield') or 0) > 3:
+            if dv > 3:
                 strategies.append('高息')
-                reasons.append(f"股息率={data['dividend_yield']:.1f}%")
+                reasons.append(f"股息率={dv:.1f}%")
             
             # 计算评分
             score = len(strategies) * 2
@@ -338,33 +349,46 @@ class DailyStockSelector:
         return selection_report
         
     def sync_to_feishu(self, selection_report):
-        """同步选股结果到飞书多维表格"""
-        syncer = FeishuBitableSync()
+        """异步同步选股结果到飞书多维表格 (不阻塞主流程)"""
+        import threading
         
-        # 转换数据格式
-        stocks_for_sync = []
-        for stock in selection_report.get('stocks', []):
-            stocks_for_sync.append({
-                'symbol': stock['symbol'],
-                'name': stock['name'],
-                'strategies': stock['strategies'],
-                'pe': stock['pe'],
-                'roe': stock['roe'],
-                'score': stock['score'],
-                'reasons': stock.get('reasons', [])
-            })
+        def sync_worker():
+            """后台同步工作线程"""
+            try:
+                syncer = FeishuBitableSync()
+                
+                # 转换数据格式
+                stocks_for_sync = []
+                for stock in selection_report.get('stocks', []):
+                    stocks_for_sync.append({
+                        'symbol': stock['symbol'],
+                        'name': stock['name'],
+                        'strategies': stock['strategies'],
+                        'pe': stock['pe'],
+                        'roe': stock['roe'],
+                        'score': stock['score'],
+                        'reasons': stock.get('reasons', [])
+                    })
+                
+                # 执行同步
+                success = syncer.sync_stock_selection(stocks_for_sync, selection_report['date'])
+                
+                if success:
+                    # 发送通知
+                    top3 = stocks_for_sync[:3]
+                    top3_str = ', '.join([f"{s['name']}({s['symbol']})" for s in top3])
+                    message = f"✅ {selection_report['date']} 选股完成！\n\n选出 {len(stocks_for_sync)} 只股票\nTop 3: {top3_str}\n\n已同步到飞书多维表格，请查收～"
+                    syncer.send_notification(message)
+                    
+            except Exception as e:
+                print(f"⚠️  后台同步失败：{e}")
         
-        # 执行同步
-        success = syncer.sync_stock_selection(stocks_for_sync, selection_report['date'])
+        # 启动后台线程 (daemon=True 确保主程序退出时自动清理)
+        thread = threading.Thread(target=sync_worker, daemon=True)
+        thread.start()
         
-        if success:
-            # 发送通知
-            top3 = stocks_for_sync[:3]
-            top3_str = ', '.join([f"{s['name']}({s['symbol']})" for s in top3])
-            message = f"✅ {selection_report['date']} 选股完成！\n\n选出 {len(stocks_for_sync)} 只股票\nTop 3: {top3_str}\n\n已同步到飞书多维表格，请查收～"
-            syncer.send_notification(message)
-        
-        return success
+        print(f"\n📤 飞书同步已在后台启动 (不阻塞主流程)")
+        return True  # 立即返回，不等待同步完成
 
 
 def load_current_holdings_from_account(account_file: str = './accounts/virtual_2026_account.json'):
@@ -439,19 +463,12 @@ def main():
         print("  - 查看交易计划：cat reports/trading_plan_*.json")
         print("  - 执行交易：python3 execute_trading.py")
         
-        # 自动同步到飞书多维表格
+        # 自动同步到飞书多维表格 (异步)
         print("\n" + "=" * 70)
-        print(" " * 20 + "自动同步到飞书多维表格")
+        print(" " * 20 + "自动同步到飞书多维表格 (异步)")
         print("=" * 70)
-        sync_script = Path(__file__).parent / 'sync_to_feishu.py'
-        if sync_script.exists():
-            subprocess.run(
-                ['python3', str(sync_script), '--auto'],
-                cwd=str(Path(__file__).parent),
-                timeout=60
-            )
-        else:
-            print("⚠️ 同步脚本不存在，跳过同步")
+        selector.sync_to_feishu(selection_report)
+        print("✅ 同步任务已在后台执行，主流程继续")
     except Exception as e:
         logger.task_failed(e)
         logger.task_end(success=False)

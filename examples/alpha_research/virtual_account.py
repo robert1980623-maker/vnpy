@@ -237,10 +237,23 @@ class VirtualAccount:
         return list(positions.values())
     
     def get_position_value(self):
-        """获取持仓总市值"""
+        """获取持仓总市值
+        
+        兼容两种数据格式:
+        - 飞书缓存格式: {stock_code, volume, cost_price, market_value, ...}
+        - 本地交易流水格式: {symbol, quantity, avg_price, cost, ...}
+        """
         total = 0
         for pos in self.get_positions():
-            total += pos["cost"]
+            # 优先使用 market_value (飞书格式)
+            if 'market_value' in pos:
+                total += pos['market_value']
+            # 其次使用 cost (本地格式)
+            elif 'cost' in pos:
+                total += pos['cost']
+            # 最后用 volume * cost_price 计算 (飞书格式变体)
+            elif 'volume' in pos and 'cost_price' in pos:
+                total += pos['volume'] * pos['cost_price']
         return total
     
     def get_total_asset(self):
