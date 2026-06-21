@@ -24,8 +24,9 @@ def download():
               help='最大下载股票数')
 @click.option('--force', is_flag=True, help='强制重新下载')
 @click.option('--workers', type=int, default=4, help='并行线程数')
+@click.option('--validate', is_flag=True, help='下载后自动校验数据质量')
 @click.option('--dry-run', is_flag=True, help='只检查参数, 不实际下载')
-def download_akshare(end, max_stocks, force, workers, dry_run):
+def download_akshare(end, max_stocks, force, workers, validate, dry_run):
     """下载 A 股日 K 线数据 (via AKShare)"""
     end_date = end or datetime.now()
     logger.info("download.akshare", extra={
@@ -33,12 +34,15 @@ def download_akshare(end, max_stocks, force, workers, dry_run):
         'max': max_stocks,
         'force': force,
         'workers': workers,
+        'validate': validate,
     })
 
     args = ['--end', end_date.strftime('%Y-%m-%d'),
             '--max', str(max_stocks)]
     if force:
         args.append('--force')
+    if validate:
+        args.append('--validate')
 
     if dry_run:
         click.echo(f"[DRY-RUN] Would run: download_data_akshare.py {' '.join(args)}")
@@ -48,12 +52,16 @@ def download_akshare(end, max_stocks, force, workers, dry_run):
     run_legacy('download_data_akshare.py', args=args)
     click.echo("✅ AKShare 数据下载完成")
 
+    if validate:
+        _run_post_download_validation()
+
 
 @download.command(name='tushare')
 @click.option('--symbols', type=str, help='股票代码列表 (逗号分隔)')
 @click.option('--force', is_flag=True, help='强制重新下载')
+@click.option('--validate', is_flag=True, help='下载后自动校验数据质量')
 @click.option('--dry-run', is_flag=True, help='只检查参数, 不实际下载')
-def download_tushare(symbols, force, dry_run):
+def download_tushare(symbols, force, validate, dry_run):
     """下载 A 股数据 (via Tushare Pro)"""
     from ..utils.wrapper import run_legacy
 
@@ -62,6 +70,8 @@ def download_tushare(symbols, force, dry_run):
         args.extend(['--symbols', symbols])
     if force:
         args.append('--force')
+    if validate:
+        args.append('--validate')
 
     if dry_run:
         click.echo(f"[DRY-RUN] Would run: tushare_pro_downloader.py {' '.join(args)}")
@@ -69,6 +79,9 @@ def download_tushare(symbols, force, dry_run):
 
     run_legacy('tushare_pro_downloader.py', args=args)
     click.echo("✅ Tushare 数据下载完成")
+
+    if validate:
+        _run_post_download_validation()
 
 
 @download.command(name='policy')
@@ -120,8 +133,9 @@ def download_news(session, dry_run):
 
 @download.command(name='all')
 @click.option('--parallel', is_flag=True, help='并行下载')
+@click.option('--validate', is_flag=True, help='下载后自动校验数据质量')
 @click.option('--dry-run', is_flag=True, help='只检查参数, 不实际下载')
-def download_all(parallel, dry_run):
+def download_all(parallel, validate, dry_run):
     """下载所有数据源 (汇总调用)"""
     if dry_run:
         click.echo("[DRY-RUN] Would run all download subcommands")
@@ -131,8 +145,71 @@ def download_all(parallel, dry_run):
     for cmd_name in ['akshare', 'policy', 'geopolitics', 'news']:
         click.echo(f"\n--- Running: {cmd_name} ---")
         try:
+            ctx.invoke(download.commands[cmd_name], dry_run=False, validate=validate)
+        except TypeError:
+            # Some subcommands don't have --validate
             ctx.invoke(download.commands[cmd_name], dry_run=False)
         except Exception as e:
             click.echo(f"❌ {cmd_name} failed: {e}", err=True)
 
     click.echo("\n✅ 全部下载任务完成")
+
+
+# ---------------------------------------------------------------------------
+# Helper: post-download validation
+# ---------------------------------------------------------------------------
+
+def _run_post_download_validation():
+    """下载完成后对数据目录中的 CSV 运行校验"""
+    import sys
+    from pathlib import Path
+
+    # 确保 alpha_research 在 sys.path 中
+    ar_dir = Path(__file__).resolve().parent.parent.parent / 'examples' / 'alpha_research'
+    if str(ar_dir) not in sys.path:
+        sys.path.insert(0, str(ar_dir))
+
+    try:
+        from data_validator import DataValidator
+        validator = DataValidator()
+
+        data_dir = Path('./data/akshare/bars')
+        if not data_dir.exists():
+            click.echo("⚠️  数据目录不存在，跳过校验")
+            return
+
+        csv_files = sorted(data_dir.glob('*.csv'))
+        if not csv_files:
+            click.echo("⚠️  数据目录为空，跳过校验")
+            return
+
+        click.echo(f"\n🔍 校验 {len(csv_files)} 个数据文件...")
+        passed, failed, errors = 0, 0, 0
+
+        for csv_file in csv_files:
+            symbol = csv_file.stem.replace('_', '.')
+            try:
+                df = pd.read_csv(csv_file)
+                result = validator.validate(df, symbol)
+                if result.passed:
+                    passed += 1
+                else:
+                    failed += 1
+                    click.echo(f"  ❌ {symbol}: {result.summary()}")
+            except Exception as e:
+                errors += 1
+                click.echo(f"  ⚠️  {symbol}: 校验异常 - {e}")
+
+        click.echo(f"\n✅ 校验完成: 通过 {passed}, 失败 {failed}, 异常 {errors}")
+
+    except ImportError as e:
+        click.echo(f"⚠️  无法加载 data_validator: {e}")
+    except Exception as e:
+        click.echo(f"⚠️  校验过程出错: {e}")
+
+
+# 导入 pandas（post-validation 使用）
+try:
+    import pandas as pd
+except ImportError:
+    pd = None

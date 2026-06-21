@@ -13,13 +13,75 @@ import logging
 logger = logging.getLogger(__name__)
 
 import json
+import math
 import os
 import time
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 import pandas as pd
+
+# AlertNotifier 延迟导入的占位（允许 mock 测试）
+try:
+    from alert_notifier import AlertNotifier
+except ImportError:
+    AlertNotifier = None
+
+
+# ---------------------------------------------------------------------------
+# Pipeline validation data classes
+# ---------------------------------------------------------------------------
+
+@dataclass
+class CheckResult:
+    """单个校验项结果"""
+    name: str               # 校验项名称 (e.g. 'row_count')
+    passed: bool            # 是否通过
+    message: str            # 人类可读的描述
+    details: Dict = field(default_factory=dict)  # 附加信息
+    severity: str = 'INFO'  # INFO / WARNING / ERROR
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+
+@dataclass
+class ValidationResult:
+    """校验结果汇总"""
+    symbol: str
+    passed: bool
+    checks: List[CheckResult]
+    timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
+
+    def summary(self) -> str:
+        """生成校验摘要（人类可读）"""
+        status = "PASSED" if self.passed else "FAILED"
+        lines = [f"[{status}] {self.symbol} @ {self.timestamp}"]
+        for c in self.checks:
+            icon = "PASS" if c.passed else "FAIL"
+            lines.append(f"  [{icon}] {c.name}: {c.message}")
+        return "\n".join(lines)
+
+    def to_dict(self) -> dict:
+        return {
+            'symbol': self.symbol,
+            'passed': self.passed,
+            'timestamp': self.timestamp,
+            'checks': [c.to_dict() for c in self.checks],
+        }
+
+    @property
+    def failed_checks(self) -> List[CheckResult]:
+        return [c for c in self.checks if not c.passed]
+
+    @property
+    def error_count(self) -> int:
+        return sum(1 for c in self.checks if not c.passed and c.severity == 'ERROR')
+
+    @property
+    def warning_count(self) -> int:
+        return sum(1 for c in self.checks if not c.passed and c.severity == 'WARNING')
 
 
 @dataclass
@@ -85,7 +147,297 @@ class DataValidator:
         
         # 数据源状态
         self.source_status: Dict[str, DataSourceStatus] = {}
-    
+
+        # Pipeline validation error log path
+        self.validation_error_log = Path('./logs/validation_errors.log')
+        self.validation_error_log.parent.mkdir(parents=True, exist_ok=True)
+
+    # ------------------------------------------------------------------
+    # Pipeline validation (DataFrame-based)
+    # ------------------------------------------------------------------
+
+    def validate(self, df: pd.DataFrame, symbol: str) -> ValidationResult:
+        """校验 DataFrame 数据质量（下载后管道校验）
+
+        Args:
+            df: K 线 DataFrame（应包含 date/datetime, open, high, low, close, volume）
+            symbol: 股票代码
+
+        Returns:
+            ValidationResult
+        """
+        checks: List[CheckResult] = [
+            self._check_required_columns(df),
+            self._check_row_count(df, symbol),
+            self._check_date_continuity(df),
+            self._check_value_range(df),
+            self._check_freshness(df),
+        ]
+        passed = all(c.passed for c in checks if c.severity == 'ERROR')
+        result = ValidationResult(symbol=symbol, passed=passed, checks=checks)
+
+        # 记录到 validation_errors.log（仅失败项）
+        if not result.passed:
+            self._log_validation_error(result)
+
+        return result
+
+    def _check_required_columns(self, df: pd.DataFrame) -> CheckResult:
+        """字段完整性校验: date/datetime, open, high, low, close, volume 必须存在"""
+        accepted_date_cols = {'date', 'datetime', 'trade_date'}
+        required_value_cols = {'open', 'high', 'low', 'close', 'volume'}
+
+        cols = set(df.columns)
+        has_date = bool(cols & accepted_date_cols)
+        missing_values = required_value_cols - cols
+
+        missing = []
+        if not has_date:
+            missing.append('date/datetime/trade_date')
+        missing.extend(sorted(missing_values))
+
+        if missing:
+            return CheckResult(
+                name='required_columns',
+                passed=False,
+                message=f"缺失字段: {', '.join(missing)}",
+                details={'missing': missing, 'available': sorted(cols)},
+                severity='ERROR',
+            )
+        return CheckResult(
+            name='required_columns',
+            passed=True,
+            message='所有必需字段存在',
+            details={'columns': sorted(cols)},
+        )
+
+    def _check_row_count(self, df: pd.DataFrame, symbol: str) -> CheckResult:
+        """行数校验: 日线数据 >= 200 行/年"""
+        if df.empty:
+            return CheckResult(
+                name='row_count',
+                passed=False,
+                message='数据为空',
+                severity='ERROR',
+            )
+
+        # 估算年份跨度
+        date_col = self._date_column(df)
+        min_years = 1.0
+        if date_col and len(df) >= 2:
+            try:
+                dates = pd.to_datetime(df[date_col], errors='coerce').dropna()
+                if len(dates) >= 2:
+                    span_days = (dates.max() - dates.min()).days
+                    if span_days > 0:
+                        # 使用较小下限，避免对短跨度数据过度宽松
+                        min_years = max(span_days / 365.25, 0.01)
+            except Exception:
+                pass
+
+        expected_min = int(200 * min_years)
+        actual = len(df)
+
+        if actual < expected_min:
+            return CheckResult(
+                name='row_count',
+                passed=False,
+                message=f"行数不足: {actual} < {expected_min} (预期 {int(min_years * 365)}天 >= 200行/年)",
+                details={'actual': actual, 'expected_min': expected_min, 'span_years': round(min_years, 2)},
+                severity='ERROR',
+            )
+        return CheckResult(
+            name='row_count',
+            passed=True,
+            message=f"行数正常: {actual} 行 (跨度 {min_years:.1f} 年)",
+            details={'actual': actual, 'expected_min': expected_min},
+        )
+
+    def _check_date_continuity(self, df: pd.DataFrame) -> CheckResult:
+        """日期连续性校验: 检查交易日是否有缺失"""
+        date_col = self._date_column(df)
+        if not date_col:
+            return CheckResult(
+                name='date_continuity',
+                passed=False,
+                message='无日期字段，无法校验连续性',
+                severity='WARNING',
+            )
+
+        try:
+            dates = pd.to_datetime(df[date_col], errors='coerce').dropna().sort_values()
+        except Exception as e:
+            return CheckResult(
+                name='date_continuity',
+                passed=False,
+                message=f'日期解析失败: {e}',
+                severity='ERROR',
+            )
+
+        if dates.empty:
+            return CheckResult(
+                name='date_continuity',
+                passed=False,
+                message='日期列全部为空',
+                severity='ERROR',
+            )
+
+        # 使用 A 股交易日历近似：只检查周一-周五的缺失（节假日无法精确判断）
+        unique_dates = dates.dt.date.drop_duplicates()
+        if len(unique_dates) < 2:
+            return CheckResult(
+                name='date_continuity',
+                passed=True,
+                message=f'仅有 {len(unique_dates)} 个交易日，跳过连续性校验',
+                details={'trading_days': len(unique_dates)},
+            )
+
+        # 生成预期工作日范围
+        start, end = min(unique_dates), max(unique_dates)
+        all_weekdays = pd.bdate_range(start=start, end=end).date
+        missing_days = sorted(set(all_weekdays) - set(unique_dates))
+
+        # 允许少量缺失（节假日），阈值：缺失 <= 5% 视为 WARNING，> 10% 视为 ERROR
+        ratio = len(missing_days) / max(len(all_weekdays), 1)
+        passed = ratio <= 0.05
+        severity = 'ERROR' if ratio > 0.10 else ('WARNING' if missing_days else 'INFO')
+
+        return CheckResult(
+            name='date_continuity',
+            passed=passed,
+            message=f"缺失 {len(missing_days)} 个工作日 ({ratio:.1%})",
+            details={
+                'missing_count': len(missing_days),
+                'total_weekdays': len(all_weekdays),
+                'trading_days': len(unique_dates),
+                'missing_ratio': round(ratio, 4),
+                'sample_missing': [str(d) for d in missing_days[:5]],
+            },
+            severity=severity,
+        )
+
+    def _check_value_range(self, df: pd.DataFrame) -> CheckResult:
+        """数值范围校验: 股价 > 0, 成交量 >= 0, 无 NaN/Inf"""
+        issues = []
+
+        # 股价列必须 > 0
+        for col in ['open', 'high', 'low', 'close']:
+            if col not in df.columns:
+                continue
+            series = pd.to_numeric(df[col], errors='coerce')
+            null_count = int(series.isna().sum())
+            non_positive = int((series <= 0).sum())
+            inf_count = int(series.apply(lambda x: isinstance(x, float) and math.isinf(x)).sum()) if null_count == 0 else 0
+            bad = null_count + non_positive + inf_count
+            if bad > 0:
+                issues.append(f"{col}: {bad} 异常值 (null={null_count}, <=0={non_positive}, inf={inf_count})")
+
+        # 成交量 >= 0
+        if 'volume' in df.columns:
+            vol = pd.to_numeric(df['volume'], errors='coerce')
+            vol_null = int(vol.isna().sum())
+            vol_neg = int((vol < 0).sum())
+            if vol_null + vol_neg > 0:
+                issues.append(f"volume: {vol_null + vol_neg} 异常值 (null={vol_null}, <0={vol_neg})")
+
+        if issues:
+            return CheckResult(
+                name='value_range',
+                passed=False,
+                message='; '.join(issues),
+                details={'issues': issues},
+                severity='ERROR',
+            )
+        return CheckResult(
+            name='value_range',
+            passed=True,
+            message='所有数值在合理范围内',
+        )
+
+    def _check_freshness(self, df: pd.DataFrame) -> CheckResult:
+        """数据新鲜度校验: 最新日期 <= 今天 - 1 天"""
+        date_col = self._date_column(df)
+        if not date_col:
+            return CheckResult(
+                name='freshness',
+                passed=False,
+                message='无日期字段，无法校验新鲜度',
+                severity='WARNING',
+            )
+
+        try:
+            dates = pd.to_datetime(df[date_col], errors='coerce').dropna()
+            if dates.empty:
+                return CheckResult(
+                    name='freshness',
+                    passed=False,
+                    message='日期列全部为空',
+                    severity='ERROR',
+                )
+            latest = dates.max()
+            today = pd.Timestamp.now().normalize()
+            age_days = (today - latest.normalize()).days
+
+            # 允许 3 天延迟（周末/节假日）
+            if age_days > 3:
+                return CheckResult(
+                    name='freshness',
+                    passed=False,
+                    message=f"数据陈旧: 最新日期 {latest.date()} (距今 {age_days} 天)",
+                    details={'latest': str(latest.date()), 'age_days': age_days},
+                    severity='WARNING',
+                )
+            return CheckResult(
+                name='freshness',
+                passed=True,
+                message=f"数据新鲜: 最新日期 {latest.date()} (距今 {age_days} 天)",
+                details={'latest': str(latest.date()), 'age_days': age_days},
+            )
+        except Exception as e:
+            return CheckResult(
+                name='freshness',
+                passed=False,
+                message=f'日期解析失败: {e}',
+                severity='ERROR',
+            )
+
+    def _date_column(self, df: pd.DataFrame) -> Optional[str]:
+        """识别 DataFrame 中的日期列"""
+        for col in ('date', 'datetime', 'trade_date'):
+            if col in df.columns:
+                return col
+        return None
+
+    def _log_validation_error(self, result: ValidationResult):
+        """记录校验失败到 validation_errors.log"""
+        try:
+            with open(self.validation_error_log, 'a', encoding='utf-8') as f:
+                f.write(json.dumps(result.to_dict(), ensure_ascii=False) + '\n')
+        except Exception as e:
+            logger.error(f"Failed to write validation error log: {e}")
+
+    def notify_validation_failure(self, result: ValidationResult):
+        """校验失败时通过飞书通知（使用现有的 alert_notifier）"""
+        if result.passed:
+            return
+        if AlertNotifier is None:
+            logger.warning("AlertNotifier not available, skipping notification")
+            return
+        try:
+            notifier = AlertNotifier()
+            failed_names = [c.name for c in result.failed_checks]
+            severity = 'P1' if result.error_count > 0 else 'P2'
+            alert = notifier.create_alert(
+                severity=severity,
+                agent='data_validator',
+                error=f"数据校验失败 {result.symbol}: {', '.join(failed_names)}",
+                action_taken='记录到 validation_errors.log',
+            )
+            notifier.send_alert(alert)
+            logger.info(f"Validation alert sent for {result.symbol}")
+        except Exception as e:
+            logger.error(f"Failed to send validation alert: {e}")
+
     def validate_all_positions(self) -> Dict:
         """验证所有持仓数据"""
         logger.info("\n" + "="*70)
@@ -171,8 +523,8 @@ class DataValidator:
                     severity = 'P1' if 'price' in issue.lower() else 'P2'
                     self._create_alert(symbol, 'price_diff', severity, issue)
             
-            # 6. 检查数据新鲜度
-            freshness = self._check_freshness(df)
+            # 6. 检查数据新鲜度（legacy 模式，返回 dict）
+            freshness = self._check_freshness_legacy(df)
             if not freshness['ok']:
                 result['issues'].extend(freshness['issues'])
             
@@ -194,7 +546,7 @@ class DataValidator:
         suffix = symbol.split('.')[1].lower()
         return self.data_dir / f'{code}_{suffix}.csv'
     
-    def _check_completeness(self, df: pd.DataFrame) -> Dict:
+    def _check_completeness_legacy(self, df: pd.DataFrame) -> Dict:
         """检查数据完整性"""
         issues = []
         ok = True
@@ -215,7 +567,7 @@ class DataValidator:
         
         return {'ok': ok, 'issues': issues}
     
-    def _check_reasonability(self, df: pd.DataFrame) -> Dict:
+    def _check_reasonability_legacy(self, df: pd.DataFrame) -> Dict:
         """检查数据合理性"""
         issues = []
         ok = True
@@ -248,7 +600,7 @@ class DataValidator:
         
         return {'ok': ok, 'issues': issues}
     
-    def _compare_data_sources(self, symbol: str, local_df: pd.DataFrame) -> Dict:
+    def _compare_data_sources_legacy(self, symbol: str, local_df: pd.DataFrame) -> Dict:
         """对比多数据源"""
         issues = []
         ok = True
@@ -269,8 +621,8 @@ class DataValidator:
         
         return {'ok': ok, 'issues': issues}
     
-    def _check_freshness(self, df: pd.DataFrame) -> Dict:
-        """检查数据新鲜度"""
+    def _check_freshness_legacy(self, df: pd.DataFrame) -> Dict:
+        """检查数据新鲜度（legacy 模式，用于 validate_symbol）"""
         issues = []
         ok = True
         
