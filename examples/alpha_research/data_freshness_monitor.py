@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 # 通知工具
+import logging
+logger = logging.getLogger(__name__)
+
 from notification_utils import notify_task_start, notify_task_complete, notify_task_error
 
 """数据新鲜度监控 Agent - 修复版"""
@@ -34,22 +37,22 @@ class DataFreshnessMonitor:
         }
     
     def check_data_freshness(self):
-        print("=" * 70)
-        print(f"数据新鲜度检查 - {self.check_time.strftime('%Y-%m-%d %H:%M')}")
-        print("=" * 70)
-        print(f"期望日期：{self.today}")
-        print(f"允许滞后：{self.max_age_hours} 小时\n")
+        logger.info("=" * 70)
+        logger.info(f"数据新鲜度检查 - {self.check_time.strftime('%Y-%m-%d %H:%M')}")
+        logger.info("=" * 70)
+        logger.info(f"期望日期：{self.today}")
+        logger.info(f"允许滞后：{self.max_age_hours} 小时\n")
         
         if not self.data_dir.exists():
-            print(f"❌ 数据目录不存在：{self.data_dir}")
+            logger.info(f"❌ 数据目录不存在：{self.data_dir}")
             return False
         
         csv_files = list(self.data_dir.glob('*.csv'))
         if not csv_files:
-            print(f"❌ 数据目录为空")
+            logger.info(f"❌ 数据目录为空")
             return False
         
-        print(f"检查 {len(csv_files)} 个文件...\n")
+        logger.info(f"检查 {len(csv_files)} 个文件...\n")
         
         fresh_count = 0
         stale_count = 0
@@ -108,24 +111,24 @@ class DataFreshnessMonitor:
         total = fresh_count + stale_count
         fresh_ratio = fresh_count / total if total > 0 else 0
         
-        print(f"📊 统计:")
-        print(f"  新鲜数据：{fresh_count} 只")
-        print(f"  滞后数据：{stale_count} 只")
+        logger.info(f"📊 统计:")
+        logger.info(f"  新鲜数据：{fresh_count} 只")
+        logger.info(f"  滞后数据：{stale_count} 只")
         
         if fresh_ratio >= 0.95:
             self.report['status'] = 'fresh'
-            print(f"\n✅ 数据新鲜：{fresh_count}/{total} ({fresh_ratio*100:.1f}%)")
+            logger.info(f"\n✅ 数据新鲜：{fresh_count}/{total} ({fresh_ratio*100:.1f}%)")
         elif fresh_ratio >= 0.80:
             self.report['status'] = 'partial_stale'
-            print(f"\n⚠️ 部分滞后：{stale_count}/{total} ({(1-fresh_ratio)*100:.1f}%)")
+            logger.info(f"\n⚠️ 部分滞后：{stale_count}/{total} ({(1-fresh_ratio)*100:.1f}%)")
         else:
             self.report['status'] = 'stale'
-            print(f"\n❌ 数据滞后：{stale_count}/{total} ({(1-fresh_ratio)*100:.1f}%)")
+            logger.info(f"\n❌ 数据滞后：{stale_count}/{total} ({(1-fresh_ratio)*100:.1f}%)")
         
         if stale_stocks:
-            print(f"\n📉 滞后股票 Top 5:")
+            logger.info(f"\n📉 滞后股票 Top 5:")
             for stock in sorted(stale_stocks, key=lambda x: x['age_hours'], reverse=True)[:5]:
-                print(f"  - {stock['symbol']}: {stock['data_date']} ({stock['age_hours']} 小时前)")
+                logger.info(f"  - {stock['symbol']}: {stock['data_date']} ({stock['age_hours']} 小时前)")
         
         return fresh_ratio >= 0.95
     
@@ -134,7 +137,7 @@ class DataFreshnessMonitor:
         report_file.parent.mkdir(parents=True, exist_ok=True)
         with open(report_file, 'w', encoding='utf-8') as f:
             json.dump(self.report, f, ensure_ascii=False, indent=2)
-        print(f"\n✅ 报告已保存：{report_file}")
+        logger.info(f"\n✅ 报告已保存：{report_file}")
 
 def main():
     import argparse

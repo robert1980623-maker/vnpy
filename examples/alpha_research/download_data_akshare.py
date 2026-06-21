@@ -9,15 +9,18 @@
 - akshare-proxy-patch 支持
 """
 
+import logging
+logger = logging.getLogger(__name__)
+
 # 先加载 akshare-proxy-patch（在导入 akshare 之前）
 try:
     import akshare_proxy_patch
     akshare_proxy_patch.install_patch("101.201.173.125", "", 30)
-    print("✓ akshare-proxy-patch 已加载")
+    logger.info("✓ akshare-proxy-patch 已加载")
 except ImportError:
-    print("⚠️ akshare-proxy-patch 未安装，将使用原始 AKShare")
+    logger.info("⚠️ akshare-proxy-patch 未安装，将使用原始 AKShare")
 except Exception as e:
-    print(f"⚠️ akshare-proxy-patch 加载失败：{e}")
+    logger.error(f"⚠️ akshare-proxy-patch 加载失败：{e}")
 
 import akshare as ak
 import pandas as pd
@@ -51,20 +54,20 @@ TUSHARE_TOKEN = ENV_TOKEN if ENV_TOKEN else CONFIG_TOKEN
 USE_TUSHARE = bool(TUSHARE_TOKEN and TUSHARE_TOKEN.strip())
 
 if USE_TUSHARE:
-    print(f"✓ Tushare 已配置，将优先使用 Tushare 数据源")
+    logger.info(f"✓ Tushare 已配置，将优先使用 Tushare 数据源")
     if ENV_TOKEN:
-        print("  来源：环境变量 TUSHARE_TOKEN")
+        logger.info("  来源：环境变量 TUSHARE_TOKEN")
     else:
-        print("  来源：config/auto_config.yaml")
+        logger.info("  来源：config/auto_config.yaml")
     # 初始化 Tushare
     import tushare as ts
     ts.set_token(TUSHARE_TOKEN)
     pro = ts.pro_api()
 else:
-    print("ℹ Tushare 未配置，将使用 AKShare 数据源")
-    print("  设置方式:")
-    print("  1. 环境变量：export TUSHARE_TOKEN='your_token'")
-    print("  2. 配置文件：config/auto_config.yaml 中的 data.tushare_token")
+    logger.info("ℹ Tushare 未配置，将使用 AKShare 数据源")
+    logger.info("  设置方式:")
+    logger.info("  1. 环境变量：export TUSHARE_TOKEN='your_token'")
+    logger.info("  2. 配置文件：config/auto_config.yaml 中的 data.tushare_token")
     pro = None
 
 
@@ -106,10 +109,10 @@ class DataCache:
         try:
             df = pd.read_csv(cache_file)
             df["datetime"] = pd.to_datetime(df["datetime"])
-            print(f"  ✓ 从缓存加载 {vt_symbol}")
+            logger.info(f"  ✓ 从缓存加载 {vt_symbol}")
             return df
         except Exception as e:
-            print(f"  ✗ 缓存读取失败：{e}")
+            logger.error(f"  ✗ 缓存读取失败：{e}")
             return None
     
     def save_bars(self, vt_symbol: str, start_date: str, end_date: str, df: pd.DataFrame):
@@ -124,7 +127,7 @@ class DataCache:
             "created": datetime.now().isoformat()
         }
         self._save_meta()
-        print(f"  ✓ 已缓存 {vt_symbol} ({len(df)} 条)")
+        logger.info(f"  ✓ 已缓存 {vt_symbol} ({len(df)} 条)")
     
     def get_fundamental(self, vt_symbol: str) -> dict:
         """从缓存获取财务数据"""
@@ -141,7 +144,7 @@ class DataCache:
         try:
             with open(cache_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-            print(f"  ✓ 从缓存加载 {vt_symbol} 财务数据")
+            logger.info(f"  ✓ 从缓存加载 {vt_symbol} 财务数据")
             return data
         except Exception as e:
             return None
@@ -209,10 +212,10 @@ def get_stock_bars_akshare(vt_symbol: str, start_date: str, end_date: str,
         except Exception as e:
             if attempt < max_retries - 1:
                 wait_time = random.uniform(3, 6) * (attempt + 1)
-                print(f"  重试 {attempt+1}/{max_retries}, 等待 {wait_time:.1f}秒...")
+                logger.info(f"  重试 {attempt+1}/{max_retries}, 等待 {wait_time:.1f}秒...")
                 time.sleep(wait_time)
             else:
-                print(f"  ✗ AKShare 失败：{e}")
+                logger.error(f"  ✗ AKShare 失败：{e}")
                 return None
     
     return None
@@ -265,7 +268,7 @@ def get_stock_bars_tushare(vt_symbol: str, start_date: str, end_date: str,
             df["volume"] = df["vol"].astype(float) * 100  # 手转股
             df["turnover"] = df["amount"].astype(float)
             
-            print(f"  ✓ Tushare 成功获取 {vt_symbol}")
+            logger.info(f"  ✓ Tushare 成功获取 {vt_symbol}")
             
             return df[["vt_symbol", "datetime", "open_price", "high_price", "low_price", 
                        "close_price", "volume", "turnover"]]
@@ -273,10 +276,10 @@ def get_stock_bars_tushare(vt_symbol: str, start_date: str, end_date: str,
         except Exception as e:
             if attempt < max_retries - 1:
                 wait_time = random.uniform(2, 4) * (attempt + 1)
-                print(f"  Tushare 重试 {attempt+1}/{max_retries}, 等待 {wait_time:.1f}秒...")
+                logger.info(f"  Tushare 重试 {attempt+1}/{max_retries}, 等待 {wait_time:.1f}秒...")
                 time.sleep(wait_time)
             else:
-                print(f"  ✗ Tushare 失败：{e}")
+                logger.error(f"  ✗ Tushare 失败：{e}")
                 return None
     
     return None
@@ -300,7 +303,7 @@ def get_stock_bars_baostock(vt_symbol: str, start_date: str, end_date: str) -> p
         # 登录
         lg = bs.login()
         if lg.error_code != '0':
-            print(f"  Baostock 登录失败：{lg.error_msg}")
+            logger.error(f"  Baostock 登录失败：{lg.error_msg}")
             return None
         
         # 转换代码格式 (baostock 需要 sh.600000 或 sz.000001 格式)
@@ -327,7 +330,7 @@ def get_stock_bars_baostock(vt_symbol: str, start_date: str, end_date: str) -> p
         )
         
         if rs.error_code != '0':
-            print(f"  Baostock 查询失败：{rs.error_msg}")
+            logger.error(f"  Baostock 查询失败：{rs.error_msg}")
             bs.logout()
             return None
         
@@ -358,10 +361,10 @@ def get_stock_bars_baostock(vt_symbol: str, start_date: str, end_date: str) -> p
                    "close_price", "volume", "turnover"]]
     
     except ImportError:
-        print("  Baostock 未安装，跳过")
+        logger.info("  Baostock 未安装，跳过")
         return None
     except Exception as e:
-        print(f"  ✗ Baostock 失败：{e}")
+        logger.error(f"  ✗ Baostock 失败：{e}")
         return None
 
 
@@ -427,10 +430,10 @@ def get_fundamental_data(vt_symbol: str, max_retries: int = 2) -> dict:
         except Exception as e:
             if attempt < max_retries - 1:
                 wait_time = random.uniform(2, 4)
-                print(f"  重试 {attempt+1}/{max_retries}, 等待 {wait_time:.1f}秒...")
+                logger.info(f"  重试 {attempt+1}/{max_retries}, 等待 {wait_time:.1f}秒...")
                 time.sleep(wait_time)
             else:
-                print(f"  ✗ 财务数据获取失败：{e}")
+                logger.error(f"  ✗ 财务数据获取失败：{e}")
                 # 返回空数据，不影响 K 线下载
                 return {
                     "vt_symbol": vt_symbol,
@@ -453,7 +456,7 @@ def download_index_components(index_code: str = "000300") -> list:
     Returns:
         list: 成分股列表
     """
-    print(f"获取 {index_code} 成分股...")
+    logger.info(f"获取 {index_code} 成分股...")
     
     try:
         df = ak.index_stock_cons(symbol=index_code)
@@ -466,10 +469,10 @@ def download_index_components(index_code: str = "000300") -> list:
                     exchange = "SZ" if str(code).startswith(("0", "3")) else "SH"
                     components.append(f"{code}.{exchange}")
             
-            print(f"获取到 {len(components)} 只成分股")
+            logger.info(f"获取到 {len(components)} 只成分股")
             return components
     except Exception as e:
-        print(f"获取成分股失败：{e}")
+        logger.error(f"获取成分股失败：{e}")
     
     return []
 
@@ -503,11 +506,11 @@ def download_all_data(
     if max_stocks:
         components = components[:max_stocks]
     
-    print(f"\n准备下载 {len(components)} 只股票数据")
-    print(f"时间范围：{start_date} - {end_date}")
+    logger.info(f"\n准备下载 {len(components)} 只股票数据")
+    logger.info(f"时间范围：{start_date} - {end_date}")
     if use_cache:
-        print(f"缓存目录：{cache_dir}")
-    print("=" * 60)
+        logger.info(f"缓存目录：{cache_dir}")
+    logger.info("=" * 60)
     
     # 下载数据
     bars_dict = {}
@@ -516,7 +519,7 @@ def download_all_data(
     cache_hit_count = 0
     
     for i, vt_symbol in enumerate(components, 1):
-        print(f"\n[{i}/{len(components)}] 下载 {vt_symbol}...")
+        logger.info(f"\n[{i}/{len(components)}] 下载 {vt_symbol}...")
         
         # 下载 K 线数据
         bars = None
@@ -528,17 +531,17 @@ def download_all_data(
         if bars is None:
             # 数据源优先级：Tushare > AKShare > Baostock
             if USE_TUSHARE:
-                print("  使用 Tushare 数据源...")
+                logger.info("  使用 Tushare 数据源...")
                 bars = get_stock_bars_tushare(vt_symbol, start_date, end_date)
             
             # Tushare 失败或未配置，尝试 AKShare
             if bars is None:
-                print("  使用 AKShare 数据源...")
+                logger.info("  使用 AKShare 数据源...")
                 bars = get_stock_bars_akshare(vt_symbol, start_date, end_date)
             
             # AKShare 失败，尝试 Baostock
             if bars is None:
-                print("  尝试 Baostock...")
+                logger.info("  尝试 Baostock...")
                 bars = get_stock_bars_baostock(vt_symbol, start_date, end_date)
             
             # 保存到缓存
@@ -547,10 +550,10 @@ def download_all_data(
         
         if bars is not None and not bars.empty:
             bars_dict[vt_symbol] = bars
-            print(f"  ✓ K 线数据：{len(bars)} 条")
+            logger.info(f"  ✓ K 线数据：{len(bars)} 条")
             success_count += 1
         else:
-            print(f"  ✗ K 线数据：失败")
+            logger.error(f"  ✗ K 线数据：失败")
         
         # 下载财务数据
         fundamental = None
@@ -565,9 +568,9 @@ def download_all_data(
         if fundamental:
             fundamental_dict[vt_symbol] = {fundamental["report_date"]: fundamental}
             pe = fundamental.get('pe_ratio', 'N/A')
-            print(f"  ✓ 财务数据：PE={pe}")
+            logger.info(f"  ✓ 财务数据：PE={pe}")
         else:
-            print(f"  ✗ 财务数据：失败")
+            logger.error(f"  ✗ 财务数据：失败")
         
         # 延迟，避免请求过快
         if i < len(components):
@@ -575,21 +578,21 @@ def download_all_data(
             if night_mode:
                 if i % 2 == 0:  # 每 2 只股票休息
                     wait_time = random.uniform(8, 12)
-                    print(f"\n休息 {wait_time:.1f}秒 (夜间模式)...")
+                    logger.info(f"\n休息 {wait_time:.1f}秒 (夜间模式)...")
                     time.sleep(wait_time)
             else:
                 if i % 3 == 0:  # 每 3 只股票休息
                     wait_time = random.uniform(3, 5)
-                    print(f"\n休息 {wait_time:.1f}秒...")
+                    logger.info(f"\n休息 {wait_time:.1f}秒...")
                     time.sleep(wait_time)
     
     # 统计
-    print("\n" + "=" * 60)
-    print("下载完成！")
-    print(f"  - 成功：{success_count}/{len(components)} 只股票")
-    print(f"  - 缓存命中：{cache_hit_count} 次")
-    print(f"  - 财务数据：{len(fundamental_dict)} 只股票")
-    print("=" * 60)
+    logger.info("\n" + "=" * 60)
+    logger.info("下载完成！")
+    logger.info(f"  - 成功：{success_count}/{len(components)} 只股票")
+    logger.info(f"  - 缓存命中：{cache_hit_count} 次")
+    logger.info(f"  - 财务数据：{len(fundamental_dict)} 只股票")
+    logger.info("=" * 60)
     
     return bars_dict, fundamental_dict
 
@@ -622,9 +625,9 @@ def main():
     
         logger.task_start()
         logger.info("任务开始")
-        print("=" * 60)
-        print("下载股票数据（增强版）")
-        print("=" * 60)
+        logger.info("=" * 60)
+        logger.info("下载股票数据（增强版）")
+        logger.info("=" * 60)
     
         # 设置参数
         index_code = args.index
@@ -634,8 +637,8 @@ def main():
         # 支持指定股票代码列表
         if args.symbols:
             symbols = args.symbols
-            print(f"指定股票：{len(symbols)} 只")
-            print(f"  列表：{', '.join(symbols[:10])}{'...' if len(symbols) > 10 else ''}")
+            logger.info(f"指定股票：{len(symbols)} 只")
+            logger.info(f"  列表：{', '.join(symbols[:10])}{'...' if len(symbols) > 10 else ''}")
             max_stocks = len(symbols)
             components = symbols  # 使用指定的股票列表
         else:
@@ -645,13 +648,13 @@ def main():
         night_mode = args.night_mode
     
         if night_mode:
-            print("夜间模式：启用（更长延迟）")
+            logger.info("夜间模式：启用（更长延迟）")
     
         # 1. 获取成分股（如果未指定股票列表）
         if not args.symbols:
             components = download_index_components(index_code)
             if not components:
-                print("获取成分股失败，使用示例股票")
+                logger.error("获取成分股失败，使用示例股票")
                 components = ["000001.SZ", "000002.SZ", "600000.SH", "600036.SH", "600519.SH"]
         # 如果指定了 symbols，components 已经在上面设置过了
     
@@ -683,8 +686,8 @@ def main():
             with open(fundamental_path, 'w', encoding='utf-8') as f:
                 json.dump(fundamental_dict, f, ensure_ascii=False, indent=2)
         
-            print(f"\n数据已保存到 {data_dir}")
-            print(f"下一步：python run_backtest.py --data {data_dir}")
+            logger.info(f"\n数据已保存到 {data_dir}")
+            logger.info(f"下一步：python run_backtest.py --data {data_dir}")
 
     except Exception as e:
         logger.task_failed(e)

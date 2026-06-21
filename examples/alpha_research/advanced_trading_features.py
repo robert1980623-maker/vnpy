@@ -9,6 +9,9 @@
 - 追踪止损 (Trailing Stop)
 """
 
+import logging
+logger = logging.getLogger(__name__)
+
 import tushare as ts
 import json
 from pathlib import Path
@@ -124,7 +127,7 @@ class AdvancedTradingAccount(PaperTradingAccount):
                       volume: Optional[int] = None) -> Optional[Order]:
         """设置止损单"""
         if ts_code not in self.positions:
-            print(f"❌ 不持有 {ts_code}")
+            logger.info(f"❌ 不持有 {ts_code}")
             return None
         
         pos = self.positions[ts_code]
@@ -137,12 +140,12 @@ class AdvancedTradingAccount(PaperTradingAccount):
             volume = pos['volume']  # 默认全部持仓
         
         if volume > pos['volume']:
-            print(f"❌ 持仓不足：持有{pos['volume']}股，设置{volume}股止损")
+            logger.info(f"❌ 持仓不足：持有{pos['volume']}股，设置{volume}股止损")
             return None
         
         # 检查止损价是否合理
         if stop_price >= current_price:
-            print(f"⚠️  止损价¥{stop_price:.2f} >= 现价¥{current_price:.2f}，可能设置错误")
+            logger.error(f"⚠️  止损价¥{stop_price:.2f} >= 现价¥{current_price:.2f}，可能设置错误")
         
         self.order_counter += 1
         
@@ -167,11 +170,11 @@ class AdvancedTradingAccount(PaperTradingAccount):
         self.orders.append(order)
         self.save_orders()
         
-        print(f"✅ 止损单已设置：{stock_name} ({ts_code})")
-        print(f"   止损价：¥{stop_price:.2f}")
-        print(f"   数量：{volume}股")
-        print(f"   当前价：¥{current_price:.2f}")
-        print(f"   止损幅度：{(current_price - stop_price)/current_price*100:.2f}%")
+        logger.info(f"✅ 止损单已设置：{stock_name} ({ts_code})")
+        logger.info(f"   止损价：¥{stop_price:.2f}")
+        logger.info(f"   数量：{volume}股")
+        logger.info(f"   当前价：¥{current_price:.2f}")
+        logger.info(f"   止损幅度：{(current_price - stop_price)/current_price*100:.2f}%")
         
         return order
     
@@ -179,7 +182,7 @@ class AdvancedTradingAccount(PaperTradingAccount):
                         volume: Optional[int] = None) -> Optional[Order]:
         """设置止盈单"""
         if ts_code not in self.positions:
-            print(f"❌ 不持有 {ts_code}")
+            logger.info(f"❌ 不持有 {ts_code}")
             return None
         
         pos = self.positions[ts_code]
@@ -192,11 +195,11 @@ class AdvancedTradingAccount(PaperTradingAccount):
             volume = pos['volume']
         
         if volume > pos['volume']:
-            print(f"❌ 持仓不足")
+            logger.info(f"❌ 持仓不足")
             return None
         
         if target_price <= current_price:
-            print(f"⚠️  止盈价¥{target_price:.2f} <= 现价¥{current_price:.2f}，可能设置错误")
+            logger.error(f"⚠️  止盈价¥{target_price:.2f} <= 现价¥{current_price:.2f}，可能设置错误")
         
         self.order_counter += 1
         
@@ -221,11 +224,11 @@ class AdvancedTradingAccount(PaperTradingAccount):
         self.orders.append(order)
         self.save_orders()
         
-        print(f"✅ 止盈单已设置：{stock_name} ({ts_code})")
-        print(f"   止盈价：¥{target_price:.2f}")
-        print(f"   数量：{volume}股")
-        print(f"   当前价：¥{current_price:.2f}")
-        print(f"   预期收益：{(target_price - current_price)/current_price*100:.2f}%")
+        logger.info(f"✅ 止盈单已设置：{stock_name} ({ts_code})")
+        logger.info(f"   止盈价：¥{target_price:.2f}")
+        logger.info(f"   数量：{volume}股")
+        logger.info(f"   当前价：¥{current_price:.2f}")
+        logger.info(f"   预期收益：{(target_price - current_price)/current_price*100:.2f}%")
         
         return order
     
@@ -239,7 +242,7 @@ class AdvancedTradingAccount(PaperTradingAccount):
             volume: 卖出数量
         """
         if ts_code not in self.positions:
-            print(f"❌ 不持有 {ts_code}")
+            logger.info(f"❌ 不持有 {ts_code}")
             return None
         
         pos = self.positions[ts_code]
@@ -277,11 +280,11 @@ class AdvancedTradingAccount(PaperTradingAccount):
         self.orders.append(order)
         self.save_orders()
         
-        print(f"✅ 追踪止损单已设置：{stock_name} ({ts_code})")
-        print(f"   回撤阈值：{trail_percent}%")
-        print(f"   触发价：¥{trigger_price:.2f}")
-        print(f"   数量：{volume}股")
-        print(f"   当前价：¥{current_price:.2f}")
+        logger.info(f"✅ 追踪止损单已设置：{stock_name} ({ts_code})")
+        logger.info(f"   回撤阈值：{trail_percent}%")
+        logger.info(f"   触发价：¥{trigger_price:.2f}")
+        logger.info(f"   数量：{volume}股")
+        logger.info(f"   当前价：¥{current_price:.2f}")
         
         return order
     
@@ -289,8 +292,8 @@ class AdvancedTradingAccount(PaperTradingAccount):
         """检查并执行触发的订单"""
         triggered_orders = []
         
-        print("【检查订单触发】")
-        print("-" * 80)
+        logger.info("【检查订单触发】")
+        logger.info("-" * 80)
         
         for order in self.orders:
             if order.status != 'active':
@@ -302,9 +305,9 @@ class AdvancedTradingAccount(PaperTradingAccount):
             
             if order.check_trigger(current_price):
                 # 订单触发，执行卖出
-                print(f"  🚨 订单触发：{order.stock_name} {order.order_type.value}")
-                print(f"     触发价：¥{current_price:.2f}")
-                print(f"     数量：{order.volume}股")
+                logger.info(f"  🚨 订单触发：{order.stock_name} {order.order_type.value}")
+                logger.info(f"     触发价：¥{current_price:.2f}")
+                logger.info(f"     数量：{order.volume}股")
                 
                 # 执行卖出
                 trade = self.sell(order.ts_code, order.volume, price=current_price)
@@ -313,73 +316,73 @@ class AdvancedTradingAccount(PaperTradingAccount):
                     order.status = 'triggered'
                     order.triggered_at = datetime.now().isoformat()
                     triggered_orders.append(order)
-                    print(f"     ✅ 已执行卖出")
+                    logger.info(f"     ✅ 已执行卖出")
                 else:
-                    print(f"     ❌ 执行失败")
+                    logger.error(f"     ❌ 执行失败")
         
         if triggered_orders:
             self.save_orders()
-            print()
-            print(f"  共触发 {len(triggered_orders)} 个订单")
+            logger.info()
+            logger.info(f"  共触发 {len(triggered_orders)} 个订单")
         else:
-            print("  无触发订单")
+            logger.info("  无触发订单")
         
-        print()
+        logger.info()
         return triggered_orders
     
     def list_orders(self):
         """列出所有活跃订单"""
-        print("【活跃订单】")
-        print("-" * 80)
+        logger.info("【活跃订单】")
+        logger.info("-" * 80)
         
         active_orders = [o for o in self.orders if o.status == 'active']
         
         if not active_orders:
-            print("  无活跃订单")
+            logger.info("  无活跃订单")
             return
         
         for order in active_orders:
             current_price, _ = self.get_latest_price(order.ts_code)
             
-            print(f"\n  {order.order_id}: {order.stock_name} ({order.ts_code})")
-            print(f"    类型：{order.order_type.value}")
-            print(f"    触发价：¥{order.trigger_price:.2f}")
-            print(f"    数量：{order.volume}股")
-            print(f"    创建时间：{order.created_at[:10]}")
+            logger.info(f"\n  {order.order_id}: {order.stock_name} ({order.ts_code})")
+            logger.info(f"    类型：{order.order_type.value}")
+            logger.info(f"    触发价：¥{order.trigger_price:.2f}")
+            logger.info(f"    数量：{order.volume}股")
+            logger.info(f"    创建时间：{order.created_at[:10]}")
             
             if current_price:
                 if order.order_type == OrderType.STOP_LOSS:
                     distance = (current_price - order.trigger_price) / current_price * 100
-                    print(f"    当前价：¥{current_price:.2f} (距止损 {distance:.2f}%)")
+                    logger.info(f"    当前价：¥{current_price:.2f} (距止损 {distance:.2f}%)")
                 elif order.order_type == OrderType.TAKE_PROFIT:
                     distance = (order.trigger_price - current_price) / current_price * 100
-                    print(f"    当前价：¥{current_price:.2f} (距止盈 {distance:.2f}%)")
+                    logger.info(f"    当前价：¥{current_price:.2f} (距止盈 {distance:.2f}%)")
         
-        print()
+        logger.info()
     
     def cancel_order(self, order_id: str) -> bool:
         """取消订单"""
         for order in self.orders:
             if order.order_id == order_id:
                 if order.status != 'active':
-                    print(f"❌ 订单 {order_id} 已不是活跃状态")
+                    logger.info(f"❌ 订单 {order_id} 已不是活跃状态")
                     return False
                 
                 order.status = 'cancelled'
                 self.save_orders()
-                print(f"✅ 订单 {order_id} 已取消")
+                logger.info(f"✅ 订单 {order_id} 已取消")
                 return True
         
-        print(f"❌ 未找到订单 {order_id}")
+        logger.info(f"❌ 未找到订单 {order_id}")
         return False
 
 
 def main():
     """演示高级交易功能"""
-    print("=" * 80)
-    print(" " * 25 + "📊 高级交易功能演示")
-    print("=" * 80)
-    print()
+    logger.info("=" * 80)
+    logger.info(" " * 25 + "📊 高级交易功能演示")
+    logger.info("=" * 80)
+    logger.info()
     
     # 创建账户
     account = AdvancedTradingAccount()
@@ -388,9 +391,9 @@ def main():
     account.print_report()
     
     # 设置止损单
-    print("\n" + "=" * 80)
-    print("【设置止损单】")
-    print("=" * 80)
+    logger.info("\n" + "=" * 80)
+    logger.info("【设置止损单】")
+    logger.info("=" * 80)
     
     # 平安银行 -3% 止损
     current_price, _ = account.get_latest_price('000001.SZ')
@@ -411,16 +414,16 @@ def main():
         account.set_stop_loss('600519.SH', stop_price)
     
     # 列出订单
-    print("\n" + "=" * 80)
+    logger.info("\n" + "=" * 80)
     account.list_orders()
     
     # 检查触发
-    print("=" * 80)
+    logger.info("=" * 80)
     account.check_orders()
     
-    print("=" * 80)
-    print("✅ 高级交易功能演示完成！")
-    print("=" * 80)
+    logger.info("=" * 80)
+    logger.info("✅ 高级交易功能演示完成！")
+    logger.info("=" * 80)
 
 
 if __name__ == "__main__":

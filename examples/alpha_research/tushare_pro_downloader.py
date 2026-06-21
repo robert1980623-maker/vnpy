@@ -11,6 +11,9 @@ Tushare Pro 主力数据下载器
 - 数据过期管理
 """
 
+import logging
+logger = logging.getLogger(__name__)
+
 import os
 import json
 import time
@@ -35,11 +38,11 @@ class TushareProDownloader:
             ts.set_token(token)
             self.pro = ts.pro_api()
             self.use_tushare = True
-            print(f"✅ Tushare Pro 已初始化 (Token: {token[:20]}...)")
+            logger.info(f"✅ Tushare Pro 已初始化 (Token: {token[:20]}...)")
         else:
             self.pro = None
             self.use_tushare = False
-            print("⚠️ Tushare Token 未配置，将使用 AKShare")
+            logger.info("⚠️ Tushare Token 未配置，将使用 AKShare")
         
         # 下载统计
         self.stats = {
@@ -102,36 +105,36 @@ class TushareProDownloader:
         if not trade_date and not start_date:
             trade_date = datetime.now().strftime('%Y%m%d')
         
-        print(f"\n{'='*60}")
-        print(f"  数据下载 (Tushare Pro 单只 + AKShare 备用)")
-        print(f"{'='*60}")
+        logger.info(f"\n{'='*60}")
+        logger.info(f"  数据下载 (Tushare Pro 单只 + AKShare 备用)")
+        logger.info(f"{'='*60}")
         if trade_date:
-            print(f"交易日期：{trade_date}")
+            logger.info(f"交易日期：{trade_date}")
         if start_date:
-            print(f"开始日期：{start_date}")
-            print(f"结束日期：{end_date or '今天'}")
-        print(f"股票数量：{len(symbols)}")
-        print()
+            logger.info(f"开始日期：{start_date}")
+            logger.info(f"结束日期：{end_date or '今天'}")
+        logger.info(f"股票数量：{len(symbols)}")
+        logger.info()
         
         # 获取需要更新的股票
         to_update = self.get_symbols_to_update(symbols)
         
         if not to_update:
-            print("✅ 所有数据已最新，无需更新")
+            logger.info("✅ 所有数据已最新，无需更新")
             return True
         
-        print(f"需要更新：{len(to_update)} 只股票")
-        print()
+        logger.info(f"需要更新：{len(to_update)} 只股票")
+        logger.info()
         
         # 使用 Tushare Pro 单只下载
         if self.use_tushare:
             try:
-                print("📥 使用 Tushare Pro 单只下载...")
+                logger.info("📥 使用 Tushare Pro 单只下载...")
                 
                 # 逐个下载单只股票
                 success_count = 0
                 for i, symbol in enumerate(to_update, 1):
-                    print(f"[{i}/{len(to_update)}] {symbol}...", end=' ')
+                    logger.info(f"[{i}/{len(to_update)}] {symbol}...", end=' ')
                     if self._download_single_tushare(symbol, trade_date, start_date, end_date):
                         success_count += 1
                         time.sleep(0.1)  # 避免请求过快
@@ -140,21 +143,21 @@ class TushareProDownloader:
                 
                 if success_count > 0:
                     self.stats['tushare_success'] = success_count
-                    print(f"\n✅ Tushare Pro 下载成功：{success_count}/{len(to_update)}只")
+                    logger.info(f"\n✅ Tushare Pro 下载成功：{success_count}/{len(to_update)}只")
                     
                     # 失败的切换到 AKShare
                     failed_symbols = [s for s in to_update 
                                     if not self._get_csv_file(s).exists()]
                     if failed_symbols:
-                        print(f"\n🔄 {len(failed_symbols)} 只切换到 AKShare...")
+                        logger.info(f"\n🔄 {len(failed_symbols)} 只切换到 AKShare...")
                         self._akshare_fallback(failed_symbols)
                     return True
                 else:
-                    print("\n⚠️ Tushare Pro 全部失败，切换到 AKShare")
+                    logger.error("\n⚠️ Tushare Pro 全部失败，切换到 AKShare")
                     self.stats['tushare_failed'] = len(to_update)
                     
             except Exception as e:
-                print(f"\n⚠️ Tushare Pro 异常：{e}")
+                logger.error(f"\n⚠️ Tushare Pro 异常：{e}")
                 self.stats['tushare_failed'] = len(to_update)
         
         # Tushare 失败或不可用，使用 AKShare
@@ -184,14 +187,14 @@ class TushareProDownloader:
             if df is not None and not df.empty:
                 # 保存数据
                 self._save_single(symbol, df)
-                print("✅")
+                logger.info("✅")
                 return True
             else:
-                print("⚠️ 空数据")
+                logger.info("⚠️ 空数据")
                 return False
                 
         except Exception as e:
-            print(f"❌ {str(e)[:50]}")
+            logger.info(f"❌ {str(e)[:50]}")
             return False
     
     def _save_single(self, symbol: str, df: pd.DataFrame):
@@ -215,17 +218,17 @@ class TushareProDownloader:
                 ohlcv.to_csv(csv_file, index=False)
                 
         except Exception as e:
-            print(f"⚠️ 保存失败：{e}")
+            logger.error(f"⚠️ 保存失败：{e}")
     
     def _akshare_fallback(self, symbols: List[str]):
         """AKShare 备用下载"""
         try:
             import akshare as ak
             
-            print(f"\n📥 使用 AKShare 下载 {len(symbols)} 只股票...")
+            logger.info(f"\n📥 使用 AKShare 下载 {len(symbols)} 只股票...")
             
             for i, symbol in enumerate(symbols, 1):
-                print(f"[{i}/{len(symbols)}] {symbol}...", end=' ')
+                logger.info(f"[{i}/{len(symbols)}] {symbol}...", end=' ')
                 
                 code = symbol.split('.')[0]
                 df = ak.stock_zh_a_hist(symbol=code, period="daily")
@@ -238,26 +241,26 @@ class TushareProDownloader:
                     # 保存
                     csv_file = self._get_csv_file(symbol)
                     ohlcv.to_csv(csv_file, index=False)
-                    print("✅")
+                    logger.info("✅")
                     self.stats['akshare_fallback'] += 1
                 else:
-                    print("❌")
+                    logger.info("❌")
                 
                 time.sleep(0.3)  # 避免请求过快
                 
         except Exception as e:
-            print(f"\n⚠️ AKShare 下载失败：{e}")
+            logger.error(f"\n⚠️ AKShare 下载失败：{e}")
     
     def _print_stats(self):
         """打印统计"""
-        print(f"\n{'='*60}")
-        print(f"  下载统计")
-        print(f"{'='*60}")
-        print(f"  Tushare 成功：{self.stats['tushare_success']}")
-        print(f"  Tushare 失败：{self.stats['tushare_failed']}")
-        print(f"  AKShare 备用：{self.stats['akshare_fallback']}")
-        print(f"  跳过 (已更新): {self.stats['skipped']}")
-        print(f"{'='*60}")
+        logger.info(f"\n{'='*60}")
+        logger.info(f"  下载统计")
+        logger.info(f"{'='*60}")
+        logger.info(f"  Tushare 成功：{self.stats['tushare_success']}")
+        logger.error(f"  Tushare 失败：{self.stats['tushare_failed']}")
+        logger.info(f"  AKShare 备用：{self.stats['akshare_fallback']}")
+        logger.info(f"  跳过 (已更新): {self.stats['skipped']}")
+        logger.info(f"{'='*60}")
 
 
 def main():
@@ -282,12 +285,12 @@ def main():
                 account = json.load(f)
                 symbols = [pos['stock_code'] for pos in account.get('positions', [])]
         else:
-            print("❌ 账户文件不存在")
+            logger.info("❌ 账户文件不存在")
             return
     elif args.symbols:
         symbols = args.symbols
     else:
-        print("❌ 请指定股票代码或使用 --all")
+        logger.info("❌ 请指定股票代码或使用 --all")
         return
     
     downloader.download_daily_bars(symbols, args.date, args.start_date, args.end_date)

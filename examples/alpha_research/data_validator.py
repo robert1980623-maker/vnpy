@@ -9,6 +9,9 @@
 - 数据溯源记录
 """
 
+import logging
+logger = logging.getLogger(__name__)
+
 import json
 import os
 import time
@@ -85,15 +88,15 @@ class DataValidator:
     
     def validate_all_positions(self) -> Dict:
         """验证所有持仓数据"""
-        print("\n" + "="*70)
-        print(" " * 20 + "数据质量验证")
-        print("="*70)
+        logger.info("\n" + "="*70)
+        logger.info(" " * 20 + "数据质量验证")
+        logger.info("="*70)
         
         # 加载持仓
         account = self._load_account()
         positions = account.get('positions', [])
         
-        print(f"\n验证 {len(positions)} 只持仓股票...")
+        logger.info(f"\n验证 {len(positions)} 只持仓股票...")
         
         validation_results = []
         
@@ -327,10 +330,10 @@ class DataValidator:
             )
             issue_id = queue.write_issue(issue)
             
-            print(f"✅ 已上报 Manager: {alert.symbol} - {alert.message} (Issue: {issue_id})")
+            logger.info(f"✅ 已上报 Manager: {alert.symbol} - {alert.message} (Issue: {issue_id})")
             
         except Exception as e:
-            print(f"⚠️ 上报 Manager 失败：{e}")
+            logger.error(f"⚠️ 上报 Manager 失败：{e}")
 
     def _save_alert(self, alert: DataQualityAlert):
         """保存告警"""
@@ -372,19 +375,19 @@ class DataValidator:
         """打印报告"""
         summary = report['summary']
         
-        print(f"\n验证结果:")
-        print(f"  总数：{summary['total']} 只")
-        print(f"  正常：{summary['ok']} 只 ({summary['quality_rate']:.1f}%)")
-        print(f"  警告：{summary['warning']} 只")
-        print(f"  错误：{summary['error']} 只")
+        logger.info(f"\n验证结果:")
+        logger.info(f"  总数：{summary['total']} 只")
+        logger.info(f"  正常：{summary['ok']} 只 ({summary['quality_rate']:.1f}%)")
+        logger.warning(f"  警告：{summary['warning']} 只")
+        logger.error(f"  错误：{summary['error']} 只")
         
         if report['alerts_count'] > 0:
-            print(f"\n⚠️  发现 {report['alerts_count']} 个告警:")
+            logger.info(f"\n⚠️  发现 {report['alerts_count']} 个告警:")
             for alert in self.alerts[-5:]:  # 显示最近 5 个
                 icon = {'P0': '🔴', 'P1': '🟠', 'P2': '🟡'}[alert.severity]
-                print(f"  {icon} {alert.symbol}: {alert.message}")
+                logger.info(f"  {icon} {alert.symbol}: {alert.message}")
         
-        print()
+        logger.info()
 
 
 def main():
@@ -405,25 +408,25 @@ def main():
     
     elif args.symbol:
         result = validator.validate_symbol(args.symbol)
-        print(f"\n{args.symbol} 验证结果:")
-        print(f"  状态：{result['status']}")
+        logger.info(f"\n{args.symbol} 验证结果:")
+        logger.info(f"  状态：{result['status']}")
         if result['issues']:
-            print(f"  问题:")
+            logger.info(f"  问题:")
             for issue in result['issues']:
-                print(f"    - {issue}")
+                logger.info(f"    - {issue}")
     
     elif args.report:
         # 生成今日报告摘要
-        print("\n数据质量报告")
-        print("="*50)
+        logger.info("\n数据质量报告")
+        logger.info("="*50)
         # 读取今日告警
         alert_file = validator.alert_dir / f'alerts_{datetime.now().strftime("%Y-%m-%d")}.jsonl'
         if alert_file.exists():
             with open(alert_file, 'r', encoding='utf-8') as f:
                 alerts = [json.loads(line) for line in f]
-                print(f"今日告警：{len(alerts)} 个")
+                logger.info(f"今日告警：{len(alerts)} 个")
         else:
-            print("今日告警：0 个")
+            logger.info("今日告警：0 个")
 
 
 if __name__ == '__main__':
@@ -433,9 +436,9 @@ if __name__ == '__main__':
 # 选股前验证模式
 def validate_pre_stock_selection():
     """选股前验证"""
-    print("\n" + "="*70)
-    print(" " * 20 + "选股前数据验证")
-    print("="*70)
+    logger.info("\n" + "="*70)
+    logger.info(" " * 20 + "选股前数据验证")
+    logger.info("="*70)
     
     # 验证所有持仓
     report = validate_all_positions()
@@ -443,27 +446,27 @@ def validate_pre_stock_selection():
     # 判断是否可以通过
     summary = report['summary']
     
-    print(f"\n{'='*70}")
-    print(" 验证结果:")
-    print(f"{'='*70}")
+    logger.info(f"\n{'='*70}")
+    logger.info(" 验证结果:")
+    logger.info(f"{'='*70}")
     
     if summary['error'] > 0:
-        print(f"❌ 发现 {summary['error']} 只股票数据错误")
-        print("⚠️  建议：暂停选股，先修复数据问题")
+        logger.error(f"❌ 发现 {summary['error']} 只股票数据错误")
+        logger.info("⚠️  建议：暂停选股，先修复数据问题")
         return False
     
     elif summary['warning'] > 0:
-        print(f"⚠️  发现 {summary['warning']} 只股票数据警告")
+        logger.warning(f"⚠️  发现 {summary['warning']} 只股票数据警告")
         if summary['warning'] > len(summary) * 0.3:  # 超过 30% 有警告
-            print("⚠️  警告比例过高，建议延迟选股")
+            logger.warning("⚠️  警告比例过高，建议延迟选股")
             return False
         else:
-            print("✅  警告在可接受范围内，可以继续选股")
+            logger.warning("✅  警告在可接受范围内，可以继续选股")
             return True
     
     else:
-        print(f"✅ 所有 {summary['ok']} 只股票数据正常")
-        print("✅ 可以通过选股验证")
+        logger.info(f"✅ 所有 {summary['ok']} 只股票数据正常")
+        logger.info("✅ 可以通过选股验证")
         return True
 
 

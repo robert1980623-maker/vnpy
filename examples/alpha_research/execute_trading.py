@@ -12,6 +12,9 @@
     python3 execute_trading.py [--date 2026-03-27] [--dry-run]
 """
 
+import logging
+logger = logging.getLogger(__name__)
+
 import json
 import sys
 import argparse
@@ -156,7 +159,7 @@ class FeishuVirtualAccount:
             if resp.code == 0:
                 return resp.data.items if resp.data else []
         except Exception as e:
-            print(f"   ⚠️ 读取表 {table_id} 失败: {e}")
+            logger.error(f"   ⚠️ 读取表 {table_id} 失败: {e}")
         return []
 
     def get_account(self) -> dict:
@@ -179,7 +182,7 @@ class FeishuVirtualAccount:
                     "total_asset": data.get("cash", 0) + pos_value,
                 }
         except Exception as e:
-            print(f"   ⚠️ 本地 JSON 读取失败，降级到飞书: {e}")
+            logger.error(f"   ⚠️ 本地 JSON 读取失败，降级到飞书: {e}")
 
         # 降级：读飞书多维表格
         try:
@@ -201,7 +204,7 @@ class FeishuVirtualAccount:
                     "total_asset": _extract_number_field(f.get("当前资金", 0)) + _extract_number_field(f.get("持仓市值", 0)),
                 }
         except Exception as e:
-            print(f"   ⚠️ 读取账户失败: {e}")
+            logger.error(f"   ⚠️ 读取账户失败: {e}")
         return None
 
     def get_positions(self) -> list:
@@ -226,10 +229,10 @@ class FeishuVirtualAccount:
                             "market_value": p.get("market_value", 0),
                         })
                 if positions:
-                    print(f"   📂 从本地 JSON 读取持仓 {len(positions)} 只")
+                    logger.info(f"   📂 从本地 JSON 读取持仓 {len(positions)} 只")
                     return positions
         except Exception as e:
-            print(f"   ⚠️ 本地 JSON 读取失败，降级到飞书: {e}")
+            logger.error(f"   ⚠️ 本地 JSON 读取失败，降级到飞书: {e}")
 
         # 降级：读飞书多维表格
         try:
@@ -255,9 +258,9 @@ class FeishuVirtualAccount:
                             "market_value": _extract_number_field(f.get("持仓市值", 0)),
                         })
                 if positions:
-                    print(f"   📋 从飞书多维表格读取持仓 {len(positions)} 只")
+                    logger.info(f"   📋 从飞书多维表格读取持仓 {len(positions)} 只")
         except Exception as e:
-            print(f"   ⚠️ 飞书持仓读取失败: {e}")
+            logger.error(f"   ⚠️ 飞书持仓读取失败: {e}")
         return positions
 
     def get_trade_log(self) -> list:
@@ -282,7 +285,7 @@ class FeishuVirtualAccount:
                         "quantity": int(_extract_number_field(f.get("数量", 0))),
                     })
         except Exception as e:
-            print(f"   ⚠️ 读取交易日志失败: {e}")
+            logger.error(f"   ⚠️ 读取交易日志失败: {e}")
         return trades
 
     def get_available_cash(self) -> float:
@@ -322,11 +325,11 @@ class FeishuVirtualAccount:
                 .build()
             resp = self.client.bitable.v1.app_table_record.update(req)
             if resp.code != 0:
-                print(f"   ⚠️ 更新账户失败: {resp.msg}")
+                logger.error(f"   ⚠️ 更新账户失败: {resp.msg}")
                 return False
             return True
         except Exception as e:
-            print(f"   ⚠️ 更新账户异常: {e}")
+            logger.error(f"   ⚠️ 更新账户异常: {e}")
             return False
 
     def _update_position_fields(self, record_id: str, fields: dict):
@@ -342,11 +345,11 @@ class FeishuVirtualAccount:
                 .build()
             resp = self.client.bitable.v1.app_table_record.update(req)
             if resp.code != 0:
-                print(f"   ⚠️ 更新持仓失败: {resp.msg}")
+                logger.error(f"   ⚠️ 更新持仓失败: {resp.msg}")
                 return False
             return True
         except Exception as e:
-            print(f"   ⚠️ 更新持仓异常: {e}")
+            logger.error(f"   ⚠️ 更新持仓异常: {e}")
             return False
 
     def _create_trade_record(self, fields: dict) -> str:
@@ -370,10 +373,10 @@ class FeishuVirtualAccount:
             if resp.code == 0:
                 return resp.data.record.record_id
             else:
-                print(f"   ⚠️ 创建交易记录失败: {resp.msg}")
+                logger.error(f"   ⚠️ 创建交易记录失败: {resp.msg}")
                 return None
         except Exception as e:
-            print(f"   ⚠️ 创建交易记录异常: {e}")
+            logger.error(f"   ⚠️ 创建交易记录异常: {e}")
             return None
 
     def _create_position_record(self, fields: dict) -> str:
@@ -397,10 +400,10 @@ class FeishuVirtualAccount:
             if resp.code == 0:
                 return resp.data.record.record_id
             else:
-                print(f"   ⚠️ 创建持仓记录失败: {resp.msg}")
+                logger.error(f"   ⚠️ 创建持仓记录失败: {resp.msg}")
                 return None
         except Exception as e:
-            print(f"   ⚠️ 创建持仓记录异常: {e}")
+            logger.error(f"   ⚠️ 创建持仓记录异常: {e}")
             return None
 
     # ── 交易操作 ─────────────────────────────────
@@ -478,7 +481,7 @@ class FeishuVirtualAccount:
             "备注": _text_field(reason),
         })
 
-        print(f"   ✅ 买入成功：{symbol} {name} @ {price:.2f} x {quantity} = {cost:,.2f} 元")
+        logger.info(f"   ✅ 买入成功：{symbol} {name} @ {price:.2f} x {quantity} = {cost:,.2f} 元")
         return {
             "trade_id": trade_id,
             "symbol": symbol,
@@ -559,7 +562,7 @@ class FeishuVirtualAccount:
             "备注": _text_field(f"{reason} | 盈亏: {profit:.2f}"),
         })
 
-        print(f"   ✅ 卖出成功：{symbol} {position['name']} @ {price:.2f} x {quantity} = {proceeds:,.2f} 元 (盈亏：{profit:.2f} 元)")
+        logger.info(f"   ✅ 卖出成功：{symbol} {position['name']} @ {price:.2f} x {quantity} = {proceeds:,.2f} 元 (盈亏：{profit:.2f} 元)")
         return {
             "trade_id": trade_id,
             "symbol": symbol,
@@ -582,28 +585,28 @@ class FeishuVirtualAccount:
         acct = self.get_account() or {}
         positions = self.get_positions()
 
-        print("\n" + "=" * 60)
-        print(" " * 20 + "虚拟账户摘要")
-        print("=" * 60)
-        print(f"账户：{acct.get('account_name', 'N/A')}")
-        print(f"初始资金：{acct.get('initial_capital', 0):,.2f} 元")
-        print(f"当前现金：{acct.get('current_cash', 0):,.2f} 元")
-        print(f"持仓市值：{acct.get('position_value', 0):,.2f} 元")
-        print(f"总资产：{acct.get('total_asset', 0):,.2f} 元")
-        print(f"仓位：{self.get_position_ratio():.1f}%")
+        logger.info("\n" + "=" * 60)
+        logger.info(" " * 20 + "虚拟账户摘要")
+        logger.info("=" * 60)
+        logger.info(f"账户：{acct.get('account_name', 'N/A')}")
+        logger.info(f"初始资金：{acct.get('initial_capital', 0):,.2f} 元")
+        logger.info(f"当前现金：{acct.get('current_cash', 0):,.2f} 元")
+        logger.info(f"持仓市值：{acct.get('position_value', 0):,.2f} 元")
+        logger.info(f"总资产：{acct.get('total_asset', 0):,.2f} 元")
+        logger.info(f"仓位：{self.get_position_ratio():.1f}%")
 
         initial = acct.get('initial_capital', 0)
         total = acct.get('total_asset', 0)
         profit = total - initial
         profit_pct = profit / initial * 100 if initial > 0 else 0
-        print(f"总盈亏：{profit:+,.2f} 元 ({profit_pct:+.2f}%)")
+        logger.info(f"总盈亏：{profit:+,.2f} 元 ({profit_pct:+.2f}%)")
 
         if positions:
-            print("\n持仓明细:")
+            logger.info("\n持仓明细:")
             for pos in positions:
-                print(f"  - {pos['symbol']} {pos['name']}: {pos['quantity']} 股 @ {pos['avg_price']:.2f} 元")
+                logger.info(f"  - {pos['symbol']} {pos['name']}: {pos['quantity']} 股 @ {pos['avg_price']:.2f} 元")
 
-        print("=" * 60)
+        logger.info("=" * 60)
 
 
 # ─────────────────────────────────────────────
@@ -618,7 +621,7 @@ def load_trading_plan(date=None):
     plan_file = REPORTS_DIR / f"trading_plan_{date}.json"
 
     if not plan_file.exists():
-        print(f"❌ 交易计划文件不存在：{plan_file}")
+        logger.info(f"❌ 交易计划文件不存在：{plan_file}")
         return None
 
     with open(plan_file, 'r', encoding='utf-8') as f:
@@ -641,10 +644,10 @@ def get_current_price(symbol, date=None):
                         stock_symbol.replace('.', '') == target_symbol.replace('.', '')):
                     pe = stock.get("pe", 20)
                     estimated_price = pe * 0.8
-                    print(f"   参考价格：{estimated_price:.2f} 元 (PE={pe})")
+                    logger.info(f"   参考价格：{estimated_price:.2f} 元 (PE={pe})")
                     return estimated_price
 
-    print(f"   ⚠️ 使用默认价格：10.00 元")
+    logger.info(f"   ⚠️ 使用默认价格：10.00 元")
     return 10.0
 
 
@@ -675,22 +678,22 @@ def calculate_buy_quantity(account: FeishuVirtualAccount, symbol: str, price: fl
 
 def execute_trading(date=None, dry_run=False):
     """执行交易"""
-    print("=" * 70)
-    print(" " * 25 + "交易执行")
-    print("=" * 70)
-    print(f"日期：{date or datetime.now().strftime('%Y-%m-%d')}")
-    print(f"时间：{datetime.now().strftime('%H:%M:%S')}")
-    print(f"模式：{'模拟' if dry_run else '实盘（飞书多维表格）'}")
-    print("=" * 70)
+    logger.info("=" * 70)
+    logger.info(" " * 25 + "交易执行")
+    logger.info("=" * 70)
+    logger.info(f"日期：{date or datetime.now().strftime('%Y-%m-%d')}")
+    logger.info(f"时间：{datetime.now().strftime('%H:%M:%S')}")
+    logger.info(f"模式：{'模拟' if dry_run else '实盘（飞书多维表格）'}")
+    logger.info("=" * 70)
 
     # 加载交易计划
     plan = load_trading_plan(date)
     if plan is None:
         return {"success": False, "error": "交易计划加载失败"}
 
-    print(f"\n📊 交易计划:")
-    print(f"  买入：{len(plan.get('buy', []))} 只")
-    print(f"  卖出：{len(plan.get('sell', []))} 只")
+    logger.info(f"\n📊 交易计划:")
+    logger.info(f"  买入：{len(plan.get('buy', []))} 只")
+    logger.info(f"  卖出：{len(plan.get('sell', []))} 只")
 
     # 初始化飞书虚拟账户
     account = FeishuVirtualAccount()
@@ -700,9 +703,9 @@ def execute_trading(date=None, dry_run=False):
     failed_trades = []
 
     # 执行买入
-    print("\n" + "=" * 70)
-    print(" " * 25 + "执行买入")
-    print("=" * 70)
+    logger.info("\n" + "=" * 70)
+    logger.info(" " * 25 + "执行买入")
+    logger.info("=" * 70)
 
     for stock in plan.get("buy", []):
         symbol = stock.get("symbol")
@@ -710,7 +713,7 @@ def execute_trading(date=None, dry_run=False):
         reason = stock.get("reason", "")
         score = stock.get("score", 0)
 
-        print(f"\n【买入】{symbol} {name} (评分：{score}, 理由：{reason})")
+        logger.info(f"\n【买入】{symbol} {name} (评分：{score}, 理由：{reason})")
 
         try:
             price = get_current_price(symbol)
@@ -720,10 +723,10 @@ def execute_trading(date=None, dry_run=False):
                 raise ValueError("计算买入数量失败")
 
             cost = price * quantity
-            print(f"   价格：{price:.2f} 元，数量：{quantity} 股，金额：{cost:,.2f} 元")
+            logger.info(f"   价格：{price:.2f} 元，数量：{quantity} 股，金额：{cost:,.2f} 元")
 
             if dry_run:
-                print(f"   [模拟] 买入成功")
+                logger.info(f"   [模拟] 买入成功")
                 trade_record = {
                     "trade_id": f"DRY_{datetime.now().strftime('%Y%m%d')}_{len(executed_trades)+1:03d}",
                     "symbol": symbol,
@@ -749,7 +752,7 @@ def execute_trading(date=None, dry_run=False):
                 executed_trades.append(trade_record)
 
         except Exception as e:
-            print(f"   ❌ 买入失败：{e}")
+            logger.error(f"   ❌ 买入失败：{e}")
             failed_trades.append({
                 "symbol": symbol,
                 "name": name,
@@ -757,9 +760,9 @@ def execute_trading(date=None, dry_run=False):
             })
 
     # 执行卖出
-    print("\n" + "=" * 70)
-    print(" " * 25 + "执行卖出")
-    print("=" * 70)
+    logger.info("\n" + "=" * 70)
+    logger.info(" " * 25 + "执行卖出")
+    logger.info("=" * 70)
 
     for stock in plan.get("sell", []):
         # 兼容字符串和字典两种格式
@@ -772,7 +775,7 @@ def execute_trading(date=None, dry_run=False):
             name = stock.get("name", "")
             reason = stock.get("reason", "")
 
-        print(f"\n【卖出】{symbol} {name} (理由：{reason})")
+        logger.info(f"\n【卖出】{symbol} {name} (理由：{reason})")
 
         try:
             price = get_current_price(symbol)
@@ -785,15 +788,15 @@ def execute_trading(date=None, dry_run=False):
             quantity = position["quantity"]
             proceeds = price * quantity
 
-            print(f"   价格：{price:.2f} 元，数量：{quantity} 股，金额：{proceeds:,.2f} 元")
+            logger.info(f"   价格：{price:.2f} 元，数量：{quantity} 股，金额：{proceeds:,.2f} 元")
 
             if dry_run:
-                print(f"   [模拟] 卖出成功")
+                logger.info(f"   [模拟] 卖出成功")
             else:
                 account.sell(symbol=symbol, price=price, quantity=quantity, reason=reason)
 
         except Exception as e:
-            print(f"   ❌ 卖出失败：{e}")
+            logger.error(f"   ❌ 卖出失败：{e}")
             failed_trades.append({
                 "symbol": symbol,
                 "name": name,
@@ -833,23 +836,23 @@ def execute_trading(date=None, dry_run=False):
     with open(report_file, 'w', encoding='utf-8') as f:
         json.dump(report, f, ensure_ascii=False, indent=2)
 
-    print(f"\n✅ 执行报告已保存：{report_file}")
+    logger.info(f"\n✅ 执行报告已保存：{report_file}")
 
     # 打印总结
-    print("\n" + "=" * 70)
-    print(" " * 25 + "执行总结")
-    print("=" * 70)
-    print(f"计划买入：{report['summary']['total_buy']} 只")
-    print(f"实际买入：{report['summary']['executed_buy']} 只")
-    print(f"失败：{report['summary']['failed']} 只")
+    logger.info("\n" + "=" * 70)
+    logger.info(" " * 25 + "执行总结")
+    logger.info("=" * 70)
+    logger.info(f"计划买入：{report['summary']['total_buy']} 只")
+    logger.info(f"实际买入：{report['summary']['executed_buy']} 只")
+    logger.error(f"失败：{report['summary']['failed']} 只")
 
     if executed_trades:
-        print("\n执行成功的交易:")
+        logger.info("\n执行成功的交易:")
         for trade in executed_trades:
             direction = "买入" if trade.get("direction") == "买" else "卖出"
-            print(f"  ✅ {trade.get('symbol')} {direction} {trade.get('quantity')} 股 @ {trade.get('price'):.2f} 元")
+            logger.info(f"  ✅ {trade.get('symbol')} {direction} {trade.get('quantity')} 股 @ {trade.get('price'):.2f} 元")
 
-    print("=" * 70)
+    logger.info("=" * 70)
 
     return report
 

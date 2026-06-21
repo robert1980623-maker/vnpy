@@ -9,6 +9,9 @@
 4. 保留 5-10% 现金
 """
 
+import logging
+logger = logging.getLogger(__name__)
+
 import json
 from pathlib import Path
 from datetime import datetime
@@ -37,22 +40,22 @@ class PortfolioRebalancer:
         selection_file = Path(f'./reports/elite_selection_{today}.json')
         
         if selection_file.exists():
-            print(f"✅ 使用今日选股报告：{selection_file}")
+            logger.info(f"✅ 使用今日选股报告：{selection_file}")
             with open(selection_file, 'r', encoding='utf-8') as f:
                 return json.load(f)
         
         # 回退到最近的结果（最多回退3天）
-        print(f"⚠️ 未找到今日选股报告，尝试回退...")
+        logger.info(f"⚠️ 未找到今日选股报告，尝试回退...")
         from datetime import timedelta
         for i in range(1, 4):
             fallback_date = (datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d')
             fallback_file = Path(f'./reports/elite_selection_{fallback_date}.json')
             if fallback_file.exists():
-                print(f"✅ 使用 {fallback_date} 选股报告（{i}天前）：{fallback_file}")
+                logger.info(f"✅ 使用 {fallback_date} 选股报告（{i}天前）：{fallback_file}")
                 with open(fallback_file, 'r', encoding='utf-8') as f:
                     return json.load(f)
         
-        print(f"⚠️ 未找到最近3天的选股报告，请先运行 python3 elite_stock_selector.py")
+        logger.info(f"⚠️ 未找到最近3天的选股报告，请先运行 python3 elite_stock_selector.py")
         return None
     
     def get_current_prices(self):
@@ -90,15 +93,15 @@ class PortfolioRebalancer:
                     skipped += 1
         
         if skipped > 0:
-            print(f"⚠️ 跳过 {skipped} 只无效/缺失价格数据")
+            logger.info(f"⚠️ 跳过 {skipped} 只无效/缺失价格数据")
         
         return prices
     
     def analyze_current_portfolio(self, account, prices):
         """分析当前持仓"""
-        print("=" * 70)
-        print(" " * 20 + "当前持仓分析")
-        print("=" * 70)
+        logger.info("=" * 70)
+        logger.info(" " * 20 + "当前持仓分析")
+        logger.info("=" * 70)
         
         total_assets = account['cash'] + sum(p.get('market_value', 0) for p in account['positions'])
         
@@ -122,23 +125,23 @@ class PortfolioRebalancer:
         # 排序
         positions.sort(key=lambda x: x['market_value'], reverse=True)
         
-        print(f"总资产：¥{total_assets:,.2f}")
-        print(f"当前现金：¥{account['cash']:,.2f} ({account['cash']/total_assets*100:.1f}%)")
-        print(f"持仓数量：{len(positions)} 只")
-        print(f"目标持仓：{self.target_stocks} 只")
-        print()
+        logger.info(f"总资产：¥{total_assets:,.2f}")
+        logger.info(f"当前现金：¥{account['cash']:,.2f} ({account['cash']/total_assets*100:.1f}%)")
+        logger.info(f"持仓数量：{len(positions)} 只")
+        logger.info(f"目标持仓：{self.target_stocks} 只")
+        logger.info()
         
-        print("📊 持仓 Top 10:")
+        logger.info("📊 持仓 Top 10:")
         for i, pos in enumerate(positions[:10], 1):
-            print(f"  {i}. {pos['symbol']}: ¥{pos['market_value']:,.2f} ({pos['position_ratio']*100:.1f}%) 盈亏{pos['profit_rate']*100:.1f}%")
+            logger.info(f"  {i}. {pos['symbol']}: ¥{pos['market_value']:,.2f} ({pos['position_ratio']*100:.1f}%) 盈亏{pos['profit_rate']*100:.1f}%")
         
         return positions, total_assets
     
     def generate_rebalance_plan(self, positions, total_assets, elite_stocks, prices):
         """生成调仓计划"""
-        print("\n" + "=" * 70)
-        print(" " * 20 + "生成调仓计划")
-        print("=" * 70)
+        logger.info("\n" + "=" * 70)
+        logger.info(" " * 20 + "生成调仓计划")
+        logger.info("=" * 70)
         
         plan = {
             'sell': [],
@@ -157,7 +160,7 @@ class PortfolioRebalancer:
                 sell_price = prices.get(pos['symbol'], 0)
                 # 🛡️ 安全防护：价格为 0 或不可用时禁止卖出
                 if sell_price <= 0:
-                    print(f"⚠️ 跳过卖出 {pos['symbol']}：当前价格 ¥{sell_price:.2f} 无效，中止卖出！")
+                    logger.info(f"⚠️ 跳过卖出 {pos['symbol']}：当前价格 ¥{sell_price:.2f} 无效，中止卖出！")
                     continue
                 plan['sell'].append({
                     'symbol': pos['symbol'],
@@ -173,7 +176,7 @@ class PortfolioRebalancer:
                     excess_ratio = pos['position_ratio'] - self.max_position_ratio
                     excess_value = total_assets * excess_ratio
                     if pos_price <= 0:
-                        print(f"⚠️ 跳过 {pos['symbol']} 超配调整：价格为 ¥{pos_price:.2f} 无效")
+                        logger.info(f"⚠️ 跳过 {pos['symbol']} 超配调整：价格为 ¥{pos_price:.2f} 无效")
                     else:
                         excess_volume = int(excess_value / pos_price / 100) * 100
                         
@@ -207,48 +210,48 @@ class PortfolioRebalancer:
                         })
         
         # 打印计划
-        print(f"\n📉 卖出计划：{len(plan['sell'])} 只")
+        logger.info(f"\n📉 卖出计划：{len(plan['sell'])} 只")
         total_sell_value = sum(s['estimated_value'] for s in plan['sell'])
         for s in plan['sell'][:10]:
-            print(f"  - {s['symbol']}: {s['volume']} 股 ≈ ¥{s['estimated_value']:,.2f} ({s['reason']})")
+            logger.info(f"  - {s['symbol']}: {s['volume']} 股 ≈ ¥{s['estimated_value']:,.2f} ({s['reason']})")
         if len(plan['sell']) > 10:
-            print(f"  ... 还有 {len(plan['sell']) - 10} 只")
-        print(f"  预计回笼资金：¥{total_sell_value:,.2f}")
+            logger.info(f"  ... 还有 {len(plan['sell']) - 10} 只")
+        logger.info(f"  预计回笼资金：¥{total_sell_value:,.2f}")
         
-        print(f"\n📈 买入计划：{len(plan['buy'])} 只")
+        logger.info(f"\n📈 买入计划：{len(plan['buy'])} 只")
         total_buy_cost = sum(b['estimated_cost'] for b in plan['buy'])
         for b in plan['buy']:
-            print(f"  - {b['symbol']}: {b['target_volume']} 股 ≈ ¥{b['estimated_cost']:,.2f}")
-        print(f"  预计使用资金：¥{total_buy_cost:,.2f}")
+            logger.info(f"  - {b['symbol']}: {b['target_volume']} 股 ≈ ¥{b['estimated_cost']:,.2f}")
+        logger.info(f"  预计使用资金：¥{total_buy_cost:,.2f}")
         
-        print(f"\n💰 资金规划:")
-        print(f"  当前现金：¥{total_assets - sum(p['market_value'] for p in positions):,.2f}")
-        print(f"  卖出所得：¥{total_sell_value:,.2f}")
-        print(f"  买入所用：¥{total_buy_cost:,.2f}")
-        print(f"  预计现金：¥{total_assets - sum(p['market_value'] for p in positions) + total_sell_value - total_buy_cost:,.2f}")
-        print(f"  目标现金：¥{plan['target_cash']:,.2f} ({self.target_cash_ratio*100:.0f}%)")
+        logger.info(f"\n💰 资金规划:")
+        logger.info(f"  当前现金：¥{total_assets - sum(p['market_value'] for p in positions):,.2f}")
+        logger.info(f"  卖出所得：¥{total_sell_value:,.2f}")
+        logger.info(f"  买入所用：¥{total_buy_cost:,.2f}")
+        logger.info(f"  预计现金：¥{total_assets - sum(p['market_value'] for p in positions) + total_sell_value - total_buy_cost:,.2f}")
+        logger.info(f"  目标现金：¥{plan['target_cash']:,.2f} ({self.target_cash_ratio*100:.0f}%)")
         
         return plan
     
     def execute_rebalance(self, account, plan, prices):
         """执行调仓"""
-        print("\n" + "=" * 70)
-        print(" " * 20 + "执行调仓")
-        print("=" * 70)
+        logger.info("\n" + "=" * 70)
+        logger.info(" " * 20 + "执行调仓")
+        logger.info("=" * 70)
         
         # 1. 执行卖出
-        print("\n📉 执行卖出:")
+        logger.info("\n📉 执行卖出:")
         for sell in plan['sell']:
             symbol = sell['symbol']
             volume = sell['volume']
             sell_price = prices.get(symbol, sell['current_price'])
             # 🛡️ 双重校验：执行时再验一次价格
             if sell_price <= 0:
-                print(f"⚠️ 跳过 {symbol}：执行时价格 ¥{sell_price:.2f} 仍为无效值！")
+                logger.info(f"⚠️ 跳过 {symbol}：执行时价格 ¥{sell_price:.2f} 仍为无效值！")
                 continue
             sell_value = volume * sell_price
             
-            print(f"  卖出 {symbol}: {volume} 股 × ¥{sell_price:.2f} = ¥{sell_value:,.2f}")
+            logger.info(f"  卖出 {symbol}: {volume} 股 × ¥{sell_price:.2f} = ¥{sell_value:,.2f}")
             
             # 更新账户
             account['cash'] += sell_value
@@ -267,7 +270,7 @@ class PortfolioRebalancer:
                     break
         
         # 2. 执行买入
-        print("\n📈 执行买入:")
+        logger.info("\n📈 执行买入:")
         for buy in plan['buy']:
             symbol = buy['symbol']
             volume = buy['target_volume']
@@ -287,9 +290,9 @@ class PortfolioRebalancer:
                     'profit': 0,
                     'profit_rate': 0
                 })
-                print(f"  买入 {symbol}: {volume} 股 × ¥{buy_price:.2f} = ¥{buy_cost:,.2f}")
+                logger.info(f"  买入 {symbol}: {volume} 股 × ¥{buy_price:.2f} = ¥{buy_cost:,.2f}")
             else:
-                print(f"  ⚠️ {symbol}: 现金不足 (需要¥{buy_cost:,.2f}, 可用¥{account['cash']:,.2f})")
+                logger.info(f"  ⚠️ {symbol}: 现金不足 (需要¥{buy_cost:,.2f}, 可用¥{account['cash']:,.2f})")
         
         # 3. 更新持仓价格
         for pos in account['positions']:
@@ -305,11 +308,11 @@ class PortfolioRebalancer:
         total_assets = account['cash'] + total_market_value
         cash_ratio = account['cash'] / total_assets if total_assets > 0 else 0
         
-        print(f"\n💰 调仓后状态:")
-        print(f"  现金：¥{account['cash']:,.2f} ({cash_ratio*100:.1f}%)")
-        print(f"  持仓：{len(account['positions'])} 只")
-        print(f"  持仓市值：¥{total_market_value:,.2f}")
-        print(f"  总资产：¥{total_assets:,.2f}")
+        logger.info(f"\n💰 调仓后状态:")
+        logger.info(f"  现金：¥{account['cash']:,.2f} ({cash_ratio*100:.1f}%)")
+        logger.info(f"  持仓：{len(account['positions'])} 只")
+        logger.info(f"  持仓市值：¥{total_market_value:,.2f}")
+        logger.info(f"  总资产：¥{total_assets:,.2f}")
         
         return account
     
@@ -331,44 +334,44 @@ class PortfolioRebalancer:
         with open(report_file, 'w', encoding='utf-8') as f:
             json.dump(report, f, ensure_ascii=False, indent=2)
         
-        print(f"\n✅ 调仓报告已保存：{report_file}")
+        logger.info(f"\n✅ 调仓报告已保存：{report_file}")
         return report_file
     
     def run(self):
         """执行完整调仓流程"""
-        print("=" * 70)
-        print(" " * 18 + f"持仓重组 - 精简至 {self.target_stocks} 只精英组合")
-        print("=" * 70)
+        logger.info("=" * 70)
+        logger.info(" " * 18 + f"持仓重组 - 精简至 {self.target_stocks} 只精英组合")
+        logger.info("=" * 70)
         
         # 加载账户
         account = self.load_account()
-        print(f"📊 账户：{account['account_id']}")
-        print()
+        logger.info(f"📊 账户：{account['account_id']}")
+        logger.info()
         
         # 获取价格
         prices = self.get_current_prices()
-        print(f"✅ 获取价格数据：{len(prices)} 只股票")
-        print()
+        logger.info(f"✅ 获取价格数据：{len(prices)} 只股票")
+        logger.info()
         
         # 加载精英选股
         elite_stocks = self.load_elite_selection()
         if not elite_stocks:
-            print("\n🛡️ 风控拦截：未找到精英选股结果，中止调仓！")
-            print("   原因：没有选股结果时禁止调仓，防止误操作清空持仓")
-            print("   请先运行 python3 elite_stock_selector.py")
+            logger.info("\n🛡️ 风控拦截：未找到精英选股结果，中止调仓！")
+            logger.info("   原因：没有选股结果时禁止调仓，防止误操作清空持仓")
+            logger.info("   请先运行 python3 elite_stock_selector.py")
             return
         
         if len(elite_stocks.get('stocks', [])) == 0:
-            print("\n🛡️ 风控拦截：精英选股结果为空（0只），中止调仓！")
-            print("   原因：选股结果为空可能是数据异常或市场极端情况")
-            print("   当前持仓保持不变，等待下次选股结果")
-            print("   建议：检查 elite_stock_selector.py 运行状态")
+            logger.info("\n🛡️ 风控拦截：精英选股结果为空（0只），中止调仓！")
+            logger.error("   原因：选股结果为空可能是数据异常或市场极端情况")
+            logger.info("   当前持仓保持不变，等待下次选股结果")
+            logger.info("   建议：检查 elite_stock_selector.py 运行状态")
             return
         
-        print(f"✅ 精英选股：{len(elite_stocks['stocks'])} 只")
+        logger.info(f"✅ 精英选股：{len(elite_stocks['stocks'])} 只")
         for s in elite_stocks['stocks']:
-            print(f"  - {s['symbol']} {s['name']} (评分：{s.get('base_score', s.get('final_score', 'N/A'))})")
-        print()
+            logger.info(f"  - {s['symbol']} {s['name']} (评分：{s.get('base_score', s.get('final_score', 'N/A'))})")
+        logger.info()
         
         # 分析当前持仓
         positions, total_assets = self.analyze_current_portfolio(account, prices)
@@ -377,9 +380,9 @@ class PortfolioRebalancer:
         plan = self.generate_rebalance_plan(positions, total_assets, elite_stocks['stocks'], prices)
         
         # 确认执行
-        print("\n" + "=" * 70)
+        logger.info("\n" + "=" * 70)
         if not confirm_action("是否执行调仓？", default=True):
-            print("❌ 已取消")
+            logger.info("❌ 已取消")
             return
         
         # 执行调仓
@@ -388,14 +391,14 @@ class PortfolioRebalancer:
         # 保存账户
         with open(self.account_file, 'w', encoding='utf-8') as f:
             json.dump(account, f, ensure_ascii=False, indent=2)
-        print(f"\n✅ 账户已保存")
+        logger.info(f"\n✅ 账户已保存")
         
         # 保存报告
         self.save_report(plan, account)
         
-        print("\n" + "=" * 70)
-        print(" " * 20 + "调仓完成")
-        print("=" * 70)
+        logger.info("\n" + "=" * 70)
+        logger.info(" " * 20 + "调仓完成")
+        logger.info("=" * 70)
 
 
 def main():

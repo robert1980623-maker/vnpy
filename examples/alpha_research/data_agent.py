@@ -11,6 +11,9 @@
 由一个 Agent 统一调度和执行
 """
 
+import logging
+logger = logging.getLogger(__name__)
+
 import os
 import sys
 import json
@@ -53,33 +56,33 @@ class UnifiedDataAgent:
         """运行所有数据下载任务"""
         reporter = create_report("统一数据下载 Agent")
         
-        print("="*70)
-        print(" " * 20 + "统一数据下载 Agent")
-        print("="*70)
-        print(f"开始时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        print()
+        logger.info("="*70)
+        logger.info(" " * 20 + "统一数据下载 Agent")
+        logger.info("="*70)
+        logger.info(f"开始时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        logger.info()
         
         all_results = []
         
         # 1. 下载日线数据
-        print("【1/4】下载日线数据...")
+        logger.info("【1/4】下载日线数据...")
         self.download_daily_bars(symbols)
-        print()
+        logger.info()
         
         # 2. 下载政策数据
-        print("【2/4】下载政策数据...")
+        logger.info("【2/4】下载政策数据...")
         self.download_policy_data()
-        print()
+        logger.info()
         
         # 3. 下载新闻数据
-        print("【3/4】下载新闻数据...")
+        logger.info("【3/4】下载新闻数据...")
         self.download_news_data()
-        print()
+        logger.info()
         
         # 4. 下载财务数据
-        print("【4/4】下载财务数据...")
+        logger.info("【4/4】下载财务数据...")
         self.download_fundamental_data(symbols)
-        print()
+        logger.info()
         
         # 生成报告
         reporter.add_section("下载结果", all_results, 'table')
@@ -88,11 +91,11 @@ class UnifiedDataAgent:
         reporter.update_metric('items_failed', len([r for r in all_results if r.get('status') == 'failed']))
         
         result = reporter.finish('success')
-        print(f"✅ 报告已保存：{result['filepath']}")
+        logger.info(f"✅ 报告已保存：{result['filepath']}")
         
-        print("="*70)
-        print(" " * 25 + "完成")
-        print("="*70)
+        logger.info("="*70)
+        logger.info(" " * 25 + "完成")
+        logger.info("="*70)
     
     def download_daily_bars(self, symbols: List[str] = None):
         """下载日线数据"""
@@ -105,7 +108,7 @@ class UnifiedDataAgent:
                     symbols = [pos.get('symbol') or pos.get('stock_code', '') for pos in account.get('positions', [])]
         
         if not symbols:
-            print("⚠️ 无股票数据可下载")
+            logger.info("⚠️ 无股票数据可下载")
             return
         
         # 使用 Tushare Pro 下载
@@ -131,7 +134,7 @@ class UnifiedDataAgent:
             self.stats['policy_data']['success'] = True
             
         except Exception as e:
-            print(f"⚠️ 政策数据下载失败：{e}")
+            logger.error(f"⚠️ 政策数据下载失败：{e}")
             self.stats['policy_data']['success'] = False
     
     def download_news_data(self):
@@ -145,7 +148,7 @@ class UnifiedDataAgent:
             self.stats['news_data']['success'] = True
             
         except Exception as e:
-            print(f"⚠️ 新闻数据下载失败：{e}")
+            logger.error(f"⚠️ 新闻数据下载失败：{e}")
             self.stats['news_data']['success'] = False
     
     def download_fundamental_data(self, symbols: List[str] = None):
@@ -158,14 +161,14 @@ class UnifiedDataAgent:
             data = self.fundamental_fetcher.get_batch_fundamentals(symbols)
             
             if data:
-                print(f"✅ 财务数据下载成功：{len(data)} 只股票")
+                logger.info(f"✅ 财务数据下载成功：{len(data)} 只股票")
                 self.stats['fundamental']['success'] = True
             else:
-                print("⚠️ 财务数据下载失败")
+                logger.error("⚠️ 财务数据下载失败")
                 self.stats['fundamental']['success'] = False
                 
         except Exception as e:
-            print(f"⚠️ 财务数据下载失败：{e}")
+            logger.error(f"⚠️ 财务数据下载失败：{e}")
             self.stats['fundamental']['success'] = False
     
     def generate_report(self):
@@ -187,12 +190,12 @@ class UnifiedDataAgent:
             json.dump(report, f, ensure_ascii=False, indent=2)
         
         # 打印摘要
-        print(f"\n📊 下载摘要:")
-        print(f"  日线数据：{report['summary']['daily_bars_success_rate']:.1f}% 成功")
-        print(f"  政策数据：{report['summary']['policy_data']}")
-        print(f"  新闻数据：{report['summary']['news_data']}")
-        print(f"  财务数据：{report['summary']['fundamental']}")
-        print(f"\n📄 报告已保存：{self.report_file}")
+        logger.info(f"\n📊 下载摘要:")
+        logger.info(f"  日线数据：{report['summary']['daily_bars_success_rate']:.1f}% 成功")
+        logger.info(f"  政策数据：{report['summary']['policy_data']}")
+        logger.info(f"  新闻数据：{report['summary']['news_data']}")
+        logger.info(f"  财务数据：{report['summary']['fundamental']}")
+        logger.info(f"\n📄 报告已保存：{self.report_file}")
 
 
 def main():
@@ -218,16 +221,16 @@ def main():
     else:
         # 下载指定数据
         if args.daily:
-            print("【日线数据】")
+            logger.info("【日线数据】")
             agent.download_daily_bars(args.symbols)
         if args.policy:
-            print("【政策数据】")
+            logger.info("【政策数据】")
             agent.download_policy_data()
         if args.news:
-            print("【新闻数据】")
+            logger.info("【新闻数据】")
             agent.download_news_data()
         if args.fundamental:
-            print("【财务数据】")
+            logger.info("【财务数据】")
             agent.download_fundamental_data(args.symbols)
 
 

@@ -11,6 +11,9 @@
 6. 自动上报 Issue 到 Manager (P0-1 修复)
 """
 
+import logging
+logger = logging.getLogger(__name__)
+
 import json
 import csv
 import os
@@ -54,7 +57,7 @@ class RealtimeMonitor:
                 defaults['take_profit'] = sl.get('take_profit', defaults['take_profit'])
                 defaults['warning'] = sl.get('warning_level', defaults['warning'])
             except Exception as e:
-                print(f"⚠️ 加载风控配置失败：{e}")
+                logger.error(f"⚠️ 加载风控配置失败：{e}")
         return defaults
 
     """实时监控系统"""
@@ -90,9 +93,9 @@ class RealtimeMonitor:
             try:
                 from manager_interface import QuantManager
                 self.manager = QuantManager()
-                print("✅ Manager 接口已初始化")
+                logger.info("✅ Manager 接口已初始化")
             except Exception as e:
-                print(f"⚠️  Manager 初始化失败：{e}")
+                logger.error(f"⚠️  Manager 初始化失败：{e}")
                 self.manager = False  # 标记为失败，避免重复尝试
         return self.manager if self.manager else None
     
@@ -134,12 +137,12 @@ class RealtimeMonitor:
         # 去重检查
         issue_key = self._get_issue_key(issue_type, context or {})
         if not self._should_report(issue_key):
-            print(f"  ⏭️  跳过重复上报：{title}")
+            logger.info(f"  ⏭️  跳过重复上报：{title}")
             return None
         
         manager = self._get_manager()
         if not manager:
-            print(f"  ⚠️  Manager 不可用，跳过上报：{title}")
+            logger.info(f"  ⚠️  Manager 不可用，跳过上报：{title}")
             return None
         
         try:
@@ -169,14 +172,14 @@ class RealtimeMonitor:
             task = manager.handle_error_report(issue)
             issue_id = task.get('issue_id', 'unknown')
             
-            print(f"  ✅ 已上报 Issue 到 Manager: {issue_id}")
-            print(f"     类型：{issue_type}, 严重性：{severity}")
-            print(f"     标题：{title}")
+            logger.info(f"  ✅ 已上报 Issue 到 Manager: {issue_id}")
+            logger.info(f"     类型：{issue_type}, 严重性：{severity}")
+            logger.info(f"     标题：{title}")
             
             return issue_id
             
         except Exception as e:
-            print(f"  ❌ 上报失败：{e}")
+            logger.error(f"  ❌ 上报失败：{e}")
             return None
             
     def load_account(self):
@@ -229,9 +232,9 @@ class RealtimeMonitor:
     
     def check_data_freshness(self, prices):
         """检查数据新鲜度"""
-        print("=" * 70)
-        print(" " * 20 + "数据新鲜度检查")
-        print("=" * 70)
+        logger.info("=" * 70)
+        logger.info(" " * 20 + "数据新鲜度检查")
+        logger.info("=" * 70)
         
         today = datetime.now().strftime('%Y-%m-%d')
         stale_data = []
@@ -244,7 +247,7 @@ class RealtimeMonitor:
                     'last_date': data['date'],
                     'days_old': days_old
                 })
-                print(f"  ⚠️ {symbol}: 数据滞后 {data['date']} ({days_old} 天)")
+                logger.info(f"  ⚠️ {symbol}: 数据滞后 {data['date']} ({days_old} 天)")
                 
                 # P0-1 修复：数据滞后超过 2 天时自动上报
                 if days_old >= 2:
@@ -262,18 +265,18 @@ class RealtimeMonitor:
                     )
         
         if not stale_data:
-            print(f"  ✅ 所有数据均为最新 ({today})")
+            logger.info(f"  ✅ 所有数据均为最新 ({today})")
         else:
-            print(f"\n  📊 统计：{len(stale_data)} 只股票数据滞后")
-            print(f"  💡 建议：运行 python3 download_data_akshare.py 更新数据")
+            logger.info(f"\n  📊 统计：{len(stale_data)} 只股票数据滞后")
+            logger.info(f"  💡 建议：运行 python3 download_data_akshare.py 更新数据")
         
         return len(stale_data) == 0, stale_data
     
     def check_positions(self, account, prices):
         """检查持仓状态"""
-        print("\n" + "=" * 70)
-        print(" " * 20 + "持仓状态检查")
-        print("=" * 70)
+        logger.info("\n" + "=" * 70)
+        logger.info(" " * 20 + "持仓状态检查")
+        logger.info("=" * 70)
         
         alerts = {
             'stop_loss': [],
@@ -297,7 +300,7 @@ class RealtimeMonitor:
             
             # 计算盈亏率
             if cost_price <= 0 or current_price <= 0:
-                print(f"  ⚠️ {symbol}: 价格无效 (cost={cost_price}, current={current_price})，跳过")
+                logger.info(f"  ⚠️ {symbol}: 价格无效 (cost={cost_price}, current={current_price})，跳过")
                 continue
             profit_rate = (current_price - cost_price) / cost_price
             volume = pos.get('volume') or pos.get('quantity', 0)
@@ -313,7 +316,7 @@ class RealtimeMonitor:
                     'cost_price': cost_price,
                     'action': '立即止损卖出'
                 })
-                print(f"  🔴 止损：{symbol} {profit_rate*100:.1f}% (¥{cost_price:.2f}→¥{current_price:.2f})")
+                logger.info(f"  🔴 止损：{symbol} {profit_rate*100:.1f}% (¥{cost_price:.2f}→¥{current_price:.2f})")
                 
                 # P0-1 修复：止损触发时自动上报
                 self.report_to_manager(
@@ -337,7 +340,7 @@ class RealtimeMonitor:
                     'current_price': current_price,
                     'action': '建议止盈'
                 })
-                print(f"  🟢 止盈：{symbol} {profit_rate*100:.1f}%")
+                logger.info(f"  🟢 止盈：{symbol} {profit_rate*100:.1f}%")
                 
                 # P0-1 修复：止盈触发时自动上报
                 self.report_to_manager(
@@ -359,7 +362,7 @@ class RealtimeMonitor:
                     'profit_rate': profit_rate,
                     'distance_to_stop': (self.stop_loss_threshold - profit_rate) * 100
                 })
-                print(f"  🟡 预警：{symbol} {profit_rate*100:.1f}% (距止损 {(self.stop_loss_threshold - profit_rate)*100:.1f}%)")
+                logger.info(f"  🟡 预警：{symbol} {profit_rate*100:.1f}% (距止损 {(self.stop_loss_threshold - profit_rate)*100:.1f}%)")
             
             # 仓位检查
             if position_ratio > self.max_position_ratio:
@@ -369,7 +372,7 @@ class RealtimeMonitor:
                     'market_value': market_value,
                     'excess': (position_ratio - self.max_position_ratio) * 100
                 })
-                print(f"  ⚠️ 超配：{symbol} {position_ratio*100:.1f}% (上限 15%，超 {position_ratio*100 - 15:.1f}%)")
+                logger.info(f"  ⚠️ 超配：{symbol} {position_ratio*100:.1f}% (上限 15%，超 {position_ratio*100 - 15:.1f}%)")
                 
                 # P0-1 修复：仓位超配时自动上报
                 self.report_to_manager(
@@ -393,7 +396,7 @@ class RealtimeMonitor:
                 'cash': account['cash'],
                 'min_required': total_assets * self.min_cash_ratio
             })
-            print(f"  ⚠️ 现金不足：{cash_ratio*100:.1f}% (建议≥5%)")
+            logger.info(f"  ⚠️ 现金不足：{cash_ratio*100:.1f}% (建议≥5%)")
             
             # P0-1 修复：现金不足时自动上报
             self.report_to_manager(
@@ -408,24 +411,24 @@ class RealtimeMonitor:
                 }
             )
         
-        print(f"\n📊 统计:")
-        print(f"  止损：{len(alerts['stop_loss'])} 只")
-        print(f"  止盈：{len(alerts['take_profit'])} 只")
-        print(f"  预警：{len(alerts['warning'])} 只")
-        print(f"  超配：{len(alerts['position_overweight'])} 只")
-        print(f"  现金不足：{len(alerts['cash_low'])} 次")
+        logger.info(f"\n📊 统计:")
+        logger.info(f"  止损：{len(alerts['stop_loss'])} 只")
+        logger.info(f"  止盈：{len(alerts['take_profit'])} 只")
+        logger.info(f"  预警：{len(alerts['warning'])} 只")
+        logger.info(f"  超配：{len(alerts['position_overweight'])} 只")
+        logger.info(f"  现金不足：{len(alerts['cash_low'])} 次")
         
         return alerts
     
     def send_alert(self, alerts):
         """发送告警通知"""
         if not any(alerts.values()):
-            print("\n✅ 无告警")
+            logger.info("\n✅ 无告警")
             return
         
-        print("\n" + "=" * 70)
-        print(" " * 20 + "告警通知")
-        print("=" * 70)
+        logger.info("\n" + "=" * 70)
+        logger.info(" " * 20 + "告警通知")
+        logger.info("=" * 70)
         
         # 构建告警消息
         message = f"🚨 投资监控告警 - {datetime.now().strftime('%Y-%m-%d %H:%M')}\n\n"
@@ -453,7 +456,7 @@ class RealtimeMonitor:
             message += f"  当前现金比例：{alerts['cash_low'][0]['cash_ratio']*100:.1f}%\n"
             message += f"  建议：保持至少 5% 现金\n"
         
-        print(message)
+        logger.info(message)
         
         # 钉钉通知（如果配置）
         if self.enable_dingtalk:
@@ -475,9 +478,9 @@ class RealtimeMonitor:
             }
             response = requests.post(webhook, json=data, timeout=10)
             if response.status_code == 200:
-                print("  ✅ 钉钉通知已发送")
+                logger.info("  ✅ 钉钉通知已发送")
         except Exception as e:
-            print(f"  ⚠️ 钉钉通知失败：{e}")
+            logger.error(f"  ⚠️ 钉钉通知失败：{e}")
     
     def _save_alert_record(self, alerts, message):
         """保存告警记录"""
@@ -489,13 +492,13 @@ class RealtimeMonitor:
         }
         with open(record_file, 'w', encoding='utf-8') as f:
             json.dump(record, f, ensure_ascii=False, indent=2)
-        print(f"\n✅ 告警记录已保存：{record_file}")
+        logger.info(f"\n✅ 告警记录已保存：{record_file}")
     
     def update_account_prices(self, account, prices):
         """更新账户持仓价格 — 修复：兼容 stock_code/stock_name/volume 字段名"""
-        print("\n" + "=" * 70)
-        print(" " * 20 + "更新持仓价格")
-        print("=" * 70)
+        logger.info("\n" + "=" * 70)
+        logger.info(" " * 20 + "更新持仓价格")
+        logger.info("=" * 70)
         
         for pos in account['positions']:
             # 修复：兼容多种标识字段
@@ -512,18 +515,18 @@ class RealtimeMonitor:
                 pos['profit_rate'] = pos['profit'] / (cost_basis * quantity) if cost_basis * quantity > 0 else 0
                 
                 if old_price > 0 and abs(new_price - old_price) / old_price > 0.01:  # 变化超过 1%
-                    print(f"  📈 {symbol}: ¥{old_price:.2f} → ¥{new_price:.2f} ({(new_price-old_price)/old_price*100:+.1f}%)")
+                    logger.info(f"  📈 {symbol}: ¥{old_price:.2f} → ¥{new_price:.2f} ({(new_price-old_price)/old_price*100:+.1f}%)")
         
         # 重新计算总资产
         total_market_value = sum(p.get('market_value', 0) for p in account['positions'])
         total_assets = account.get('cash', 0) + total_market_value
         initial_capital = account.get('initial_capital', 1000000)
         
-        print(f"\n💰 账户状态:")
-        print(f"  现金：¥{account.get('cash', 0):,.2f}")
-        print(f"  持仓市值：¥{total_market_value:,.2f}")
-        print(f"  总资产：¥{total_assets:,.2f}")
-        print(f"  收益率：{(total_assets - initial_capital)/initial_capital*100:+.1f}%")
+        logger.info(f"\n💰 账户状态:")
+        logger.info(f"  现金：¥{account.get('cash', 0):,.2f}")
+        logger.info(f"  持仓市值：¥{total_market_value:,.2f}")
+        logger.info(f"  总资产：¥{total_assets:,.2f}")
+        logger.info(f"  收益率：{(total_assets - initial_capital)/initial_capital*100:+.1f}%")
         
         return account
     
@@ -531,7 +534,7 @@ class RealtimeMonitor:
         """保存账户"""
         with open(self.account_file, 'w', encoding='utf-8') as f:
             json.dump(account, f, ensure_ascii=False, indent=2)
-        print(f"\n✅ 账户已保存")
+        logger.info(f"\n✅ 账户已保存")
     
     def save_monitor_report(self, data_fresh, stale_data, alerts):
         """保存监控报告"""
@@ -554,26 +557,26 @@ class RealtimeMonitor:
         with open(report_file, 'w', encoding='utf-8') as f:
             json.dump(report, f, ensure_ascii=False, indent=2)
         
-        print(f"\n✅ 监控报告已保存：{report_file}")
+        logger.info(f"\n✅ 监控报告已保存：{report_file}")
         return report_file
     
     def run_check(self):
         """执行一次完整检查"""
-        print("=" * 70)
-        print(" " * 16 + f"实时监控检查 - {datetime.now().strftime('%Y-%m-%d %H:%M')}")
-        print("=" * 70)
+        logger.info("=" * 70)
+        logger.info(" " * 16 + f"实时监控检查 - {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+        logger.info("=" * 70)
         
         # 加载账户
         account = self.load_account()
-        print(f"📊 账户：{account['account_id']}")
-        print(f"   持仓：{len(account['positions'])} 只")
-        print()
+        logger.info(f"📊 账户：{account['account_id']}")
+        logger.info(f"   持仓：{len(account['positions'])} 只")
+        logger.info()
         
         # 获取最新价格
         symbols = [p['symbol'] for p in account['positions']]
         prices = self.get_latest_prices(symbols)
-        print(f"✅ 获取价格数据：{len(prices)} 只股票")
-        print()
+        logger.info(f"✅ 获取价格数据：{len(prices)} 只股票")
+        logger.info()
         
         # 检查数据新鲜度
         data_fresh, stale_data = self.check_data_freshness(prices)
@@ -593,9 +596,9 @@ class RealtimeMonitor:
         # 保存监控报告
         self.save_monitor_report(data_fresh, stale_data, alerts)
         
-        print("\n" + "=" * 70)
-        print(" " * 20 + "检查完成")
-        print("=" * 70)
+        logger.info("\n" + "=" * 70)
+        logger.info(" " * 20 + "检查完成")
+        logger.info("=" * 70)
         
         return alerts
 
@@ -620,27 +623,27 @@ def main():
         monitor.run_check()
     else:
         # 持续监控
-        print("=" * 70)
-        print(" " * 18 + "实时监控系统启动")
-        print("=" * 70)
-        print(f"检查间隔：{args.interval} 秒 ({args.interval/60:.0f} 分钟)")
-        print(f"止损线：-15%  |  止盈线：+30%  |  预警线：-10%")
-        print(f"单只上限：15%  |  现金下限：5%")
-        print()
-        print("按 Ctrl+C 停止监控")
-        print("=" * 70)
+        logger.info("=" * 70)
+        logger.info(" " * 18 + "实时监控系统启动")
+        logger.info("=" * 70)
+        logger.info(f"检查间隔：{args.interval} 秒 ({args.interval/60:.0f} 分钟)")
+        logger.info(f"止损线：-15%  |  止盈线：+30%  |  预警线：-10%")
+        logger.info(f"单只上限：15%  |  现金下限：5%")
+        logger.info()
+        logger.info("按 Ctrl+C 停止监控")
+        logger.info("=" * 70)
         
         try:
             while True:
                 monitor.run_check()
                 
                 next_check = datetime.now() + timedelta(seconds=args.interval)
-                print(f"\n⏰ 下次检查：{next_check.strftime('%Y-%m-%d %H:%M:%S')}")
-                print()
+                logger.info(f"\n⏰ 下次检查：{next_check.strftime('%Y-%m-%d %H:%M:%S')}")
+                logger.info()
                 
                 time.sleep(args.interval)
         except KeyboardInterrupt:
-            print("\n\n✅ 监控已停止")
+            logger.info("\n\n✅ 监控已停止")
 
 
 if __name__ == '__main__':

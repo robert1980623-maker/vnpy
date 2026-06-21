@@ -12,6 +12,9 @@
 日期：2026-03-16
 """
 
+import logging
+logger = logging.getLogger(__name__)
+
 import os
 import json
 import time
@@ -145,14 +148,14 @@ class DataSourceManager:
         # 加载历史统计
         self._load_statistics()
         
-        print(f"✅ DataSourceManager 初始化完成")
-        print(f"   已注册 {len(self.data_sources)} 个数据源")
+        logger.info(f"✅ DataSourceManager 初始化完成")
+        logger.info(f"   已注册 {len(self.data_sources)} 个数据源")
         
         # P0-4 修复：启动健康检查线程
         self.start_health_check()
         for name, ds in self.data_sources.items():
             status = self.status.get(name, DataSourceStatus.UNKNOWN)
-            print(f"   - {name}: priority={ds.priority}, status={status.value}")
+            logger.info(f"   - {name}: priority={ds.priority}, status={status.value}")
     
     def _load_config(self) -> dict:
         """加载配置文件"""
@@ -193,9 +196,9 @@ class DataSourceManager:
                 for name, stats in data.get('usage_stats', {}).items():
                     if name in self.usage_stats:
                         self.usage_stats[name] = UsageStatistics.from_dict(stats)
-                print(f"   已加载历史统计数据")
+                logger.info(f"   已加载历史统计数据")
             except Exception as e:
-                print(f"   ⚠️ 加载历史统计失败：{e}")
+                logger.error(f"   ⚠️ 加载历史统计失败：{e}")
     
     def _save_statistics(self):
         """保存统计"""
@@ -231,7 +234,7 @@ class DataSourceManager:
             self.status[name] = DataSourceStatus.UNKNOWN
             self.response_time_history[name] = []
             self.rate_limit_tracker[name] = []
-            print(f"✅ 已注册数据源：{name} (priority={priority})")
+            logger.info(f"✅ 已注册数据源：{name} (priority={priority})")
     
     def calculate_health_score(self, name: str) -> float:
         """
@@ -393,7 +396,7 @@ class DataSourceManager:
             candidates.sort(key=lambda x: (-x[1], x[2]))
             
             best = candidates[0]
-            print(f"📊 选择数据源：{best[0]} (score={best[1]:.1f}, health={best[3]:.1f}, priority={best[2]})")
+            logger.info(f"📊 选择数据源：{best[0]} (score={best[1]:.1f}, health={best[3]:.1f}, priority={best[2]})")
             return best[0]
     
     def _is_rate_limited(self, name: str) -> bool:
@@ -477,20 +480,20 @@ class DataSourceManager:
             interval = self.config.get('health_check_interval', 300)
         
         if self._health_check_thread and self._health_check_thread.is_alive():
-            print(f"⚠️ 健康检查线程已在运行")
+            logger.info(f"⚠️ 健康检查线程已在运行")
             return
         
         self._stop_health_check = False
         self._health_check_thread = threading.Thread(target=self._health_check_loop, args=(interval,), daemon=True)
         self._health_check_thread.start()
-        print(f"✅ 健康检查已启动 (interval={interval}s)")
+        logger.info(f"✅ 健康检查已启动 (interval={interval}s)")
     
     def stop_health_check(self):
         """停止健康检查线程"""
         self._stop_health_check = True
         if self._health_check_thread:
             self._health_check_thread.join(timeout=5)
-        print(f"✅ 健康检查已停止")
+        logger.info(f"✅ 健康检查已停止")
     
     def _health_check_loop(self, interval: int):
         """健康检查循环"""
@@ -499,7 +502,7 @@ class DataSourceManager:
                 self._run_health_check()
                 self._save_statistics()
             except Exception as e:
-                print(f"❌ 健康检查异常：{e}")
+                logger.error(f"❌ 健康检查异常：{e}")
             
             time.sleep(interval)
     
@@ -509,7 +512,7 @@ class DataSourceManager:
         
         实际调用数据源 API 测试连通性和响应时间
         """
-        print(f"\n🔍 执行数据源健康检查 ({datetime.now().strftime('%H:%M:%S')})")
+        logger.info(f"\n🔍 执行数据源健康检查 ({datetime.now().strftime('%H:%M:%S')})")
         
         for name in self.data_sources.keys():
             try:
@@ -530,7 +533,7 @@ class DataSourceManager:
                     self._send_slack_alert(name, health)
                 
             except Exception as e:
-                print(f"   ❌ {name}: 健康检查异常 - {e}")
+                logger.error(f"   ❌ {name}: 健康检查异常 - {e}")
                 self.update_health_metrics(
                     name=name,
                     response_time_ms=0,
@@ -615,17 +618,17 @@ class DataSourceManager:
                     estimated_fix='自动恢复'
                 )
             )
-            print(f"  📢 已发送 Slack 告警：{source_name} 故障")
+            logger.info(f"  📢 已发送 Slack 告警：{source_name} 故障")
         except Exception as e:
-            print(f"  ⚠️  Slack 告警发送失败：{e}")
+            logger.error(f"  ⚠️  Slack 告警发送失败：{e}")
     
     def print_status(self):
         """打印数据源状态"""
-        print("\n" + "="*70)
-        print("  数据源状态")
-        print("="*70)
-        print(f"{'数据源':<15} {'状态':<12} {'优先级':<8} {'健康分':<10} {'成功率':<10} {'响应时间':<12}")
-        print("-"*70)
+        logger.info("\n" + "="*70)
+        logger.info("  数据源状态")
+        logger.info("="*70)
+        logger.info(f"{'数据源':<15} {'状态':<12} {'优先级':<8} {'健康分':<10} {'成功率':<10} {'响应时间':<12}")
+        logger.info("-"*70)
         
         for name in sorted(self.data_sources.keys(), key=lambda x: self.data_sources[x].priority):
             status = self.status.get(name, DataSourceStatus.UNKNOWN)
@@ -633,11 +636,11 @@ class DataSourceManager:
             metrics = self.health_metrics.get(name, HealthMetrics())
             stats = self.usage_stats.get(name, UsageStatistics())
             
-            print(f"{name:<15} {status.value:<12} {config.priority:<8} "
+            logger.info(f"{name:<15} {status.value:<12} {config.priority:<8} "
                   f"{self.calculate_health_score(name):<10.1f} {metrics.success_rate:<10.2f} "
                   f"{metrics.response_time_ms:<12.1f}ms")
         
-        print("="*70)
+        logger.info("="*70)
 
 
 # ==================== 使用示例 ====================
@@ -651,7 +654,7 @@ if __name__ == '__main__':
     
     # 选择数据源
     best = manager.get_data_source()
-    print(f"\n✅ 最优数据源：{best}")
+    logger.info(f"\n✅ 最优数据源：{best}")
     
     # 模拟请求
     if best:
@@ -666,9 +669,9 @@ if __name__ == '__main__':
     
     # 查看统计
     stats = manager.get_statistics()
-    print(f"\n📊 使用统计:")
+    logger.info(f"\n📊 使用统计:")
     for name, data in stats.items():
-        print(f"  {name}: {data['usage']['total_requests']} requests, "
+        logger.info(f"  {name}: {data['usage']['total_requests']} requests, "
               f"success_rate={data['usage']['success_rate']:.2f}")
     
     # 启动健康检查

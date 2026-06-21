@@ -867,29 +867,29 @@ class IndustryRotationStrategy(StockScreenerStrategy):
 
 def test_strategy():
     """测试策略"""
-    print("=" * 60)
-    print("行业轮动策略测试")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("行业轮动策略测试")
+    logger.info("=" * 60)
     
     # 打印行业定义
-    print("\n📊 行业配置:")
+    logger.info("\n📊 行业配置:")
     for industry, stocks in INDUSTRY_STOCKS.items():
-        print(f"  {industry}: {len(stocks)}只股票")
+        logger.info(f"  {industry}: {len(stocks)}只股票")
     
-    print("\n📊 策略参数:")
-    print("  - 动量回看：20 天")
-    print("  - 热门行业：前 3 个")
-    print("  - 每行业选股：5 只")
-    print("  - 估值上限：PE<20, PB<3")
-    print("  - 调仓周期：5 天")
+    logger.info("\n📊 策略参数:")
+    logger.info("  - 动量回看：20 天")
+    logger.info("  - 热门行业：前 3 个")
+    logger.info("  - 每行业选股：5 只")
+    logger.info("  - 估值上限：PE<20, PB<3")
+    logger.info("  - 调仓周期：5 天")
     
-    print("\n📊 选股逻辑:")
-    print("  1. 计算行业得分（动量 40% + 估值 30% + 换手 10%）")
-    print("  2. 选择得分最高的 3 个行业")
-    print("  3. 在热门行业中选择低估值股票")
-    print("  4. 等权重配置")
+    logger.info("\n📊 选股逻辑:")
+    logger.info("  1. 计算行业得分（动量 40% + 估值 30% + 换手 10%）")
+    logger.info("  2. 选择得分最高的 3 个行业")
+    logger.info("  3. 在热门行业中选择低估值股票")
+    logger.info("  4. 等权重配置")
     
-    print("\n✅ 策略开发完成！")
+    logger.info("\n✅ 策略开发完成！")
 
 
 if __name__ == "__main__":

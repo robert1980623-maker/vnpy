@@ -15,6 +15,9 @@
 - ✅ 改进量价匹配算法
 """
 
+import logging
+logger = logging.getLogger(__name__)
+
 import csv
 import json
 from pathlib import Path
@@ -154,13 +157,13 @@ class DataQualityChecker:
     
     def check_all(self) -> QualityReport:
         """执行所有检查"""
-        print("=" * 70)
-        print(" " * 20 + "数据质量检查 (优化版)")
-        print("=" * 70)
-        print(f"检查时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        print(f"数据目录：{self.data_dir}")
-        print(f"节假日日历：{len(self.cn_holidays)} 个节假日")
-        print()
+        logger.info("=" * 70)
+        logger.info(" " * 20 + "数据质量检查 (优化版)")
+        logger.info("=" * 70)
+        logger.info(f"检查时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        logger.info(f"数据目录：{self.data_dir}")
+        logger.info(f"节假日日历：{len(self.cn_holidays)} 个节假日")
+        logger.info()
         
         # 1. 检查文件存在
         self._check_files_exist()
@@ -193,7 +196,7 @@ class DataQualityChecker:
     
     def _check_files_exist(self):
         """检查文件存在"""
-        print("【1. 文件检查】")
+        logger.info("【1. 文件检查】")
         
         csv_files = list(self.data_dir.glob('*.csv'))
         self.stats['total_files'] = len(csv_files)
@@ -205,15 +208,15 @@ class DataQualityChecker:
                 description='数据目录为空',
                 severity='critical'
             ))
-            print("  ❌ 数据目录为空")
+            logger.info("  ❌ 数据目录为空")
         else:
-            print(f"  ✅ 发现 {len(csv_files)} 个 CSV 文件")
+            logger.info(f"  ✅ 发现 {len(csv_files)} 个 CSV 文件")
         
-        print()
+        logger.info()
     
     def _check_data_structure(self):
         """检查数据结构"""
-        print("【2. 数据结构检查】")
+        logger.info("【2. 数据结构检查】")
         
         errors = 0
         for csv_file in self.data_dir.glob('*.csv'):
@@ -249,14 +252,14 @@ class DataQualityChecker:
                     errors += 1
         
         if errors == 0:
-            print("  ✅ 所有文件列名正确")
+            logger.info("  ✅ 所有文件列名正确")
         else:
-            print(f"  ❌ {errors} 个文件列名错误")
-        print()
+            logger.error(f"  ❌ {errors} 个文件列名错误")
+        logger.info()
     
     def _check_data_completeness(self):
         """检查数据完整性"""
-        print("【3. 数据完整性检查】")
+        logger.info("【3. 数据完整性检查】")
         
         missing_data = 0
         
@@ -284,14 +287,14 @@ class DataQualityChecker:
                             break
         
         if missing_data == 0:
-            print("  ✅ 无缺失值")
+            logger.info("  ✅ 无缺失值")
         else:
-            print(f"  ⚠️ 发现 {missing_data} 个缺失值")
-        print()
+            logger.info(f"  ⚠️ 发现 {missing_data} 个缺失值")
+        logger.info()
     
     def _check_outliers_smart(self):
         """智能异常值检查 (分板块)"""
-        print("【4. 异常值检查 (智能规则)】")
+        logger.error("【4. 异常值检查 (智能规则)】")
         
         outliers = 0
         board_stats = {}
@@ -366,19 +369,19 @@ class DataQualityChecker:
                     prev_close = close_price
         
         # 打印板块统计
-        print("  板块统计:")
+        logger.info("  板块统计:")
         for board, stats in board_stats.items():
-            print(f"    {board}: {stats['count']} 只股票")
+            logger.info(f"    {board}: {stats['count']} 只股票")
         
         if outliers == 0:
-            print("  ✅ 无异常值")
+            logger.error("  ✅ 无异常值")
         else:
-            print(f"  ⚠️ 发现 {outliers} 个异常值 (已分板块优化)")
-        print()
+            logger.error(f"  ⚠️ 发现 {outliers} 个异常值 (已分板块优化)")
+        logger.info()
     
     def _check_continuity_smart(self):
         """智能数据连续性检查 (考虑节假日)"""
-        print("【5. 数据连续性检查 (考虑节假日)】")
+        logger.info("【5. 数据连续性检查 (考虑节假日)】")
         
         gaps = 0
         
@@ -428,14 +431,14 @@ class DataQualityChecker:
                         gaps += 1
         
         if gaps == 0:
-            print("  ✅ 数据连续性好 (已考虑节假日)")
+            logger.info("  ✅ 数据连续性好 (已考虑节假日)")
         else:
-            print(f"  ⚠️ 发现 {gaps} 处数据中断")
-        print()
+            logger.info(f"  ⚠️ 发现 {gaps} 处数据中断")
+        logger.info()
     
     def _check_consistency_optimized(self):
         """优化的逻辑一致性检查"""
-        print("【6. 逻辑一致性检查 (优化算法)】")
+        logger.info("【6. 逻辑一致性检查 (优化算法)】")
         
         inconsistencies = 0
         
@@ -489,10 +492,10 @@ class DataQualityChecker:
                             inconsistencies += 1
         
         if inconsistencies == 0:
-            print("  ✅ 逻辑一致性好")
+            logger.info("  ✅ 逻辑一致性好")
         else:
-            print(f"  ℹ️ 发现 {inconsistencies} 处提示 (已优化算法)")
-        print()
+            logger.info(f"  ℹ️ 发现 {inconsistencies} 处提示 (已优化算法)")
+        logger.info()
     
     def _generate_report(self) -> QualityReport:
         """生成报告"""
@@ -522,55 +525,55 @@ class DataQualityChecker:
     
     def _print_report(self, report: QualityReport):
         """打印报告"""
-        print("=" * 70)
-        print(" " * 20 + "质量检查报告")
-        print("=" * 70)
-        print()
+        logger.info("=" * 70)
+        logger.info(" " * 20 + "质量检查报告")
+        logger.info("=" * 70)
+        logger.info()
         
-        print("【统计信息】")
-        print(f"  数据文件：{report.total_files} 个")
-        print(f"  数据记录：{report.total_records:,} 条")
-        print(f"  股票数量：{len(self.stats['symbols'])} 只")
-        print()
+        logger.info("【统计信息】")
+        logger.info(f"  数据文件：{report.total_files} 个")
+        logger.info(f"  数据记录：{report.total_records:,} 条")
+        logger.info(f"  股票数量：{len(self.stats['symbols'])} 只")
+        logger.info()
         
-        print("【问题统计】")
-        print(f"  总问题数：{report.issues_count}")
-        print(f"  严重问题：{report.critical_count} (红色)")
-        print(f"  警告问题：{report.warning_count} (黄色)")
-        print(f"  提示信息：{report.info_count} (蓝色)")
-        print()
+        logger.info("【问题统计】")
+        logger.info(f"  总问题数：{report.issues_count}")
+        logger.info(f"  严重问题：{report.critical_count} (红色)")
+        logger.warning(f"  警告问题：{report.warning_count} (黄色)")
+        logger.info(f"  提示信息：{report.info_count} (蓝色)")
+        logger.info()
         
-        print("【质量评分】")
+        logger.info("【质量评分】")
         score = report.quality_score
         if score >= 90:
-            print(f"  得分：{score}/100 ✅ 优秀")
+            logger.info(f"  得分：{score}/100 ✅ 优秀")
         elif score >= 70:
-            print(f"  得分：{score}/100 ⚠️ 良好")
+            logger.info(f"  得分：{score}/100 ⚠️ 良好")
         elif score >= 60:
-            print(f"  得分：{score}/100 ⚠️ 及格")
+            logger.info(f"  得分：{score}/100 ⚠️ 及格")
         else:
-            print(f"  得分：{score}/100 ❌ 需要改进")
-        print()
+            logger.info(f"  得分：{score}/100 ❌ 需要改进")
+        logger.info()
         
         if self.issues:
-            print("【问题详情】")
+            logger.info("【问题详情】")
             # 只显示严重和警告问题
             critical_warnings = [i for i in self.issues if i.severity in ['critical', 'warning']][:10]
             
             for issue in critical_warnings:
                 emoji = {'critical': '❌', 'warning': '⚠️', 'info': 'ℹ️'}.get(issue.severity, '•')
-                print(f"  {emoji} [{issue.symbol}] {issue.issue_type}: {issue.description}")
+                logger.info(f"  {emoji} [{issue.symbol}] {issue.issue_type}: {issue.description}")
             
             if len(critical_warnings) < len([i for i in self.issues if i.severity in ['critical', 'warning']]):
                 remaining = len([i for i in self.issues if i.severity in ['critical', 'warning']]) - len(critical_warnings)
-                print(f"  ... 还有 {remaining} 个严重/警告问题")
+                logger.warning(f"  ... 还有 {remaining} 个严重/警告问题")
             
             # 提示信息不显示详情
             if report.info_count > 0:
-                print(f"  ℹ️ 还有 {report.info_count} 条提示信息 (已省略)")
-        print()
+                logger.info(f"  ℹ️ 还有 {report.info_count} 条提示信息 (已省略)")
+        logger.info()
         
-        print("=" * 70)
+        logger.info("=" * 70)
     
     def _save_report(self, report: QualityReport):
         """保存报告"""
@@ -583,12 +586,12 @@ class DataQualityChecker:
         with open(report_file, 'w', encoding='utf-8') as f:
             json.dump(asdict(report), f, ensure_ascii=False, indent=2)
         
-        print(f"✅ 报告已保存：{report_file}")
-        print()
+        logger.info(f"✅ 报告已保存：{report_file}")
+        logger.info()
 
 
 def main():
-    print()
+    logger.info()
     
     # 创建检查器
     checker = DataQualityChecker('./data/akshare/bars')

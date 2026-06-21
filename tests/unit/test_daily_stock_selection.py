@@ -160,20 +160,21 @@ class TestFeishuConfigLoading:
         # user_open_id 环境变量未设 → 使用源码中的硬编码默认值
         assert sync.user_open_id == "ou_c4a65a3dcdbf8fe6d6a17a7df0e702e6"
 
-    def test_feishu_sync_returns_false_without_app_token(self, feishu_env, capsys):
+    def test_feishu_sync_returns_false_without_app_token(self, feishu_env, caplog):
         """
         场景 4: app_token 为空时，sync_stock_selection 应返回 False 且不发起请求
         """
+        import logging
         empty_config = {"app_token": "", "table_id": "", "user_open_id": ""}
         with patch("config_loader.get_feishu_config", return_value=empty_config):
             sync = FeishuBitableSync()
 
-        result = sync.sync_stock_selection(
-            [{"symbol": "000001", "name": "测试", "strategies": ["价值"]}]
-        )
+        with caplog.at_level(logging.INFO):
+            result = sync.sync_stock_selection(
+                [{"symbol": "000001", "name": "测试", "strategies": ["价值"]}]
+            )
         assert result is False
-        captured = capsys.readouterr()
-        assert "FEISHU_APP_TOKEN" in captured.out
+        assert "FEISHU_APP_TOKEN" in caplog.text
 
 
 # ===========================================================================

@@ -9,6 +9,9 @@
 - 生成新鲜度报告
 """
 
+import logging
+logger = logging.getLogger(__name__)
+
 import json
 import subprocess
 import sys
@@ -260,7 +263,7 @@ class DataFreshnessGuard:
         if not symbols:
             return {'status': 'no_symbols', 'downloaded': 0}
         
-        print(f"🔄 开始下载 {len(symbols)} 只股票数据...")
+        logger.info(f"🔄 开始下载 {len(symbols)} 只股票数据...")
         self.report['actions'].append({
             'action': 'download',
             'symbols': symbols,
@@ -355,22 +358,22 @@ class DataFreshnessGuard:
         Returns:
             执行结果
         """
-        print("=" * 70)
-        print("🛡️ 数据新鲜度守护检查")
-        print("=" * 70)
+        logger.info("=" * 70)
+        logger.info("🛡️ 数据新鲜度守护检查")
+        logger.info("=" * 70)
         
         now = datetime.now()
         expected_date = self.get_expected_date()
         
         self.report['expected_date'] = expected_date.strftime('%Y-%m-%d')
         
-        print(f"检查时间：{now.strftime('%Y-%m-%d %H:%M')}")
-        print(f"期望数据日期：{expected_date.strftime('%Y-%m-%d')}")
-        print()
+        logger.info(f"检查时间：{now.strftime('%Y-%m-%d %H:%M')}")
+        logger.info(f"期望数据日期：{expected_date.strftime('%Y-%m-%d')}")
+        logger.info()
         
         # 1. 判断是否需要下载
         should_dl, reason = self.should_download()
-        print(f"下载判断：{'需要' if should_dl else '不需要'} - {reason}")
+        logger.info(f"下载判断：{'需要' if should_dl else '不需要'} - {reason}")
         
         if not should_dl:
             self.report['status'] = 'fresh'
@@ -378,12 +381,12 @@ class DataFreshnessGuard:
             return {'status': 'fresh', 'reason': reason}
         
         # 2. 检查新鲜度详情
-        print("\n📊 新鲜度详情:")
+        logger.info("\n📊 新鲜度详情:")
         freshness = self.check_all_freshness(expected_date)
         
         # 检查是否有错误
         if 'error' in freshness:
-            print(f"  ❌ 错误：{freshness['error']}")
+            logger.error(f"  ❌ 错误：{freshness['error']}")
             self.report['status'] = 'error'
             self.report['actions'].append({
                 'action': 'freshness_check_error',
@@ -393,10 +396,10 @@ class DataFreshnessGuard:
             self._save_report()
             return {'status': 'error', 'error': freshness['error']}
         
-        print(f"  总持仓：{freshness['total']}")
-        print(f"  新鲜：{freshness['fresh_count']} ({freshness['fresh_rate']*100:.1f}%)")
-        print(f"  滞后：{freshness['stale_count']} ({freshness['stale_rate']*100:.1f}%)")
-        print(f"  缺失：{freshness['missing_count']}")
+        logger.info(f"  总持仓：{freshness['total']}")
+        logger.info(f"  新鲜：{freshness['fresh_count']} ({freshness['fresh_rate']*100:.1f}%)")
+        logger.info(f"  滞后：{freshness['stale_count']} ({freshness['stale_rate']*100:.1f}%)")
+        logger.info(f"  缺失：{freshness['missing_count']}")
         
         self.report['actual_date'] = freshness.get('expected_date')
         self.report['fresh_stocks'] = freshness['fresh']
@@ -410,17 +413,17 @@ class DataFreshnessGuard:
         
         # 3. 自动修复
         if auto_fix:
-            print(f"\n🔄 自动修复启动...")
+            logger.info(f"\n🔄 自动修复启动...")
             stale_symbols = [s['symbol'] for s in freshness['stale']]
             stale_symbols.extend(freshness['missing'])
             
             dl_result = self.trigger_download(stale_symbols)
-            print(f"下载结果：{dl_result['status']}")
+            logger.info(f"下载结果：{dl_result['status']}")
             
             if dl_result['status'] in ['success', 'partial']:
                 # 验证下载结果
                 verify_result = self.verify_after_download(stale_symbols)
-                print(f"验证成功率：{verify_result['success_rate']*100:.1f}%")
+                logger.info(f"验证成功率：{verify_result['success_rate']*100:.1f}%")
                 
                 self.report['actions'].append({
                     'action': 'verify',
@@ -484,7 +487,7 @@ class DataFreshnessGuard:
         with open(latest_file, 'w', encoding='utf-8') as f:
             json.dump(clean_report, f, ensure_ascii=False, indent=2, default=str)
         
-        print(f"\n✅ 报告已保存：{report_file}")
+        logger.info(f"\n✅ 报告已保存：{report_file}")
 
 
 def main():
@@ -515,7 +518,7 @@ def main():
             "结果": json.dumps(result, ensure_ascii=False)[:200]
         })
         
-        print(f"\n✅ 守护周期完成，状态：{result.get('status')}")
+        logger.info(f"\n✅ 守护周期完成，状态：{result.get('status')}")
         
     except Exception as e:
         notify_task_error("数据新鲜度守护", str(e))

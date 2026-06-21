@@ -12,6 +12,9 @@ IQ-01 修复：使用 SQLite 作为主数据源，JSON 仅作为备份
 虚拟账户数据分裂修复：以飞书缓存为主，SQLite 同步
 """
 
+import logging
+logger = logging.getLogger(__name__)
+
 import json
 import os
 import sys
@@ -60,7 +63,7 @@ class VirtualAccount:
         # 第一优先级：飞书缓存（如果有且新鲜）
         feishu_data = self._load_account_from_feishu()
         if feishu_data:
-            print(f"ℹ️ 从飞书缓存读取账户数据，同步到 SQLite")
+            logger.info(f"ℹ️ 从飞书缓存读取账户数据，同步到 SQLite")
             # 同步到 SQLite，确保数据一致
             self._sync_account_to_sqlite(feishu_data)
             return feishu_data
@@ -68,7 +71,7 @@ class VirtualAccount:
         # 第二优先级：SQLite（主数据源）
         sqlite_account = self.db.get_account(VIRTUAL_ACCOUNT_ID)
         if sqlite_account:
-            print(f"ℹ️ 从 SQLite 读取账户数据")
+            logger.info(f"ℹ️ 从 SQLite 读取账户数据")
             return {
                 "account_id": sqlite_account.account_id,
                 "account_name": sqlite_account.account_name,
@@ -85,14 +88,14 @@ class VirtualAccount:
             try:
                 with open(ACCOUNT_FILE, 'r', encoding='utf-8') as f:
                     local_data = json.load(f)
-                print(f"ℹ️ 从本地 JSON 读取账户数据（备份），同步到 SQLite")
+                logger.info(f"ℹ️ 从本地 JSON 读取账户数据（备份），同步到 SQLite")
                 self._sync_account_to_sqlite(local_data)
                 return local_data
             except Exception as e:
-                print(f"⚠️ 读取本地 JSON 失败：{e}")
+                logger.error(f"⚠️ 读取本地 JSON 失败：{e}")
         
         # 默认：创建新账户
-        print(f"ℹ️ 创建默认账户")
+        logger.info(f"ℹ️ 创建默认账户")
         default_account = {
             "account_id": VIRTUAL_ACCOUNT_ID,
             "account_name": "王雅轩主账户",
@@ -141,14 +144,14 @@ class VirtualAccount:
                     cache_time = datetime.fromisoformat(updated.replace('+08:00', ''))
                     age = (datetime.now() - cache_time).total_seconds()
                     if age > 3600:  # 超过 1 小时
-                        print(f"⚠️ 账户缓存过期 {age/3600:.1f} 小时")
+                        logger.info(f"⚠️ 账户缓存过期 {age/3600:.1f} 小时")
                         return None
                 except Exception:
                     pass
-            print(f"ℹ️ 从飞书缓存读取账户数据")
+            logger.info(f"ℹ️ 从飞书缓存读取账户数据")
             return data
         except Exception as e:
-            print(f"⚠️ 读取账户缓存失败：{e}")
+            logger.error(f"⚠️ 读取账户缓存失败：{e}")
         return None
     
     def _load_positions_from_feishu(self):
@@ -179,10 +182,10 @@ class VirtualAccount:
                     "cost": rec.get("cost_basis", 0)
                 })
             
-            print(f"ℹ️ 从飞书缓存读取 {len(positions)} 条持仓")
+            logger.info(f"ℹ️ 从飞书缓存读取 {len(positions)} 条持仓")
             return positions
         except Exception as e:
-            print(f"⚠️ 读取持仓缓存失败：{e}")
+            logger.error(f"⚠️ 读取持仓缓存失败：{e}")
         return None
     
     def _load_trade_log(self):
@@ -209,11 +212,11 @@ class VirtualAccount:
         # 优先从飞书缓存读取
         feishu_positions = self._load_positions_from_feishu()
         if feishu_positions is not None and len(feishu_positions) > 0:
-            print(f"ℹ️ 从飞书缓存读取到 {len(feishu_positions)} 条持仓记录")
+            logger.info(f"ℹ️ 从飞书缓存读取到 {len(feishu_positions)} 条持仓记录")
             return feishu_positions
         
         # 最后备用：从本地交易流水计算
-        print("⚠️ 飞书持仓缓存不可用，回退到交易流水计算")
+        logger.info("⚠️ 飞书持仓缓存不可用，回退到交易流水计算")
         positions = {}
         for trade in self.trade_log.get("trades", []):
             if trade.get("status") == "filled" and trade.get("direction") == "买":
@@ -335,7 +338,7 @@ class VirtualAccount:
         try:
             self._sync_account_to_sqlite(self.account_data)
         except Exception as e:
-            print(f"⚠️ 写入 SQLite 失败：{e}，回滚操作")
+            logger.error(f"⚠️ 写入 SQLite 失败：{e}，回滚操作")
             raise
         
         # 再写 JSON（备份）
@@ -347,7 +350,7 @@ class VirtualAccount:
             with open(TRADE_LOG_FILE, 'w', encoding='utf-8') as f:
                 json.dump(self.trade_log, f, ensure_ascii=False, indent=2)
         except Exception as e:
-            print(f"⚠️ 写入 JSON 失败：{e}，但 SQLite 已成功")
+            logger.error(f"⚠️ 写入 JSON 失败：{e}，但 SQLite 已成功")
             # SQLite 已成功，JSON 失败不影响主数据
     
     def sync_to_feishu(self, trade_records=None):
@@ -384,18 +387,18 @@ class VirtualAccount:
                     }
                 })
             
-            print(f"✅ 准备同步：1 条账户记录，{len(position_records)} 条持仓记录")
+            logger.info(f"✅ 准备同步：1 条账户记录，{len(position_records)} 条持仓记录")
             # 实际同步由 process_feishu_sync_qtrade.py 处理
             return True
         except Exception as e:
-            print(f"❌ 同步到飞书失败：{e}")
+            logger.error(f"❌ 同步到飞书失败：{e}")
             return False
 
 
 if __name__ == "__main__":
     # 测试
     account = VirtualAccount()
-    print(f"可用资金：¥{account.get_available_cash():,.2f}")
-    print(f"持仓：{len(account.get_positions())} 只")
+    logger.info(f"可用资金：¥{account.get_available_cash():,.2f}")
+    logger.info(f"持仓：{len(account.get_positions())} 只")
     for pos in account.get_positions():
-        print(f"  {pos['symbol']}: {pos['quantity']}股 @ ¥{pos['avg_price']:.2f}")
+        logger.info(f"  {pos['symbol']}: {pos['quantity']}股 @ ¥{pos['avg_price']:.2f}")

@@ -9,6 +9,9 @@
     df = fetcher.get_daily_bars('000001.SZ', start_date='20240101', end_date='20241231')
 """
 
+import logging
+logger = logging.getLogger(__name__)
+
 import os
 import time
 import pandas as pd
@@ -42,19 +45,19 @@ class DataSourceFetcher:
         try:
             import akshare as ak
             self.akshare = ak
-            print("✅ AKShare 已初始化")
+            logger.info("✅ AKShare 已初始化")
         except ImportError:
             self.akshare = None
-            print("⚠️ AKShare 未安装")
+            logger.info("⚠️ AKShare 未安装")
         
         # Sina (使用 requests)
         try:
             import requests
             self.requests = requests
-            print("✅ Sina 数据源已准备")
+            logger.info("✅ Sina 数据源已准备")
         except ImportError:
             self.requests = None
-            print("⚠️ requests 未安装")
+            logger.info("⚠️ requests 未安装")
     
     def get_daily_bars(self, symbol: str, start_date: str, end_date: str,
                        max_retries: int = 3) -> Optional[pd.DataFrame]:
@@ -80,7 +83,7 @@ class DataSourceFetcher:
                 last_error = "无可用数据源"
                 break
             
-            print(f"\n📡 尝试使用数据源：{data_source} (attempt {attempt + 1}/{max_retries})")
+            logger.info(f"\n📡 尝试使用数据源：{data_source} (attempt {attempt + 1}/{max_retries})")
             
             try:
                 # 记录请求
@@ -100,7 +103,7 @@ class DataSourceFetcher:
                     )
                     self.manager.update_usage_stats(data_source, response_time, success=True)
                     
-                    print(f"✅ 成功获取数据：{len(df)} 条，响应时间：{response_time:.0f}ms")
+                    logger.info(f"✅ 成功获取数据：{len(df)} 条，响应时间：{response_time:.0f}ms")
                     return df
                 else:
                     # 数据为空
@@ -124,15 +127,15 @@ class DataSourceFetcher:
                 self.manager.update_usage_stats(data_source, response_time, success=False, rate_limit_hit=rate_limit_hit)
                 
                 last_error = str(e)
-                print(f"❌ 数据源 {data_source} 失败：{e}")
+                logger.error(f"❌ 数据源 {data_source} 失败：{e}")
                 
                 # 如果是限流，等待一段时间
                 if rate_limit_hit:
                     cooldown = self.manager.config.get('failover', {}).get('cooldown_seconds', 60)
-                    print(f"⏳ 触发限流，等待 {cooldown} 秒...")
+                    logger.info(f"⏳ 触发限流，等待 {cooldown} 秒...")
                     time.sleep(cooldown)
         
-        print(f"\n❌ 所有数据源尝试失败：{last_error}")
+        logger.error(f"\n❌ 所有数据源尝试失败：{last_error}")
         return None
     
     def _fetch_from_source(self, source: str, symbol: str, 
@@ -290,28 +293,28 @@ if __name__ == '__main__':
     fetcher.print_status()
     
     # 获取数据
-    print("\n" + "="*70)
-    print("  测试数据获取")
-    print("="*70)
+    logger.info("\n" + "="*70)
+    logger.info("  测试数据获取")
+    logger.info("="*70)
     
     df = fetcher.get_daily_bars('000001.SZ', '20241201', '20241231')
     
     if df is not None:
-        print(f"\n✅ 成功获取数据:")
-        print(f"   数据量：{len(df)} 条")
-        print(f"   日期范围：{df['datetime'].min()} - {df['datetime'].max()}")
-        print(f"\n前 5 行:")
-        print(df.head())
+        logger.info(f"\n✅ 成功获取数据:")
+        logger.info(f"   数据量：{len(df)} 条")
+        logger.info(f"   日期范围：{df['datetime'].min()} - {df['datetime'].max()}")
+        logger.info(f"\n前 5 行:")
+        logger.info(df.head())
     
     # 查看统计
-    print("\n" + "="*70)
-    print("  使用统计")
-    print("="*70)
+    logger.info("\n" + "="*70)
+    logger.info("  使用统计")
+    logger.info("="*70)
     stats = fetcher.get_status()
     for name, data in stats.items():
-        print(f"\n{name}:")
-        print(f"  状态：{data['status']}")
-        print(f"  健康分：{data['health_score']:.1f}")
-        print(f"  总请求：{data['usage']['total_requests']}")
-        print(f"  成功率：{data['usage']['success_rate']:.2f}")
-        print(f"  平均响应：{data['usage']['avg_response_time_ms']:.0f}ms")
+        logger.info(f"\n{name}:")
+        logger.info(f"  状态：{data['status']}")
+        logger.info(f"  健康分：{data['health_score']:.1f}")
+        logger.info(f"  总请求：{data['usage']['total_requests']}")
+        logger.info(f"  成功率：{data['usage']['success_rate']:.2f}")
+        logger.info(f"  平均响应：{data['usage']['avg_response_time_ms']:.0f}ms")
