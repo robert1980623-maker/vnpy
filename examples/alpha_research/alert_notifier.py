@@ -365,7 +365,12 @@ class AlertNotifier:
           - @your_channel    → Channel username
           - -1001234567890   → Chat ID（群组或频道）
         """
-        bot_token = "YOUR_TELEGRAM_BOT_TOKEN"  # TODO: 填入实际 Bot Token
+        from config_loader import get_telegram_token
+        bot_token = get_telegram_token()
+        if not bot_token:
+            print("[AlertNotifier] TELEGRAM_BOT_TOKEN 未配置，跳过 Telegram 通知")
+            self._write_notification_file(alert, "telegram", target)
+            return
 
         # 移除 @ 前缀（如果存在）
         chat_id = target.lstrip("@")

@@ -13,6 +13,7 @@
 
 import sys
 import json
+import os
 import subprocess
 from pathlib import Path
 from datetime import datetime, timedelta
@@ -30,11 +31,13 @@ from logger import TaskLogger
 
 class FeishuBitableSync:
     """飞书多维表格同步工具（使用 subprocess 调用 OpenClaw 工具）"""
-    
+
     def __init__(self):
-        self.app_token = "YpWLbsLAfaXw3HsprKfcj0AFnrh"  # Multi-Agent CircleNet - Trade Data
-        self.table_id = "tblyihWO0zsV9xqw"  # 选股记录表
-        self.user_open_id = "ou_c4a65a3dcdbf8fe6d6a17a7df0e702e6"  # 雅轩
+        from config_loader import get_feishu_config
+        feishu_config = get_feishu_config()
+        self.app_token = feishu_config['app_token'] or os.environ.get('FEISHU_APP_TOKEN', '')
+        self.table_id = feishu_config['table_id'] or os.environ.get('FEISHU_TABLE_ID', 'tblyihWO0zsV9xqw')
+        self.user_open_id = feishu_config['user_open_id'] or os.environ.get('FEISHU_USER_OPEN_ID', 'ou_c4a65a3dcdbf8fe6d6a17a7df0e702e6')
         
     def sync_stock_selection(self, stocks, date_str=None):
         """
@@ -46,6 +49,10 @@ class FeishuBitableSync:
         """
         if date_str is None:
             date_str = datetime.now().strftime('%Y-%m-%d')
+
+        if not self.app_token:
+            print("\n⚠️ FEISHU_APP_TOKEN 未配置，跳过飞书多维表格同步")
+            return False
         
         print("\n" + "=" * 70)
         print(" " * 20 + "同步选股结果到飞书多维表格")
