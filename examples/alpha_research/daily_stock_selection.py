@@ -139,7 +139,7 @@ print(json.dumps(result, ensure_ascii=False))
             import os
             try:
                 os.unlink(records_file)
-            except:
+            except OSError:
                 pass
     
     def send_notification(self, message):

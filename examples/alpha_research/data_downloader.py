@@ -111,6 +111,8 @@ class DownloaderConfig:
         timeout: 单次下载超时（秒）
         data_dir: 数据目录
         failed_queue_file: 失败队列文件路径
+        validate: 下载后是否自动校验数据质量
+        notify_on_failure: 校验失败时是否发送飞书通知
     """
     max_workers: int = 4
     stock_delay: float = 1.0
@@ -122,6 +124,8 @@ class DownloaderConfig:
     timeout: float = 120.0
     data_dir: str = './data/akshare/bars'
     failed_queue_file: str = './failed_downloads.json'
+    validate: bool = False
+    notify_on_failure: bool = False
 
 
 @dataclass
@@ -136,6 +140,7 @@ class DownloadResult:
         rows: 数据行数
         duration: 下载耗时（秒）
         error: 错误信息（失败时）
+        validation: 校验结果 (validate=True 时填充)
     """
     symbol: str
     status: Literal['success', 'failed', 'skipped']
@@ -143,6 +148,7 @@ class DownloadResult:
     rows: int = 0
     duration: float = 0.0
     error: str = ''
+    validation: Optional[dict] = None
 
     def to_dict(self) -> dict:
         """转换为字典（兼容旧接口）"""
@@ -152,6 +158,13 @@ class DownloadResult:
     def ok(self) -> bool:
         """是否成功"""
         return self.status == 'success'
+
+    @property
+    def validation_passed(self) -> Optional[bool]:
+        """校验是否通过（None 表示未校验）"""
+        if self.validation is None:
+            return None
+        return self.validation.get('passed', False)
 
 
 # ==================== 失败队列 ====================
@@ -251,6 +264,8 @@ class DataDownloader:
         timeout: float = 120.0,
         stock_delay: float = 1.0,
         data_dir: Optional[Path] = None,
+        validate: bool = False,
+        notify_on_failure: bool = False,
     ):
         """
         Args:
@@ -262,6 +277,8 @@ class DataDownloader:
             timeout: 单次下载超时（秒）
             stock_delay: 股票间延迟（秒，串行模式下使用）
             data_dir: 数据目录（用于增量检测）
+            validate: 下载后是否自动校验数据质量
+            notify_on_failure: 校验失败时是否发送飞书通知
         """
         if config is not None:
             self.config = config
@@ -273,6 +290,8 @@ class DataDownloader:
             self.stock_delay = config.stock_delay
             self.data_dir = Path(config.data_dir)
             self._failed_file = Path(config.failed_queue_file)
+            self.validate = config.validate
+            self.notify_on_failure = config.notify_on_failure
         else:
             self.config = DownloaderConfig(
                 max_workers=max_workers,
@@ -281,6 +300,8 @@ class DataDownloader:
                 base_delay=base_delay,
                 max_delay=max_delay,
                 timeout=timeout,
+                validate=validate,
+                notify_on_failure=notify_on_failure,
             )
             self.max_workers = max_workers
             self.max_retries = max_retries
@@ -290,6 +311,8 @@ class DataDownloader:
             self.stock_delay = stock_delay
             self.data_dir = data_dir or (Path(__file__).parent / 'data' / 'akshare' / 'bars')
             self._failed_file = _FAILED_DOWNLOADS_FILE
+            self.validate = validate
+            self.notify_on_failure = notify_on_failure
 
         self._stats_lock = Lock()
         self._stats = {
@@ -410,12 +433,14 @@ class DataDownloader:
                 if bars is not None and not bars.empty:
                     self._save_bars(symbol, bars)
                     remove_from_failed_queue(symbol)
+                    validation = self._run_validation(symbol, bars)
                     return DownloadResult(
                         symbol=symbol,
                         status='success',
                         source=source_name,
                         rows=len(bars),
                         duration=time.time() - start_time,
+                        validation=validation,
                     )
             except Exception as e:
                 last_error = f"{source_name} attempt {attempt + 1}: {e}"
@@ -441,6 +466,26 @@ class DataDownloader:
         self.data_dir.mkdir(parents=True, exist_ok=True)
         csv_path = self.data_dir / f"{symbol}.csv"
         bars.to_csv(csv_path, index=False)
+
+    def _run_validation(self, symbol: str, bars: pd.DataFrame) -> Optional[dict]:
+        """下载后运行数据质量校验（如已启用）
+
+        Returns:
+            校验结果的 dict 形式，未启用时返回 None
+        """
+        if not self.validate:
+            return None
+        try:
+            from data_validator import DataValidator
+            validator = DataValidator()
+            result = validator.validate(bars, symbol)
+            if not result.passed and self.notify_on_failure:
+                validator.notify_validation_failure(result)
+            logger.info(result.summary())
+            return result.to_dict()
+        except Exception as e:
+            logger.warning(f"Validation failed for {symbol}: {e}")
+            return {'symbol': symbol, 'passed': False, 'error': str(e), 'checks': []}
 
     def _update_stats(self, result: DownloadResult):
         """更新统计信息（线程安全）"""
@@ -590,12 +635,14 @@ class DataDownloader:
                 if bars is not None and not bars.empty:
                     await asyncio.to_thread(self._save_bars, symbol, bars)
                     await asyncio.to_thread(remove_from_failed_queue, symbol)
+                    validation = await asyncio.to_thread(self._run_validation, symbol, bars)
                     return DownloadResult(
                         symbol=symbol,
                         status='success',
                         source=source_name,
                         rows=len(bars),
                         duration=time.time() - start_time,
+                        validation=validation,
                     )
             except Exception as e:
                 last_error = f"{source_name} attempt {attempt + 1}: {e}"
@@ -672,7 +719,8 @@ class DataDownloader:
                     error=str(result),
                 )
                 await asyncio.to_thread(add_to_failed_queue, symbols[i], str(result))
-            self._update_stats(result)
+            # 使用 to_thread 避免 threading.Lock 阻塞事件循环
+            await asyncio.to_thread(self._update_stats, result)
             processed.append(result)
 
         # 汇总

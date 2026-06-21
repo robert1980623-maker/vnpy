@@ -164,6 +164,10 @@ def _run_post_download_validation():
     import sys
     from pathlib import Path
 
+    if pd is None:
+        click.echo("❌ pandas 未安装，无法校验 (pip install pandas)")
+        return
+
     # 确保 alpha_research 在 sys.path 中
     ar_dir = Path(__file__).resolve().parent.parent.parent / 'examples' / 'alpha_research'
     if str(ar_dir) not in sys.path:

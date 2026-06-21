@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import subprocess
 from pathlib import Path
 
@@ -10,10 +11,6 @@ import click
 
 from ..utils.cron_schema import CronConfig, load_and_validate_cron_config
 from ..utils.errors import ConfigError
-from ..utils.logging import get_logger
-
-
-logger = get_logger(__name__)
 
 
 @click.group(name='cron', short_help='定时任务管理')
@@ -96,13 +93,15 @@ def cron_validate(ctx):
     """校验 cron 配置文件"""
     config = _load_config(ctx)
 
-    click.echo("✅ 配置语法正确")
-    click.echo("✅ 所有依赖关系合法")
-    click.echo("✅ 无重复 task id")
-
     enabled = len(config.get_enabled_tasks())
     total = len(config.tasks)
-    click.echo(f"\n📊 共 {total} 个任务 (启用 {enabled}, 禁用 {total - enabled})")
+    groups = {t.group for t in config.tasks}
+    ids = {t.id for t in config.tasks}
+
+    click.echo(f"✅ 配置语法正确 (共 {total} 个任务, {len(groups)} 个分组)")
+    click.echo(f"✅ 所有依赖关系合法 (已校验 {sum(len(t.depends_on) for t in config.tasks)} 条依赖)")
+    click.echo(f"✅ 无重复 task id (共 {len(ids)} 个唯一 id)")
+    click.echo(f"\n📊 启用 {enabled}, 禁用 {total - enabled}")
 
 
 @cron.command(name='export')
@@ -218,7 +217,7 @@ def cron_run(ctx, task_id, dry_run):
     click.echo(f"[{task_id}] 正在执行: {command}")
     try:
         result = subprocess.run(
-            command, shell=True, timeout=task.timeout,
+            shlex.split(command), timeout=task.timeout,
             capture_output=False,
         )
         if result.returncode == 0:

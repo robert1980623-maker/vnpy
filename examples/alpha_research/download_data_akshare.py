@@ -388,7 +388,7 @@ def get_fundamental_data(vt_symbol: str, max_retries: int = 2) -> dict:
             # 方法 1: 获取个股估值指标
             try:
                 df = ak.stock_value_em(symbol=code)
-            except:
+            except Exception:
                 # 备用方法
                 df = None
             
@@ -415,7 +415,7 @@ def get_fundamental_data(vt_symbol: str, max_retries: int = 2) -> dict:
                         "pb_ratio": float(latest.get("市净率", 0)) if "市净率" in latest else None,
                         "roe": float(latest.get("净资产收益率", 0)) if "净资产收益率" in latest else None,
                     }
-            except:
+            except Exception:
                 pass
             
             # 如果都失败，返回基础数据

@@ -638,7 +638,7 @@ class DataValidator:
             if days_old > self.thresholds['missing_days']:
                 issues.append(f'数据陈旧：{days_old} 天未更新')
                 ok = False
-        except:
+        except (ValueError, TypeError):
             issues.append(f'日期格式错误：{latest_date_str}')
             ok = False
         
@@ -745,19 +745,25 @@ class DataValidator:
 def main():
     """主函数"""
     import argparse
-    
+
     parser = argparse.ArgumentParser(description='数据验证器')
     parser.add_argument('--validate', action='store_true', help='验证持仓数据')
+    parser.add_argument('--pre-stock', action='store_true', help='选股前验证模式')
     parser.add_argument('--symbol', type=str, help='验证指定股票')
     parser.add_argument('--report', action='store_true', help='生成报告')
-    
+
     args = parser.parse_args()
-    
+
     validator = DataValidator()
-    
-    if args.validate:
+
+    if args.validate and args.pre_stock:
+        # 选股前验证模式
+        success = validate_pre_stock_selection(validator)
+        exit(0 if success else 1)
+
+    elif args.validate:
         validator.validate_all_positions()
-    
+
     elif args.symbol:
         result = validator.validate_symbol(args.symbol)
         logger.info(f"\n{args.symbol} 验证结果:")
@@ -766,7 +772,7 @@ def main():
             logger.info(f"  问题:")
             for issue in result['issues']:
                 logger.info(f"    - {issue}")
-    
+
     elif args.report:
         # 生成今日报告摘要
         logger.info("\n数据质量报告")
@@ -786,59 +792,37 @@ if __name__ == '__main__':
 
 
 # 选股前验证模式
-def validate_pre_stock_selection():
+def validate_pre_stock_selection(validator: DataValidator) -> bool:
     """选股前验证"""
     logger.info("\n" + "="*70)
     logger.info(" " * 20 + "选股前数据验证")
     logger.info("="*70)
-    
+
     # 验证所有持仓
-    report = validate_all_positions()
-    
+    report = validator.validate_all_positions()
+
     # 判断是否可以通过
     summary = report['summary']
-    
+
     logger.info(f"\n{'='*70}")
     logger.info(" 验证结果:")
     logger.info(f"{'='*70}")
-    
+
     if summary['error'] > 0:
         logger.error(f"❌ 发现 {summary['error']} 只股票数据错误")
         logger.info("⚠️  建议：暂停选股，先修复数据问题")
         return False
-    
+
     elif summary['warning'] > 0:
         logger.warning(f"⚠️  发现 {summary['warning']} 只股票数据警告")
-        if summary['warning'] > len(summary) * 0.3:  # 超过 30% 有警告
+        if summary['warning'] > summary['total'] * 0.3:  # 超过 30% 有警告
             logger.warning("⚠️  警告比例过高，建议延迟选股")
             return False
         else:
             logger.warning("✅  警告在可接受范围内，可以继续选股")
             return True
-    
+
     else:
         logger.info(f"✅ 所有 {summary['ok']} 只股票数据正常")
         logger.info("✅ 可以通过选股验证")
         return True
-
-
-if __name__ == '__main__':
-    import argparse
-    
-    parser = argparse.ArgumentParser(description='数据验证器')
-    parser.add_argument('--validate', action='store_true', help='验证持仓数据')
-    parser.add_argument('--pre-stock', action='store_true', help='选股前验证模式')
-    parser.add_argument('--symbol', type=str, help='验证指定股票')
-    parser.add_argument('--report', action='store_true', help='生成报告')
-    
-    args = parser.parse_args()
-    
-    validator = DataValidator()
-    
-    if args.validate and args.pre_stock:
-        # 选股前验证模式
-        success = validate_pre_stock_selection()
-        exit(0 if success else 1)
-    elif args.validate:
-        validator.validate_all_positions()
-    # ... 其他参数处理

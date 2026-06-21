@@ -14,7 +14,7 @@ from typing import Any
 
 import click
 
-from .errors import DependencyError, ValidationError
+from .errors import DependencyError
 from .logging import get_current_trace_id, get_logger
 
 
@@ -74,11 +74,12 @@ def run_legacy(
     )
 
     try:
+        # check=False + manual raise so we can wrap errors as DependencyError
         result = subprocess.run(
             cmd,
             cwd=run_cwd,
             env=run_env,
-            check=False,  # We handle errors ourselves
+            check=False,
         )
         if check and result.returncode != 0:
             raise DependencyError(

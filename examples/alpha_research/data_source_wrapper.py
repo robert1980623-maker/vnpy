@@ -271,7 +271,7 @@ class DataSourceFetcher:
             
             completeness = min(1.0, actual_days / max(1, trading_days))
             return completeness
-        except:
+        except (ValueError, TypeError, ZeroDivisionError):
             return 1.0
     
     def get_status(self) -> Dict[str, Any]:
