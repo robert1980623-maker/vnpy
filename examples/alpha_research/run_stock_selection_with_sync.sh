@@ -12,6 +12,37 @@ TODAY=$(date +%Y-%m-%d)
 # Fix PATH for cron
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
 
+# Load environment variables (needed for cron)
+# Use absolute path for cron compatibility
+ZSHRC_PATH="/Users/rowang/.zshrc"
+
+# Method 1: Direct grep from .zshrc (most reliable for cron)
+if [ -f "$ZSHRC_PATH" ]; then
+    echo "📌 从 ~/.zshrc 加载环境变量..."
+    TUSHARE_TOKEN=$(grep -E "^export TUSHARE_TOKEN=" "$ZSHRC_PATH" | cut -d'=' -f2 | tr -d '"')
+    echo "✅ TUSHARE_TOKEN 已加载 (长度：${#TUSHARE_TOKEN})"
+fi
+
+# Method 2: Try sourcing .zshrc
+if [ -z "$TUSHARE_TOKEN" ] && [ -f "$ZSHRC_PATH" ]; then
+    export TUSHARE_TOKEN=$(/bin/zsh -c "source $ZSHRC_PATH && echo \$TUSHARE_TOKEN" 2>/dev/null)
+    echo "✅ TUSHARE_TOKEN 通过 zsh 加载 (长度：${#TUSHARE_TOKEN})"
+fi
+
+# Method 3: Load from .env file
+if [ -f "$PROJECT_DIR/.env" ]; then
+    source "$PROJECT_DIR/.env" 2>/dev/null || true
+fi
+
+# Verify token is loaded
+if [ -z "$TUSHARE_TOKEN" ]; then
+    echo "❌ 错误：TUSHARE_TOKEN 未设置"
+    echo "请检查 ~/.zshrc 中是否配置了 TUSHARE_TOKEN"
+    exit 1
+fi
+
+echo "✅ TUSHARE_TOKEN 已加载 (长度：${#TUSHARE_TOKEN})"
+
 echo "======================================================================"
 echo "                    每日选股任务 (含飞书同步)"
 echo "======================================================================"
@@ -35,6 +66,7 @@ echo ""
 
 # 执行选股
 echo "【执行选股】..."
+export TUSHARE_TOKEN="$TUSHARE_TOKEN"
 python3 daily_stock_selection.py 2>&1
 
 # 检查报告是否生成
