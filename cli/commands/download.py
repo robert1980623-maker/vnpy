@@ -1,0 +1,138 @@
+"""vnpy download - 数据下载命令组"""
+from __future__ import annotations
+
+from datetime import datetime
+
+import click
+
+from ..utils.logging import get_logger
+
+
+logger = get_logger(__name__)
+
+
+@click.group(name='download', short_help='数据下载')
+def download():
+    """数据下载子命令: akshare / tushare / baostock / 政策/新闻"""
+    pass
+
+
+@download.command(name='akshare')
+@click.option('--end', type=click.DateTime(formats=['%Y-%m-%d']),
+              help='结束日期 (默认: 今日)')
+@click.option('--max', 'max_stocks', type=int, default=20,
+              help='最大下载股票数')
+@click.option('--force', is_flag=True, help='强制重新下载')
+@click.option('--workers', type=int, default=4, help='并行线程数')
+@click.option('--dry-run', is_flag=True, help='只检查参数, 不实际下载')
+def download_akshare(end, max_stocks, force, workers, dry_run):
+    """下载 A 股日 K 线数据 (via AKShare)"""
+    end_date = end or datetime.now()
+    logger.info("download.akshare", extra={
+        'end': end_date.strftime('%Y-%m-%d'),
+        'max': max_stocks,
+        'force': force,
+        'workers': workers,
+    })
+
+    args = ['--end', end_date.strftime('%Y-%m-%d'),
+            '--max', str(max_stocks)]
+    if force:
+        args.append('--force')
+
+    if dry_run:
+        click.echo(f"[DRY-RUN] Would run: download_data_akshare.py {' '.join(args)}")
+        return
+
+    from ..utils.wrapper import run_legacy
+    run_legacy('download_data_akshare.py', args=args)
+    click.echo("✅ AKShare 数据下载完成")
+
+
+@download.command(name='tushare')
+@click.option('--symbols', type=str, help='股票代码列表 (逗号分隔)')
+@click.option('--force', is_flag=True, help='强制重新下载')
+@click.option('--dry-run', is_flag=True, help='只检查参数, 不实际下载')
+def download_tushare(symbols, force, dry_run):
+    """下载 A 股数据 (via Tushare Pro)"""
+    from ..utils.wrapper import run_legacy
+
+    args = []
+    if symbols:
+        args.extend(['--symbols', symbols])
+    if force:
+        args.append('--force')
+
+    if dry_run:
+        click.echo(f"[DRY-RUN] Would run: tushare_pro_downloader.py {' '.join(args)}")
+        return
+
+    run_legacy('tushare_pro_downloader.py', args=args)
+    click.echo("✅ Tushare 数据下载完成")
+
+
+@download.command(name='policy')
+@click.option('--days', type=int, default=7, help='回溯天数')
+@click.option('--dry-run', is_flag=True, help='只检查参数, 不实际下载')
+def download_policy(days, dry_run):
+    """下载政策面数据"""
+    from ..utils.wrapper import run_legacy
+
+    if dry_run:
+        click.echo(f"[DRY-RUN] Would run: download_policy_data.py --days {days}")
+        return
+
+    run_legacy('download_policy_data.py', args=['--days', str(days)])
+    click.echo("✅ 政策面数据下载完成")
+
+
+@download.command(name='geopolitics')
+@click.option('--dry-run', is_flag=True, help='只检查参数, 不实际下载')
+def download_geopolitics(dry_run):
+    """下载国际形势数据"""
+    from ..utils.wrapper import run_legacy
+
+    if dry_run:
+        click.echo("[DRY-RUN] Would run: download_geopolitics_data.py")
+        return
+
+    run_legacy('download_geopolitics_data.py')
+    click.echo("✅ 国际形势数据下载完成")
+
+
+@download.command(name='news')
+@click.option('--session', type=click.Choice(['morning', 'evening', 'all']),
+              default='all', help='时段')
+@click.option('--dry-run', is_flag=True, help='只检查参数, 不实际下载')
+def download_news(session, dry_run):
+    """下载财经新闻数据"""
+    from ..utils.wrapper import run_legacy
+
+    args = ['--session', session]
+
+    if dry_run:
+        click.echo(f"[DRY-RUN] Would run: download_news_data.py {' '.join(args)}")
+        return
+
+    run_legacy('download_news_data.py', args=args)
+    click.echo("✅ 新闻数据下载完成")
+
+
+@download.command(name='all')
+@click.option('--parallel', is_flag=True, help='并行下载')
+@click.option('--dry-run', is_flag=True, help='只检查参数, 不实际下载')
+def download_all(parallel, dry_run):
+    """下载所有数据源 (汇总调用)"""
+    if dry_run:
+        click.echo("[DRY-RUN] Would run all download subcommands")
+        return
+
+    ctx = click.get_current_context()
+    for cmd_name in ['akshare', 'policy', 'geopolitics', 'news']:
+        click.echo(f"\n--- Running: {cmd_name} ---")
+        try:
+            ctx.invoke(download.commands[cmd_name], dry_run=False)
+        except Exception as e:
+            click.echo(f"❌ {cmd_name} failed: {e}", err=True)
+
+    click.echo("\n✅ 全部下载任务完成")

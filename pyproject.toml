@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vnpy"
+version = "1.0.0"
+description = "VNPY 量化交易系统"
+requires-python = ">=3.9"
+dependencies = [
+    "click>=8.0",
+]
+
+[project.scripts]
+vnpy = "cli.main:main"
