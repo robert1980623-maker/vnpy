@@ -65,4 +65,22 @@ examples/.test_*/
 
 # 测试数据库
 issues.db
+issues.db-shm
+issues.db-wal
 accounts/trading.db
+
+# 构建产物
+vnpy.egg-info/
+*.egg-info/
+dist/
+build/
+
+# 临时文件
+.tables
+*.tmp
+
+# 锁文件
+*.lock
+
+# 数据目录（新格式）
+data/
