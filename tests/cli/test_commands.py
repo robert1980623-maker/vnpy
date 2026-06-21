@@ -1,12 +1,13 @@
 """Tests for CLI main entry point and commands."""
 import json
+import subprocess
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 import pytest
 from click.testing import CliRunner
 
-from cli.main import cli
+from cli.main import cli, main
 
 
 @pytest.fixture
@@ -370,3 +371,310 @@ tasks:
             'nonexistent',
         ])
         assert result.exit_code != 0
+
+
+# ── TestMainEntry (cli/__main__.py) ──────────────────────────────────────
+
+
+class TestMainEntry:
+    """Tests for cli/__main__.py entry point."""
+
+    def test_main_entry_callable(self):
+        """python -m cli calls main(); verify module structure and execution."""
+        import runpy
+        # Patch cli.main.cli to prevent sys.exit and verify main() was called
+        with patch('cli.main.cli') as mock_cli, \
+             patch('cli.main.setup_logging'):
+            mock_cli.return_value = None
+            # run_module executes __main__.py
+            runpy.run_module('cli', run_name='__main__')
+            mock_cli.assert_called_once_with(obj={})
+
+
+# ── TestMainFunction (cli/main.py error handling) ───────────────────────
+
+
+class TestMainFunction:
+    """Tests for main() error handling paths (lines 83-97)."""
+
+    def test_main_usage_error(self):
+        """click.UsageError → exit code 2."""
+        import click
+        with patch('cli.main.cli', side_effect=click.UsageError('bad usage')):
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+            assert exc_info.value.code == 2
+
+    def test_main_click_exception(self):
+        """click.ClickException → exit with its exit_code."""
+        import click
+        with patch('cli.main.cli', side_effect=click.ClickException('oops')):
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+            assert exc_info.value.code == 1  # default ClickException exit code
+
+    def test_main_keyboard_interrupt(self):
+        """KeyboardInterrupt → exit code 130."""
+        with patch('cli.main.cli', side_effect=KeyboardInterrupt):
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+            assert exc_info.value.code == 130
+
+    def test_main_unexpected_error(self):
+        """Generic Exception → handle_error returns exit code."""
+        with patch('cli.main.cli', side_effect=RuntimeError('boom')):
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+            assert exc_info.value.code == 1  # EXIT_GENERAL_ERROR
+
+
+# ── TestCronEnableDisable ───────────────────────────────────────────────
+
+
+class TestCronEnableDisable:
+    """Tests for cron enable/disable commands."""
+
+    @pytest.fixture
+    def config_with_tasks(self, tmp_path):
+        config = tmp_path / "cron_config.yaml"
+        config.write_text("""
+version: "1.0"
+default_tz: Asia/Shanghai
+tasks:
+  - id: my_task
+    group: test
+    name: My Task
+    schedule: "0 9 * * *"
+    command: "echo hello"
+    enabled: false
+""")
+        return config
+
+    def test_enable_success(self, runner, config_with_tasks):
+        """Enable a disabled task → YAML updated, exit 0."""
+        result = runner.invoke(cli, [
+            'cron', '--config', str(config_with_tasks), 'enable', 'my_task',
+        ])
+        assert result.exit_code == 0
+        assert '已启用' in result.output
+
+        # Verify YAML was updated
+        import yaml
+        with open(config_with_tasks) as f:
+            raw = yaml.safe_load(f)
+        task = next(t for t in raw['tasks'] if t['id'] == 'my_task')
+        assert task['enabled'] is True
+
+    def test_disable_success(self, runner, tmp_path):
+        """Disable an enabled task → YAML updated, exit 0."""
+        config = tmp_path / "cron_config.yaml"
+        config.write_text("""
+version: "1.0"
+default_tz: Asia/Shanghai
+tasks:
+  - id: my_task
+    group: test
+    name: My Task
+    schedule: "0 9 * * *"
+    command: "echo hello"
+    enabled: true
+""")
+        result = runner.invoke(cli, [
+            'cron', '--config', str(config), 'disable', 'my_task',
+        ])
+        assert result.exit_code == 0
+        assert '已禁用' in result.output
+
+        import yaml
+        with open(config) as f:
+            raw = yaml.safe_load(f)
+        task = next(t for t in raw['tasks'] if t['id'] == 'my_task')
+        assert task['enabled'] is False
+
+    def test_enable_not_found(self, runner, config_with_tasks):
+        """Enable a non-existent task → exit != 0."""
+        result = runner.invoke(cli, [
+            'cron', '--config', str(config_with_tasks), 'enable', 'nonexistent',
+        ])
+        assert result.exit_code != 0
+        assert '不存在' in result.output
+
+
+# ── TestCronInstallExtended ─────────────────────────────────────────────
+
+
+class TestCronInstallExtended:
+    """Extended tests for cron install command (non-dry-run paths)."""
+
+    @pytest.fixture
+    def install_config(self, tmp_path):
+        config = tmp_path / "cron_config.yaml"
+        config.write_text("""
+version: "1.0"
+default_tz: Asia/Shanghai
+tasks:
+  - id: install_task
+    group: test
+    name: Install Task
+    schedule: "0 9 * * *"
+    command: "echo hello"
+    enabled: true
+""")
+        return config
+
+    def test_install_success(self, runner, install_config):
+        """Successful install via mocked openclaw subprocess."""
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stderr = ''
+        with patch('cli.commands.cron.subprocess.run', return_value=mock_result):
+            result = runner.invoke(cli, [
+                'cron', '--config', str(install_config), 'install', '-y',
+            ])
+        assert result.exit_code == 0
+        assert '✅' in result.output
+        assert 'install_task' in result.output
+
+    def test_install_subprocess_failure(self, runner, install_config):
+        """openclaw returns non-zero → shows ❌ with error."""
+        mock_result = MagicMock()
+        mock_result.returncode = 1
+        mock_result.stderr = 'error: invalid config'
+        with patch('cli.commands.cron.subprocess.run', return_value=mock_result):
+            result = runner.invoke(cli, [
+                'cron', '--config', str(install_config), 'install', '-y',
+            ])
+        assert '❌' in result.output
+
+    def test_install_openclaw_not_found(self, runner, install_config):
+        """openclaw binary missing → exit 5."""
+        with patch('cli.commands.cron.subprocess.run', side_effect=FileNotFoundError):
+            result = runner.invoke(cli, [
+                'cron', '--config', str(install_config), 'install', '-y',
+            ])
+        assert result.exit_code != 0
+        assert 'openclaw' in result.output
+
+
+# ── TestCronRunExtended ─────────────────────────────────────────────────
+
+
+class TestCronRunExtended:
+    """Extended tests for cron run command (non-dry-run paths)."""
+
+    @pytest.fixture
+    def run_config(self, tmp_path):
+        config = tmp_path / "cron_config.yaml"
+        config.write_text("""
+version: "1.0"
+default_tz: Asia/Shanghai
+tasks:
+  - id: run_task
+    group: test
+    name: Run Task
+    schedule: "0 9 * * *"
+    command: "echo running"
+    timeout: 30
+    enabled: true
+""")
+        return config
+
+    def test_run_success(self, runner, run_config):
+        """Successful run → ✅ message."""
+        mock_result = subprocess.CompletedProcess(args=[], returncode=0)
+        with patch('cli.commands.cron.subprocess.run', return_value=mock_result):
+            result = runner.invoke(cli, [
+                'cron', '--config', str(run_config), 'run', 'run_task',
+            ])
+        assert result.exit_code == 0
+        assert '✅' in result.output
+        assert '执行完成' in result.output
+
+    def test_run_failure(self, runner, run_config):
+        """Non-zero exit → ❌ message + non-zero exit code."""
+        mock_result = subprocess.CompletedProcess(args=[], returncode=1)
+        with patch('cli.commands.cron.subprocess.run', return_value=mock_result):
+            result = runner.invoke(cli, [
+                'cron', '--config', str(run_config), 'run', 'run_task',
+            ])
+        assert result.exit_code != 0
+        assert '❌' in result.output
+
+    def test_run_timeout(self, runner, run_config):
+        """Timeout → ❌ timeout message + exit 6."""
+        with patch('cli.commands.cron.subprocess.run',
+                   side_effect=subprocess.TimeoutExpired(cmd='echo', timeout=30)):
+            result = runner.invoke(cli, [
+                'cron', '--config', str(run_config), 'run', 'run_task',
+            ])
+        assert result.exit_code != 0
+        assert '超时' in result.output
+
+
+# ── TestDownloadExecution ───────────────────────────────────────────────
+
+
+class TestDownloadExecution:
+    """Tests for download commands non-dry-run execution paths."""
+
+    def test_akshare_execution(self, runner):
+        """download akshare without --dry-run calls run_legacy."""
+        mock_result = subprocess.CompletedProcess(args=[], returncode=0)
+        with patch('cli.utils.wrapper.run_legacy', return_value=mock_result) as mock_rl:
+            result = runner.invoke(cli, ['download', 'akshare'])
+        assert result.exit_code == 0
+        assert '✅' in result.output
+        mock_rl.assert_called_once()
+        call_args = mock_rl.call_args
+        assert call_args[0][0] == 'download_data_akshare.py'
+
+    def test_tushare_execution(self, runner):
+        """download tushare without --dry-run calls run_legacy."""
+        mock_result = subprocess.CompletedProcess(args=[], returncode=0)
+        with patch('cli.utils.wrapper.run_legacy', return_value=mock_result) as mock_rl:
+            result = runner.invoke(cli, ['download', 'tushare'])
+        assert result.exit_code == 0
+        assert '✅' in result.output
+        mock_rl.assert_called_once()
+        assert mock_rl.call_args[0][0] == 'tushare_pro_downloader.py'
+
+    def test_policy_execution(self, runner):
+        """download policy without --dry-run calls run_legacy."""
+        mock_result = subprocess.CompletedProcess(args=[], returncode=0)
+        with patch('cli.utils.wrapper.run_legacy', return_value=mock_result) as mock_rl:
+            result = runner.invoke(cli, ['download', 'policy'])
+        assert result.exit_code == 0
+        assert '✅' in result.output
+        mock_rl.assert_called_once()
+        assert mock_rl.call_args[0][0] == 'download_policy_data.py'
+
+    def test_geopolitics_execution(self, runner):
+        """download geopolitics without --dry-run calls run_legacy."""
+        mock_result = subprocess.CompletedProcess(args=[], returncode=0)
+        with patch('cli.utils.wrapper.run_legacy', return_value=mock_result) as mock_rl:
+            result = runner.invoke(cli, ['download', 'geopolitics'])
+        assert result.exit_code == 0
+        assert '✅' in result.output
+        mock_rl.assert_called_once()
+        assert mock_rl.call_args[0][0] == 'download_geopolitics_data.py'
+
+    def test_news_execution(self, runner):
+        """download news without --dry-run calls run_legacy."""
+        mock_result = subprocess.CompletedProcess(args=[], returncode=0)
+        with patch('cli.utils.wrapper.run_legacy', return_value=mock_result) as mock_rl:
+            result = runner.invoke(cli, ['download', 'news', '--session', 'morning'])
+        assert result.exit_code == 0
+        assert '✅' in result.output
+        mock_rl.assert_called_once()
+        assert mock_rl.call_args[0][0] == 'download_news_data.py'
+        args = mock_rl.call_args[1].get('args') or mock_rl.call_args[0][1] if len(mock_rl.call_args[0]) > 1 else mock_rl.call_args[1].get('args')
+        assert '--session' in args
+        assert 'morning' in args
+
+    def test_all_execution(self, runner):
+        """download all invokes each subcommand via ctx.invoke."""
+        mock_result = subprocess.CompletedProcess(args=[], returncode=0)
+        with patch('cli.utils.wrapper.run_legacy', return_value=mock_result):
+            result = runner.invoke(cli, ['download', 'all'])
+        assert result.exit_code == 0
+        assert '全部下载任务完成' in result.output
