@@ -27,16 +27,37 @@ class ChiefRiskOfficer:
         self.report_dir = Path('./reports/risk_control')
         self.report_dir.mkdir(parents=True, exist_ok=True)
         
-        # 风控规则
-        self.risk_rules = {
-            'single_position_limit': 0.20,  # 单只股票上限 20%
-            'total_position_limit': 0.95,   # 总仓位上限 95%
-            'cash_reserve_min': 0.05,       # 最低现金储备 5%
-            'stop_loss_rate': -0.15,        # 止损线 -15%
-            'take_profit_rate': 0.30,       # 止盈线 +30%
-            'daily_loss_limit': -0.05,      # 单日亏损上限 -5%
-            'warning_level': 0.80,          # 预警线 80%
+        # 风控规则 — 优先从配置文件读取，兜底用默认值
+        self.risk_rules = self._load_risk_rules()
+    
+    def _load_risk_rules(self) -> Dict:
+        """从 config/trading_strategy_v2.json 加载风控规则"""
+        defaults = {
+            'single_position_limit': 0.20,
+            'total_position_limit': 0.95,
+            'cash_reserve_min': 0.05,
+            'stop_loss_rate': -0.05,        # 止损线 -5%（从-15%下调）
+            'take_profit_rate': 0.15,       # 止盈线 +15%（从30%下调）
+            'daily_loss_limit': -0.03,      # 单日亏损上限 -3%
+            'warning_level': -0.03,         # 预警线 -3%
         }
+        config_path = Path('./config/trading_strategy_v2.json')
+        if config_path.exists():
+            try:
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    cfg = json.load(f)
+                sl = cfg.get('stop_loss', {})
+                rc = cfg.get('risk_control', {})
+                pm = cfg.get('position_management', {})
+                defaults['stop_loss_rate'] = sl.get('hard_stop_loss', defaults['stop_loss_rate'])
+                defaults['take_profit_rate'] = sl.get('take_profit', defaults['take_profit_rate'])
+                defaults['warning_level'] = sl.get('warning_level', defaults['warning_level'])
+                defaults['daily_loss_limit'] = rc.get('max_daily_loss', defaults['daily_loss_limit'])
+                defaults['single_position_limit'] = pm.get('max_single_position', defaults['single_position_limit'])
+                print(f"✅ 风控规则已从配置文件加载：止损={defaults['stop_loss_rate']*100:.0f}%, 止盈={defaults['take_profit_rate']*100:.0f}%")
+            except Exception as e:
+                print(f"⚠️ 加载风控配置失败，使用默认值：{e}")
+        return defaults
     
     def load_account(self) -> Dict:
         """加载账户数据"""
@@ -107,53 +128,74 @@ class ChiefRiskOfficer:
         return risks
     
     def check_stop_loss(self, account: Dict) -> List[Dict]:
-        """检查止损止盈"""
+        """检查止损止盈 — 修复：兼容 stock_code/stock_name/volume 字段名"""
         print("\n" + "="*70)
         print("🛑 止损止盈检查")
         print("="*70)
+        print(f"止损线：{self.risk_rules['stop_loss_rate']*100:.0f}%  |  "
+              f"止盈线：{self.risk_rules['take_profit_rate']*100:.0f}%  |  "
+              f"预警线：{self.risk_rules.get('warning_level', -0.03)*100:.0f}%")
+        print()
         
         actions = []
         positions = account.get('positions', [])
         
         for pos in positions:
-            symbol = pos.get('symbol', 'Unknown')
+            # 修复：兼容多种字段名（symbol/stock_code/stock_name）
+            symbol = pos.get('symbol') or pos.get('stock_name') or pos.get('stock_code') or 'Unknown'
             cost_price = pos.get('cost_price', 0)
             current_price = pos.get('current_price', 0)
-            quantity = pos.get('quantity', 0)
+            # 修复：兼容 quantity/volume 字段名
+            quantity = pos.get('quantity') or pos.get('volume', 0)
             
             if cost_price <= 0 or current_price <= 0:
+                print(f"⚠️ {symbol}: 价格无效 (cost={cost_price}, current={current_price})，跳过")
                 continue
             
             profit_rate = (current_price - cost_price) / cost_price
             
             # 检查止损
-            if profit_rate < self.risk_rules['stop_loss_rate']:
+            if profit_rate <= self.risk_rules['stop_loss_rate']:
                 actions.append({
                     'type': 'stop_loss',
                     'level': 'critical',
                     'symbol': symbol,
+                    'stock_code': pos.get('stock_code', ''),
+                    'stock_name': pos.get('stock_name', ''),
                     'profit_rate': f"{profit_rate*100:.1f}%",
+                    'profit_rate_value': profit_rate,
                     'stop_loss_line': f"{self.risk_rules['stop_loss_rate']*100:.0f}%",
                     'action': '立即止损卖出',
-                    'quantity': quantity
+                    'quantity': quantity,
+                    'cost_price': cost_price,
+                    'current_price': current_price,
                 })
-                print(f"🔴 {symbol} 触发止损：{profit_rate*100:.1f}% (止损线{self.risk_rules['stop_loss_rate']*100:.0f}%)")
+                print(f"🔴 {symbol} 触发止损：{profit_rate*100:.1f}% "
+                      f"(成本¥{cost_price:.2f} → 现价¥{current_price:.2f})")
             
             # 检查止盈
-            elif profit_rate > self.risk_rules['take_profit_rate']:
+            elif profit_rate >= self.risk_rules['take_profit_rate']:
                 actions.append({
                     'type': 'take_profit',
                     'level': 'medium',
                     'symbol': symbol,
+                    'stock_code': pos.get('stock_code', ''),
+                    'stock_name': pos.get('stock_name', ''),
                     'profit_rate': f"{profit_rate*100:.1f}%",
+                    'profit_rate_value': profit_rate,
                     'take_profit_line': f"{self.risk_rules['take_profit_rate']*100:.0f}%",
                     'action': '建议止盈卖出',
-                    'quantity': quantity
+                    'quantity': quantity,
+                    'cost_price': cost_price,
+                    'current_price': current_price,
                 })
-                print(f"🟢 {symbol} 触发止盈：{profit_rate*100:.1f}% (止盈线{self.risk_rules['take_profit_rate']*100:.0f}%)")
+                print(f"🟢 {symbol} 触发止盈：{profit_rate*100:.1f}% "
+                      f"(成本¥{cost_price:.2f} → 现价¥{current_price:.2f})")
         
         if not actions:
             print("✅ 无触发止损止盈的股票")
+        else:
+            print(f"\n📊 共 {len(actions)} 只股票触发风控")
         
         return actions
     
@@ -258,8 +300,13 @@ class ChiefRiskOfficer:
         return report
 
 
-if __name__ == '__main__':
+def main():
+    """主函数"""
+    cro = ChiefRiskOfficer()
+    return cro.run()
 
+
+if __name__ == '__main__':
     # 发送通知
     try:
         notify_task_start("首席风险官", {
@@ -281,6 +328,3 @@ if __name__ == '__main__':
     except Exception as e:
         notify_task_error("首席风险官", str(e))
         raise
-
-    cro = ChiefRiskOfficer()
-    cro.run()

@@ -37,6 +37,25 @@ class RealtimeMonitor:
                 continue
         # If all fail, return None
         return None
+    
+    def _load_config_thresholds(self) -> dict:
+        """从配置文件加载风控阈值，修复：之前硬编码-15%/+30%"""
+        defaults = {
+            'stop_loss': -0.05,     # -5% 止损
+            'take_profit': 0.15,   # +15% 止盈
+            'warning': -0.03,      # -3% 预警
+        }
+        if self.config_file.exists():
+            try:
+                with open(self.config_file, 'r', encoding='utf-8') as f:
+                    cfg = json.load(f)
+                sl = cfg.get('stop_loss', {})
+                defaults['stop_loss'] = sl.get('hard_stop_loss', defaults['stop_loss'])
+                defaults['take_profit'] = sl.get('take_profit', defaults['take_profit'])
+                defaults['warning'] = sl.get('warning_level', defaults['warning'])
+            except Exception as e:
+                print(f"⚠️ 加载风控配置失败：{e}")
+        return defaults
 
     """实时监控系统"""
     
@@ -46,11 +65,13 @@ class RealtimeMonitor:
         self.cache_dir = Path('./cache/monitor')
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         
-        # 监控配置
+        # 监控配置 — 从配置文件读取（修复硬编码 -15% 问题）
         self.check_interval = 3600  # 1 小时
-        self.stop_loss_threshold = -0.15  # -15% 止损
-        self.take_profit_threshold = 0.30  # +30% 止盈
-        self.warning_threshold = -0.10  # -10% 预警
+        self.config_file = Path('./config/trading_strategy_v2.json')
+        thresholds = self._load_config_thresholds()
+        self.stop_loss_threshold = thresholds['stop_loss']      # -5%
+        self.take_profit_threshold = thresholds['take_profit']  # +15%
+        self.warning_threshold = thresholds['warning']          # -3%
         self.max_position_ratio = 0.15  # 单只最大 15%
         self.min_cash_ratio = 0.05  # 最小现金 5%
         
@@ -265,14 +286,22 @@ class RealtimeMonitor:
         total_assets = account['cash'] + sum(p.get('market_value', 0) for p in account['positions'])
         
         for pos in account['positions']:
-            symbol = pos['symbol']
+            # 修复：兼容两种字段名格式（symbol/stock_code, quantity/volume, cost_price/avg_price）
+            symbol = pos.get('symbol') or pos.get('stock_code') or pos.get('stock_name') or 'Unknown'
+            stock_code = pos.get('stock_code', '')
+            stock_name = pos.get('stock_name', '')
+            
             price_data = prices.get(symbol, {})
-            current_price = price_data.get('price', pos['current_price'])
-            cost_price = pos.get('avg_price') or pos.get('avg_cost', 0)
+            current_price = price_data.get('price', pos.get('current_price', 0))
+            cost_price = pos.get('cost_price') or pos.get('avg_price') or pos.get('avg_cost', 0)
             
             # 计算盈亏率
+            if cost_price <= 0 or current_price <= 0:
+                print(f"  ⚠️ {symbol}: 价格无效 (cost={cost_price}, current={current_price})，跳过")
+                continue
             profit_rate = (current_price - cost_price) / cost_price
-            market_value = pos.get('quantity', 0) * current_price
+            volume = pos.get('volume') or pos.get('quantity', 0)
+            market_value = volume * current_price
             position_ratio = market_value / total_assets if total_assets > 0 else 0
             
             # 止盈止损检查
@@ -463,33 +492,38 @@ class RealtimeMonitor:
         print(f"\n✅ 告警记录已保存：{record_file}")
     
     def update_account_prices(self, account, prices):
-        """更新账户持仓价格"""
+        """更新账户持仓价格 — 修复：兼容 stock_code/stock_name/volume 字段名"""
         print("\n" + "=" * 70)
         print(" " * 20 + "更新持仓价格")
         print("=" * 70)
         
         for pos in account['positions']:
-            symbol = pos['symbol']
+            # 修复：兼容多种标识字段
+            symbol = pos.get('symbol') or pos.get('stock_name') or pos.get('stock_code') or 'Unknown'
+            quantity = pos.get('quantity') or pos.get('volume', 0)
+            cost_basis = pos.get('cost_price') or pos.get('avg_price', 0)
+            
             if symbol in prices:
-                old_price = pos['current_price']
+                old_price = pos.get('current_price', 0)
                 new_price = prices[symbol]['price']
                 pos['current_price'] = new_price
-                pos['market_value'] = pos.get('quantity', 0) * new_price
-                pos['profit'] = pos['market_value'] - pos.get('cost_basis', 0)
-                pos['profit_rate'] = pos['profit'] / pos.get('cost_basis', 1) if pos.get('cost_basis', 0) > 0 else 0
+                pos['market_value'] = quantity * new_price
+                pos['profit'] = pos['market_value'] - cost_basis * quantity
+                pos['profit_rate'] = pos['profit'] / (cost_basis * quantity) if cost_basis * quantity > 0 else 0
                 
-                if abs(new_price - old_price) / old_price > 0.01:  # 变化超过 1%
+                if old_price > 0 and abs(new_price - old_price) / old_price > 0.01:  # 变化超过 1%
                     print(f"  📈 {symbol}: ¥{old_price:.2f} → ¥{new_price:.2f} ({(new_price-old_price)/old_price*100:+.1f}%)")
         
         # 重新计算总资产
         total_market_value = sum(p.get('market_value', 0) for p in account['positions'])
-        total_assets = account['cash'] + total_market_value
+        total_assets = account.get('cash', 0) + total_market_value
+        initial_capital = account.get('initial_capital', 1000000)
         
         print(f"\n💰 账户状态:")
-        print(f"  现金：¥{account['cash']:,.2f}")
+        print(f"  现金：¥{account.get('cash', 0):,.2f}")
         print(f"  持仓市值：¥{total_market_value:,.2f}")
         print(f"  总资产：¥{total_assets:,.2f}")
-        print(f"  收益率：{(total_assets - account['initial_capital'])/account['initial_capital']*100:+.1f}%")
+        print(f"  收益率：{(total_assets - initial_capital)/initial_capital*100:+.1f}%")
         
         return account
     

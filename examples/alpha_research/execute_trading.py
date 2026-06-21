@@ -160,7 +160,28 @@ class FeishuVirtualAccount:
         return []
 
     def get_account(self) -> dict:
-        """读取账户信息"""
+        """读取账户信息（优先本地 JSON，降级飞书多维表格）"""
+        # 🔧 优先读本地 JSON，避免飞书数据不同步
+        try:
+            import os
+            account_path = os.path.join(os.path.dirname(__file__), "accounts", "virtual_2026_account.json")
+            if os.path.exists(account_path):
+                with open(account_path) as f:
+                    data = json.load(f)
+                positions = data.get("positions", [])
+                pos_value = sum(p.get("market_value", 0) for p in positions)
+                return {
+                    "account_id": "virtual_2026",
+                    "account_name": "王雅轩主账户",
+                    "initial_capital": 1_000_000.0,
+                    "current_cash": data.get("cash", 0),
+                    "position_value": pos_value,
+                    "total_asset": data.get("cash", 0) + pos_value,
+                }
+        except Exception as e:
+            print(f"   ⚠️ 本地 JSON 读取失败，降级到飞书: {e}")
+
+        # 降级：读飞书多维表格
         try:
             from lark_oapi.api.bitable.v1 import GetAppTableRecordRequest
             req = GetAppTableRecordRequest.builder() \
@@ -184,8 +205,33 @@ class FeishuVirtualAccount:
         return None
 
     def get_positions(self) -> list:
-        """读取当前持仓列表"""
+        """读取当前持仓列表（优先本地 JSON，降级飞书多维表格）"""
+        # 🔧 修复 2026-04-15：优先读本地 JSON 账户文件，避免飞书数据不同步导致"没有持仓"
         positions = []
+        try:
+            import os
+            account_path = os.path.join(os.path.dirname(__file__), "accounts", "virtual_2026_account.json")
+            if os.path.exists(account_path):
+                with open(account_path) as f:
+                    account_data = json.load(f)
+                for p in account_data.get("positions", []):
+                    vol = p.get("volume", 0)
+                    if vol > 0:
+                        positions.append({
+                            "symbol": p["stock_code"],
+                            "name": p.get("stock_name", ""),
+                            "quantity": vol,
+                            "avg_price": p.get("cost_price", 0),
+                            "cost": p.get("cost_price", 0) * vol,
+                            "market_value": p.get("market_value", 0),
+                        })
+                if positions:
+                    print(f"   📂 从本地 JSON 读取持仓 {len(positions)} 只")
+                    return positions
+        except Exception as e:
+            print(f"   ⚠️ 本地 JSON 读取失败，降级到飞书: {e}")
+
+        # 降级：读飞书多维表格
         try:
             from lark_oapi.api.bitable.v1 import ListAppTableRecordRequest
             req = ListAppTableRecordRequest.builder() \
@@ -208,8 +254,10 @@ class FeishuVirtualAccount:
                             "cost": _extract_number_field(f.get("持仓成本", 0)),
                             "market_value": _extract_number_field(f.get("持仓市值", 0)),
                         })
+                if positions:
+                    print(f"   📋 从飞书多维表格读取持仓 {len(positions)} 只")
         except Exception as e:
-            print(f"   ⚠️ 读取持仓失败: {e}")
+            print(f"   ⚠️ 飞书持仓读取失败: {e}")
         return positions
 
     def get_trade_log(self) -> list:
