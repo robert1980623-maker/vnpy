@@ -83,10 +83,21 @@ class DataFreshnessGuard:
     
     def check_single_stock(self, symbol: str, expected_date: datetime) -> Dict:
         """检查单只股票数据新鲜度"""
-        code = symbol.split('.')[0]
+        # 处理 symbol 格式：可能是 "600522" 或 "600522.SH" 或 "000651.SZ"
+        if '.' in symbol:
+            code = symbol.split('.')[0]
+            exchange = symbol.split('.')[1].lower()
+        else:
+            code = symbol
+            # 根据代码前缀推断交易所
+            if code.startswith('6') or code.startswith('5'):
+                exchange = 'sh'
+            else:
+                exchange = 'sz'
+        
         possible_files = [
             self.data_dir / f'{code}.csv',
-            self.data_dir / f'{code}_{symbol.split(".")[1].lower()}.csv',
+            self.data_dir / f'{code}_{exchange}.csv',
             self.data_dir / f'{code.upper()}.csv'
         ]
         
@@ -107,7 +118,8 @@ class DataFreshnessGuard:
         
         # 读取最后一行
         try:
-            df = pd.read_csv(file_found, nrows=1)
+            # 读取最后几行，确保获取到有效数据
+            df = pd.read_csv(file_found, nrows=5)
             if df.empty:
                 return {
                     'symbol': symbol,
@@ -124,11 +136,42 @@ class DataFreshnessGuard:
                     break
             
             if not date_col:
-                # 尝试第二列
-                date_col = df.columns[1]
+                # 尝试第一列（通常是代码）或第二列
+                date_col = df.columns[0] if len(df.columns) > 0 else None
+                if date_col and 'date' not in date_col.lower():
+                    date_col = df.columns[1] if len(df.columns) > 1 else None
             
-            last_date_str = df.iloc[0][date_col]
-            last_date = pd.to_datetime(last_date_str)
+            if not date_col:
+                return {
+                    'symbol': symbol,
+                    'status': 'error',
+                    'error': '无法识别日期列',
+                    'last_date': None,
+                    'days_stale': None
+                }
+            
+            # 从最后一行开始向前查找有效日期
+            last_date_str = None
+            last_date = None
+            for i in range(len(df) - 1, -1, -1):
+                candidate = df.iloc[i][date_col]
+                if pd.notna(candidate) and candidate != '':
+                    last_date_str = str(candidate)
+                    try:
+                        last_date = pd.to_datetime(last_date_str)
+                        break
+                    except:
+                        continue
+            
+            if last_date is None:
+                return {
+                    'symbol': symbol,
+                    'status': 'error',
+                    'error': '无法解析日期',
+                    'last_date': None,
+                    'days_stale': None
+                }
+            
             days_stale = (expected_date - last_date).days
             
             return {
@@ -267,13 +310,33 @@ class DataFreshnessGuard:
         
         for symbol in symbols:
             result = self.check_single_stock(symbol, expected_date)
+            
+            # 检查是否有错误（如文件读取失败）
+            if 'error' in result:
+                failed.append({
+                    'symbol': symbol,
+                    'reason': f"error: {result.get('error', 'unknown')}",
+                    'last_date': None
+                })
+                continue
+            
+            # 检查日期是否有效
+            last_date = result.get('last_date')
+            if last_date is None or (isinstance(last_date, float) and last_date != last_date):  # NaN check
+                failed.append({
+                    'symbol': symbol,
+                    'reason': 'no_data',
+                    'last_date': None
+                })
+                continue
+            
             if result['status'] == 'fresh':
                 verified.append(symbol)
             else:
                 failed.append({
                     'symbol': symbol,
                     'reason': result['status'],
-                    'last_date': result.get('last_date')
+                    'last_date': last_date
                 })
         
         return {
@@ -390,16 +453,36 @@ class DataFreshnessGuard:
     
     def _save_report(self):
         """保存报告"""
+        import math
+        
+        def clean_for_json(obj):
+            """清理 NaN/Inf 等无法序列化的值"""
+            if isinstance(obj, dict):
+                return {k: clean_for_json(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [clean_for_json(item) for item in obj]
+            elif isinstance(obj, float):
+                if math.isnan(obj) or math.isinf(obj):
+                    return None
+                return obj
+            elif isinstance(obj, (datetime, pd.Timestamp)):
+                return obj.isoformat()
+            else:
+                return obj
+        
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         report_file = self.report_dir / f'guard_report_{timestamp}.json'
         
+        # 清理报告中的 NaN 值
+        clean_report = clean_for_json(self.report)
+        
         with open(report_file, 'w', encoding='utf-8') as f:
-            json.dump(self.report, f, ensure_ascii=False, indent=2, default=str)
+            json.dump(clean_report, f, ensure_ascii=False, indent=2, default=str)
         
         # 也保存最新报告
         latest_file = self.report_dir / 'latest_report.json'
         with open(latest_file, 'w', encoding='utf-8') as f:
-            json.dump(self.report, f, ensure_ascii=False, indent=2, default=str)
+            json.dump(clean_report, f, ensure_ascii=False, indent=2, default=str)
         
         print(f"\n✅ 报告已保存：{report_file}")
 

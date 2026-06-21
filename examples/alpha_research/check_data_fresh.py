@@ -1,16 +1,22 @@
 #!/usr/bin/env python3
-"""数据新鲜度快速检查"""
+"""数据新鲜度快速检查（修复版）"""
 
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 
 data_dir = Path('./data/akshare/bars')
 check_time = datetime.now()
-today = check_time.strftime('%Y-%m-%d')
+today = check_time.strftime('%Y%m%d')
+
+# 获取最近交易日（排除周末）
+last_trading = check_time
+while last_trading.weekday() >= 5:
+    last_trading -= timedelta(days=1)
+last_trading_str = last_trading.strftime('%Y%m%d')
 
 print(f"检查时间：{check_time.strftime('%Y-%m-%d %H:%M')}")
-print(f"期望日期：{today}")
+print(f"最近交易日：{last_trading_str}")
 print()
 
 # 随机检查 10 只股票
@@ -25,15 +31,16 @@ for csv_file in sample_files:
     with open(csv_file, 'r') as f:
         lines = f.readlines()
         if len(lines) >= 2:
-            last_line = lines[-1].strip().split(',')
-            if len(last_line) >= 2:
-                data_date = last_line[1]
-                is_fresh = data_date == today
+            # 数据按日期倒序排列，第一行是最新日期
+            first_data = lines[1].strip().split(',')
+            if len(first_data) >= 1:
+                data_date = first_data[0]  # 第0列是日期
+                is_fresh = data_date >= last_trading_str
                 if is_fresh:
                     fresh += 1
                 else:
                     stale += 1
-                    print(f"❌ {csv_file.stem}: {data_date}")
+                    print(f"❌ {csv_file.stem}: 最新={data_date}, 期望>={last_trading_str}")
 
 print()
 print(f"新鲜：{fresh}/{len(sample_files)}")

@@ -102,7 +102,7 @@ class UnifiedDataAgent:
             if account_file.exists():
                 with open(account_file, 'r', encoding='utf-8') as f:
                     account = json.load(f)
-                    symbols = [pos['symbol'] for pos in account.get('positions', [])]
+                    symbols = [pos.get('symbol') or pos.get('stock_code', '') for pos in account.get('positions', [])]
         
         if not symbols:
             print("⚠️ 无股票数据可下载")
@@ -138,10 +138,9 @@ class UnifiedDataAgent:
         """下载新闻数据"""
         try:
             # 导入新闻数据下载器
-            from download_news_data import NewsDataDownloader
+            from download_news_data import download_all_news
             
-            downloader = NewsDataDownloader()
-            downloader.download_all()
+            download_all_news()
             
             self.stats['news_data']['success'] = True
             
@@ -156,7 +155,7 @@ class UnifiedDataAgent:
         
         try:
             # 获取财务数据
-            data = self.fundamental_fetcher.fetch_all(symbols)
+            data = self.fundamental_fetcher.get_batch_fundamentals(symbols)
             
             if data:
                 print(f"✅ 财务数据下载成功：{len(data)} 只股票")

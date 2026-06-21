@@ -106,8 +106,12 @@ class TaskNotifier:
     def _send_via_openclaw(self, message: str):
         """通过 openclaw message send 发送"""
         try:
+            # 使用完整路径，避免 cron 环境中 PATH 问题
+            import shutil
+            openclaw_path = shutil.which('openclaw') or '/usr/local/bin/openclaw'
+            
             cmd = [
-                'openclaw',
+                openclaw_path,
                 'message',
                 'send',
                 '--channel', 'feishu',

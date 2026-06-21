@@ -378,11 +378,11 @@ class PerformanceAttribution:
                 'market_value': round(market_value, 2),
                 'initial_capital': self.account.account_data.get("initial_capital", 1000000),
                 'total_return': round(total_value - self.account.account_data.get("initial_capital", 1000000), 2),
-                'total_return_rate': round((total_value - self.account.account_data.get("initial_capital", 1000000)) / self.account.account_data.get("initial_capital", 1000000) * 100, 2),
+                'total_return_rate': round((total_value - self.account.account_data.get("initial_capital", 1000000)) / max(self.account.account_data.get("initial_capital", 1000000), 1) * 100, 2),
                 'position_count': len(positions),
                 'trade_count': len(self.account.trade_log.get("trades", [])),
                 'benchmark_return_rate': benchmark_return,
-                'excess_return': round((total_value - self.account.account_data.get("initial_capital", 1000000)) / self.account.account_data.get("initial_capital", 1000000) * 100 - benchmark_return, 2)
+                'excess_return': round((total_value - self.account.account_data.get("initial_capital", 1000000)) / max(self.account.account_data.get("initial_capital", 1000000), 1) * 100 - benchmark_return, 2)
             },
             'returns_attribution': returns_attribution,
             'risk_attribution': risk_attribution,
