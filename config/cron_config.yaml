@@ -4,11 +4,15 @@
 # 用于 `vnpy cron install/validate/list` 命令
 # 合并自 16 个 setup_*_cron.py 脚本
 #
-# 版本: 1.1
-# 最后更新: 2026-06-21
+# 版本: 1.2
+# 最后更新: 2026-06-24
+# 变更:
+#   - v1.2: 交易任务改用 run_trade_with_env.sh wrapper，确保真实交易模式
+#           添加 trade-execute 主交易任务
+#   - v1.1: 合并 16 个 setup_*.py 脚本
 # =============================================================================
 
-version: "1.1"
+version: "1.2"
 default_tz: Asia/Shanghai
 default_model: qwen3.7-plus
 
@@ -17,9 +21,13 @@ vars:
   VNPY_DIR: /Users/rowang/projects/vnpy
   PYTHON: python3
   SCRIPTS_DIR: examples/alpha_research
+  # 交易 Wrapper - 确保环境变量加载 + 真实交易模式
+  TRADE_WRAPPER: "${VNPY_DIR}/scripts/run_trade_with_env.sh"
+  # 数据下载 Wrapper
+  DOWNLOAD_WRAPPER: "${VNPY_DIR}/scripts/run_download_with_env.sh"
 
 # =============================================================================
-# 任务列表 (按 group 分组，共 31 个任务，合并自 16 个 setup_*.py)
+# 任务列表 (按 group 分组，共 33 个任务)
 # =============================================================================
 tasks:
 
@@ -30,7 +38,7 @@ tasks:
     name: 凌晨 A 股数据下载
     group: data
     schedule: "0 1 * * *"
-    command: "cd ${VNPY_DIR}/${SCRIPTS_DIR} && ${PYTHON} download_data_akshare.py --end $(date +\\%Y-\\%m-\\%d)"
+    command: "${DOWNLOAD_WRAPPER} download_data_akshare.py --end $(date +\\%Y-\\%m-\\%d)"
     timeout: 600
     enabled: true
     retry:
@@ -44,7 +52,7 @@ tasks:
     name: 下午 A 股数据下载
     group: data
     schedule: "0 17 * * *"
-    command: "cd ${VNPY_DIR}/${SCRIPTS_DIR} && ${PYTHON} download_data_akshare.py --end $(date +\\%Y-\\%m-\\%d)"
+    command: "${DOWNLOAD_WRAPPER} download_data_akshare.py --end $(date +\\%Y-\\%m-\\%d)"
     timeout: 600
     enabled: true
     tags: [download, akshare, intraday]
@@ -54,7 +62,7 @@ tasks:
     name: 政策面数据下载
     group: data
     schedule: "0 3 * * *"
-    command: "cd ${VNPY_DIR}/${SCRIPTS_DIR} && ${PYTHON} download_policy_data.py"
+    command: "${DOWNLOAD_WRAPPER} download_policy_data.py"
     timeout: 300
     enabled: true
     tags: [download, policy]
@@ -64,7 +72,7 @@ tasks:
     name: 国际形势数据下载
     group: data
     schedule: "0 4 * * *"
-    command: "cd ${VNPY_DIR}/${SCRIPTS_DIR} && ${PYTHON} download_geopolitics_data.py"
+    command: "${DOWNLOAD_WRAPPER} download_geopolitics_data.py"
     timeout: 300
     enabled: true
     tags: [download, geopolitics]
@@ -74,7 +82,7 @@ tasks:
     name: 早间新闻下载
     group: data
     schedule: "0 6 * * *"
-    command: "cd ${VNPY_DIR}/${SCRIPTS_DIR} && ${PYTHON} download_news_data.py --session morning"
+    command: "${DOWNLOAD_WRAPPER} download_news_data.py --session morning"
     timeout: 300
     enabled: true
     tags: [download, news]
@@ -83,7 +91,7 @@ tasks:
     name: 晚间新闻下载
     group: data
     schedule: "0 18 * * *"
-    command: "cd ${VNPY_DIR}/${SCRIPTS_DIR} && ${PYTHON} download_news_data.py --session evening"
+    command: "${DOWNLOAD_WRAPPER} download_news_data.py --session evening"
     timeout: 300
     enabled: true
     tags: [download, news]
@@ -150,35 +158,16 @@ tasks:
     command: "cd ${VNPY_DIR}/${SCRIPTS_DIR} && ${PYTHON} chief_risk_officer.py"
     timeout: 300
     enabled: true
+    model: qwen3-max
     tags: [monitor, risk]
-    source: setup_missing_agents_cron.py
-
-  - id: monitor-task-check
-    name: 任务监控检查
-    group: monitor
-    schedule: "0 9,17 * * *"
-    command: "cd ${VNPY_DIR}/${SCRIPTS_DIR} && ${PYTHON} task_monitor.py"
-    timeout: 300
-    enabled: true
-    tags: [monitor, tasks]
-    source: setup_task_monitor_cron.py
-
-  - id: monitor-data-quality
-    name: 数据质量检查
-    group: monitor
-    schedule: "0 23 * * *"
-    command: "cd ${VNPY_DIR}/${SCRIPTS_DIR} && ${PYTHON} check_data_quality.py"
-    timeout: 600
-    enabled: true
-    tags: [monitor, quality]
-    source: setup_quality_check_cron.py
+    source: setup_compliance_cron.py
 
   - id: monitor-virtual-account
-    name: 虚拟账户同步
+    name: 虚拟账户监控
     group: monitor
     schedule: "*/15 * * * *"
-    command: "cd ${VNPY_DIR}/${SCRIPTS_DIR} && ${PYTHON} virtual_account.py"
-    timeout: 120
+    command: "${TRADE_WRAPPER} virtual_account.py --monitor"
+    timeout: 60
     enabled: true
     tags: [monitor, account]
 
@@ -205,78 +194,102 @@ tasks:
   # ============== 交易组 ==============
   # 来源: setup_elite_cron.py, setup_limit_up_cron.py, setup_missing_agents_cron.py,
   #        setup_comprehensive_cron.py
+  # 重要: 所有交易任务使用 run_trade_with_env.sh wrapper
+  #        - 自动加载环境变量 (TUSHARE_TOKEN, BROKER_CONFIG 等)
+  #        - 移除 --dry-run 参数，确保真实交易
+  #        - 修复 P2-1: 执行链路恢复
 
   - id: trade-elite-screener
     name: 精英选股
     group: trading
     schedule: "0 9 * * 1-5"
-    command: "cd ${VNPY_DIR}/${SCRIPTS_DIR} && ${PYTHON} elite_stock_selector.py"
+    command: "${TRADE_WRAPPER} elite_stock_selector.py"
     timeout: 600
     enabled: true
     model: qwen3-max
     tags: [trade, screener]
     source: setup_elite_cron.py
+    note: "修复 P2-1: 使用 wrapper 确保环境变量加载"
 
   - id: trade-limit-up
     name: 涨停策略
     group: trading
     schedule: "0 17 * * 1-5"
-    command: "cd ${VNPY_DIR}/${SCRIPTS_DIR} && ${PYTHON} limit_up_strategy_runner.py --auto --notify"
+    command: "${TRADE_WRAPPER} limit_up_strategy_runner.py --auto --notify"
     timeout: 300
     enabled: true
     tags: [trade, limit-up]
     source: setup_limit_up_cron.py
+    note: "修复 P2-1: 使用 wrapper 确保真实交易"
 
   - id: trade-stop-loss-check
     name: 严格止盈止损检查
     group: trading
     schedule: "0 15 * * 1-5"
-    command: "cd ${VNPY_DIR}/${SCRIPTS_DIR} && ${PYTHON} strict_stop_loss.py"
+    command: "${TRADE_WRAPPER} strict_stop_loss.py"
     timeout: 300
     enabled: true
     tags: [trade, stop-loss]
     source: setup_elite_cron.py
+    note: "修复 P2-1: 使用 wrapper 确保环境变量加载"
 
   - id: trade-stop-loss-executor
     name: 止盈止损执行
     group: trading
     schedule: "0 16 * * 1-5"
-    command: "cd ${VNPY_DIR}/${SCRIPTS_DIR} && ${PYTHON} stop_loss_executor.py"
+    command: "${TRADE_WRAPPER} stop_loss_executor.py"
     timeout: 300
     enabled: true
     tags: [trade, stop-loss, executor]
     source: setup_missing_agents_cron.py
+    note: "修复 P2-1: 使用 wrapper 确保真实交易"
 
   - id: trade-rebalance
     name: 每日调仓
     group: trading
     schedule: "30 17 * * 1-5"
-    command: "cd ${VNPY_DIR}/${SCRIPTS_DIR} && ${PYTHON} rebalance_portfolio.py"
+    command: "${TRADE_WRAPPER} rebalance_portfolio.py"
     timeout: 600
     enabled: true
     model: qwen3-max
     tags: [trade, rebalance]
     source: setup_elite_cron.py
+    note: "修复 P2-1: 使用 wrapper 确保真实交易"
 
   - id: trade-comprehensive-analyzer
     name: 综合消息面分析
     group: trading
     schedule: "0 5 * * *"
-    command: "cd ${VNPY_DIR}/${SCRIPTS_DIR} && ${PYTHON} comprehensive_analyzer.py"
+    command: "${TRADE_WRAPPER} comprehensive_analyzer.py"
     timeout: 600
     enabled: true
     model: qwen3-max
     tags: [trade, analysis]
     source: setup_comprehensive_cron.py
+    note: "修复 P2-1: 使用 wrapper 确保环境变量加载"
 
   - id: trade-news-analyzer
     name: 新闻分析
     group: trading
     schedule: "0 6,18 * * *"
-    command: "cd ${VNPY_DIR}/${SCRIPTS_DIR} && ${PYTHON} news_analyzer.py"
+    command: "${TRADE_WRAPPER} news_analyzer.py"
     timeout: 300
     enabled: true
     tags: [trade, news]
+    note: "修复 P2-1: 使用 wrapper 确保环境变量加载"
+
+  - id: trade-execute
+    name: 执行交易计划
+    group: trading
+    schedule: "30 9 * * 1-5"
+    command: "${TRADE_WRAPPER} execute_trading.py --date $(date +\\%Y-\\%m-\\%d)"
+    timeout: 600
+    enabled: true
+    model: qwen3-max
+    tags: [trade, execution, critical]
+    note: "新增 P2-1: 主交易执行任务"
+    depends_on:
+      - trade-elite-screener
 
   # ============== 报告组 ==============
   # 来源: setup_elite_cron.py, setup_validation_cron.py, setup_update_cron.py,

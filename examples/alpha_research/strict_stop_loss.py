@@ -93,7 +93,24 @@ class StrictStopLoss:
             current_price = prices.get(symbol, pos.get('current_price', 0))
             # 修复：兼容 volume/quantity
             volume = pos.get('volume', pos.get('quantity', 0))
-            
+
+            # 修复 P1-1: 计算 profit_rate 和 pos_info（之前缺失导致 NameError）
+            if cost_price and cost_price > 0:
+                profit_rate = (current_price - cost_price) / cost_price
+            else:
+                profit_rate = 0.0
+            market_value = current_price * volume
+            profit_amount = (current_price - cost_price) * volume
+            pos_info = {
+                'symbol': symbol,
+                'cost_price': cost_price,
+                'current_price': current_price,
+                'volume': volume,
+                'market_value': market_value,
+                'profit_rate': profit_rate,
+                'profit_amount': profit_amount,
+            }
+
             # 判断操作
             if profit_rate <= self.stop_loss_threshold:
                 # 触发止损

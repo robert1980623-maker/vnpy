@@ -76,20 +76,88 @@ class EnhancedDownloader:
         
         return True, "检查通过", expected_date
     
-    def download_stocks(self, symbols: list) -> dict:
+    def _check_stale_stocks(self, symbols: list, expected_date: datetime) -> tuple:
+        """
+        检查哪些股票的数据需要更新（缺失或过期）
+
+        复用 validate_download 的文件查找逻辑，但只做"是否需要重新下载"的判断。
+
+        Args:
+            symbols: 待检查的股票代码列表
+            expected_date: 期望的数据日期（最新交易日）
+
+        Returns:
+            (stale_symbols, fresh_symbols) - 需要下载 / 已是最新的 symbol 列表
+        """
+        stale = []
+        fresh = []
+
+        for symbol in symbols:
+            code = symbol.split('.')[0] if '.' in symbol else symbol
+            suffix = symbol.split('.')[1] if '.' in symbol else ''
+            suffix_lower = suffix.lower()
+            suffix_upper = suffix.upper()
+            possible_files = [
+                DATA_DIR / f'{code}_{suffix_lower}.csv' if suffix else None,
+                DATA_DIR / f'{code}_{suffix_upper}.csv' if suffix else None,
+                DATA_DIR / f'{code}.csv',
+            ]
+            possible_files = [f for f in possible_files if f]
+
+            best_file = None
+            best_date = None
+            for f in possible_files:
+                if not f.exists():
+                    continue
+                try:
+                    df_temp = pd.read_csv(f, nrows=5)
+                    if df_temp.empty:
+                        continue
+                    date_col = None
+                    for col in ['trade_date', 'datetime', '日期', 'date']:
+                        if col in df_temp.columns:
+                            date_col = col
+                            break
+                    if not date_col:
+                        date_col = df_temp.columns[1]
+                    file_date = pd.to_datetime(df_temp.iloc[0][date_col])
+                    if best_date is None or file_date > best_date:
+                        best_date = file_date
+                        best_file = f
+                except Exception:
+                    continue
+
+            if best_date is None:
+                # 文件不存在或为空 -> 需要下载
+                stale.append(symbol)
+                continue
+
+            # 数据日期 >= 期望日期 - 1 天视为新鲜（容忍 1 天延迟，如周末发布）
+            if (expected_date - best_date).days <= 1:
+                fresh.append(symbol)
+            else:
+                stale.append(symbol)
+
+        return stale, fresh
+
+    def download_stocks(self, symbols: list, stale_symbols: list = None) -> dict:
         """
         下载股票数据
-        
+
         Args:
-            symbols: 股票代码列表
-        
+            symbols: 完整股票代码列表（用于报告）
+            stale_symbols: 需要下载的子集（None 则下载全部）
+
         Returns:
             下载结果
         """
-        if not symbols:
+        to_download = stale_symbols if stale_symbols is not None else symbols
+
+        if not to_download:
+            self.log("✅ 所有股票数据已是最新，跳过下载")
             return {'success': [], 'failed': []}
-        
-        self.log(f"开始下载 {len(symbols)} 只股票...")
+
+        self.log(f"开始下载 {len(to_download)} 只股票（共 {len(symbols)} 只，{len(symbols) - len(to_download)} 只已跳过）...")
         
         success = []
         failed = []
@@ -105,12 +173,16 @@ class EnhancedDownloader:
         
         try:
             env = {'PYTHONPATH': str(Path('./').absolute())}
+            cmd = [sys.executable, str(script)]
+            # 当只下载子集时，通过 --symbols 传给批处理脚本
+            if stale_symbols is not None and to_download:
+                cmd.extend(['--symbols'] + list(to_download))
             result = subprocess.run(
-                [sys.executable, str(script)],
+                cmd,
                 cwd=Path(__file__).parent,
                 capture_output=True,
                 text=True,
-                timeout=600,
+                timeout=1800,
                 env=env
             )
             
@@ -286,9 +358,19 @@ class EnhancedDownloader:
                 return self.report
         
         self.log(f"📋 待下载股票：{len(symbols)} 只")
-        
+
+        # 2.5 增量检查：识别需要更新的股票
+        stale_symbols, fresh_symbols = self._check_stale_stocks(symbols, expected_date)
+        self.report['skipped'] = fresh_symbols
+        if fresh_symbols:
+            self.log(f"⏭️ 跳过 {len(fresh_symbols)} 只已是最新的股票")
+        if stale_symbols:
+            self.log(f"🔄 需要下载 {len(stale_symbols)} 只股票（缺失或过期）")
+        else:
+            self.log("✅ 所有股票数据已是最新，无需下载")
+
         # 3. 执行下载
-        dl_result = self.download_stocks(symbols)
+        dl_result = self.download_stocks(symbols, stale_symbols=stale_symbols)
         self.report['downloaded'] = dl_result['success']
         self.report['failed'] = dl_result['failed']
         

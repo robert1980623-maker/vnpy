@@ -35,6 +35,31 @@ import requests
 from logger import TaskLogger
 from non_interactive_helper import setup_non_interactive_mode, is_non_interactive
 
+# ==================== .env 自动加载（cron 环境兼容）====================
+
+def _load_env():
+    """从 .env 文件加载环境变量（cron 环境兼容）
+
+    Cron 不加载 .zshrc / .bash_profile，导致 TUSHARE_TOKEN 缺失。
+    本函数在模块加载时自动读取同目录下的 .env 文件，
+    使用 os.environ.setdefault 以免覆盖已存在的环境变量。
+    """
+    env_file = Path(__file__).parent / '.env'
+    if not env_file.exists():
+        return
+    with open(env_file, 'r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            # 跳过空行和注释
+            if not line or line.startswith('#') or '=' not in line:
+                continue
+            key, value = line.split('=', 1)
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            os.environ.setdefault(key, value)
+
+_load_env()
+
 # ==================== 配置加载 ====================
 
 def load_data_config() -> dict:
