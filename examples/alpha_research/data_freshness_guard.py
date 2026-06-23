@@ -369,7 +369,7 @@ class DataFreshnessGuard:
         
         logger.info(f"检查时间：{now.strftime('%Y-%m-%d %H:%M')}")
         logger.info(f"期望数据日期：{expected_date.strftime('%Y-%m-%d')}")
-        logger.info()
+        logger.info("数据检查完成")
         
         # 1. 判断是否需要下载
         should_dl, reason = self.should_download()

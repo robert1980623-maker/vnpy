@@ -25,6 +25,56 @@ import time
 import requests
 from non_interactive_helper import setup_non_interactive_mode, is_non_interactive
 
+# 账户系统 — Phase 3
+from accounts.account_service import AccountService
+from accounts.account_db import AccountDB, Account
+
+
+def _ensure_account(account_id: str = "virtual_2026", initial_capital: float = 1_000_000):
+    """确保 SQLite 中存在该账户"""
+    db = AccountDB()
+    if not db.get_account(account_id):
+        acct = Account(
+            account_id=account_id,
+            account_name="虚拟账户",
+            initial_capital=initial_capital,
+            cash=initial_capital,
+        )
+        db.create_account(acct)
+
+
+def _load_account_from_service(account_id: str = "virtual_2026") -> dict:
+    """从 AccountService 加载账户数据（兼容旧 JSON 格式）"""
+    _ensure_account(account_id)
+    service = AccountService(account_id)
+    balance = service.get_balance()
+    positions = service.get_positions()
+
+    # 转换为旧 JSON 格式
+    pos_list = []
+    for p in positions:
+        pos_list.append({
+            'symbol': p.symbol,
+            'stock_code': p.symbol,
+            'stock_name': p.name,
+            'name': p.name,
+            'quantity': p.quantity,
+            'volume': p.quantity,
+            'avg_price': p.avg_cost,
+            'cost_price': p.avg_cost,
+            'avg_cost': p.avg_cost,
+            'current_price': p.current_price,
+            'market_value': p.market_value,
+        })
+
+    return {
+        'account_id': account_id,
+        'account_name': '虚拟账户',
+        'initial_capital': 1_000_000,
+        'cash': balance.cash,
+        'positions': pos_list,
+    }
+
 
 class RealtimeMonitor:
     @staticmethod
@@ -183,9 +233,8 @@ class RealtimeMonitor:
             return None
             
     def load_account(self):
-        """加载账户"""
-        with open(self.account_file, 'r', encoding='utf-8') as f:
-            return json.load(f)
+        """加载账户 — 从 AccountService 读取（Phase 3 迁移）"""
+        return _load_account_from_service()
     
     def get_latest_prices(self, symbols):
         """获取最新价格（优先从最新数据文件读取）"""
@@ -531,10 +580,11 @@ class RealtimeMonitor:
         return account
     
     def save_account(self, account):
-        """保存账户"""
-        with open(self.account_file, 'w', encoding='utf-8') as f:
-            json.dump(account, f, ensure_ascii=False, indent=2)
-        logger.info(f"\n✅ 账户已保存")
+        """保存账户 — Phase 3: 不再写 JSON，AccountService 已持久化到 SQLite
+
+        保留此方法仅为兼容调用方。
+        """
+        logger.info(f"\n✅ 账户已由 AccountService 持久化（无需手动保存）")
     
     def save_monitor_report(self, data_fresh, stale_data, alerts):
         """保存监控报告"""

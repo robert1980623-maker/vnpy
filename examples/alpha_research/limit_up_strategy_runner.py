@@ -24,7 +24,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from strategies.limit_up_leader import LimitUpLeaderStrategy, run_daily_strategy
-from virtual_account import VirtualAccount
+from accounts.account_service import AccountService
+from accounts.account_db import AccountDB, Account
 from notification_utils import send_to_group
 
 # 配置日志
@@ -46,12 +47,23 @@ class LimitUpStrategyRunner:
         """初始化运行器"""
         self.config = config or {}
         self.strategy = LimitUpLeaderStrategy(config)
-        self.account = VirtualAccount()
-        
+        # 确保账户存在并初始化 AccountService
+        db = AccountDB()
+        if not db.get_account("virtual_2026"):
+            from accounts.account_db import Account
+            acct = Account(
+                account_id="virtual_2026",
+                account_name="虚拟账户",
+                initial_capital=1_000_000,
+                cash=1_000_000,
+            )
+            db.create_account(acct)
+        self.account = AccountService("virtual_2026")
+
         # 报告目录
         self.report_dir = Path(__file__).parent / 'reports' / 'limit_up_strategy'
         self.report_dir.mkdir(parents=True, exist_ok=True)
-        
+
         logger.info("涨停龙头策略运行器初始化完成")
     
     def run_selection(self, date: str = None) -> dict:

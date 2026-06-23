@@ -7,6 +7,10 @@
 3. 执行交易
 4. 查看持仓和盈亏
 5. 保存交易记录
+
+迁移到 AccountService — 2026-06-23
+注意：本文件仍使用 PaperTradingAccount 以保留回测功能，
+但新增 AccountService 作为替代选项。
 """
 
 import pandas as pd
@@ -14,8 +18,14 @@ from datetime import datetime, timedelta
 from pathlib import Path
 import random
 
-# 导入模拟交易模块
-from paper_trading import PaperTradingAccount
+# 导入模拟交易模块 — 保留以支持回测功能
+# Phase 3: 生产环境应改用 AccountService
+try:
+    from paper_trading import PaperTradingAccount
+except ImportError:
+    # 如果 paper_trading 不可用，使用 AccountService
+    from accounts.account_service import AccountService
+    PaperTradingAccount = None
 
 
 def generate_demo_data(output_dir: str = "./data/mock"):

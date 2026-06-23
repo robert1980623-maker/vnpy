@@ -17,6 +17,57 @@ from pathlib import Path
 from datetime import datetime
 from non_interactive_helper import setup_non_interactive_mode, is_non_interactive, confirm_action
 
+# 账户系统 — Phase 3
+from accounts.account_service import AccountService
+from accounts.account_db import AccountDB, Account
+
+
+def _ensure_account(account_id: str = "virtual_2026", initial_capital: float = 1_000_000):
+    """确保 SQLite 中存在该账户"""
+    db = AccountDB()
+    if not db.get_account(account_id):
+        acct = Account(
+            account_id=account_id,
+            account_name="虚拟账户",
+            initial_capital=initial_capital,
+            cash=initial_capital,
+        )
+        db.create_account(acct)
+
+
+def _load_account_from_service(account_id: str = "virtual_2026") -> dict:
+    """从 AccountService 加载账户数据（兼容旧 JSON 格式）"""
+    _ensure_account(account_id)
+    service = AccountService(account_id)
+    balance = service.get_balance()
+    positions = service.get_positions()
+
+    pos_list = []
+    for p in positions:
+        pos_list.append({
+            'symbol': p.symbol,
+            'name': p.name,
+            'quantity': p.quantity,
+            'avg_price': p.avg_cost,
+            'cost_price': p.avg_cost,
+            'cost_basis': p.avg_cost * p.quantity,
+            'cost': p.avg_cost * p.quantity,
+            'current_price': p.current_price,
+            'market_value': p.market_value,
+            'profit_rate': (
+                (p.current_price - p.avg_cost) / p.avg_cost
+                if p.avg_cost > 0 else 0
+            ),
+        })
+
+    return {
+        'account_id': account_id,
+        'account_name': '虚拟账户',
+        'initial_capital': 1_000_000,
+        'cash': balance.cash,
+        'positions': pos_list,
+    }
+
 
 class PortfolioRebalancer:
     """持仓重组器"""
@@ -30,9 +81,8 @@ class PortfolioRebalancer:
         self.target_cash_ratio = 0.08  # 目标现金 8%
         
     def load_account(self):
-        """加载账户"""
-        with open(self.account_file, 'r', encoding='utf-8') as f:
-            return json.load(f)
+        """加载账户 — 从 AccountService 读取（Phase 3 迁移）"""
+        return _load_account_from_service()
     
     def load_elite_selection(self):
         """加载精英选股结果，支持回退到最近的结果"""

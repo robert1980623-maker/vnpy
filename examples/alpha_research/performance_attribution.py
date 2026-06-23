@@ -9,6 +9,8 @@
 - 综合绩效报告生成
 
 数据源：AKShare（真实市价）
+
+迁移到 AccountService — 2026-06-23
 """
 
 import json
@@ -18,20 +20,23 @@ from datetime import datetime
 from typing import Dict, List, Optional
 from dataclasses import dataclass, asdict
 
+# 账户系统 — Phase 3
+from accounts.account_service import AccountService
+
 
 def _get_current_prices(symbols: List[str]) -> Dict[str, float]:
     """
     从 Tushare Pro 获取真实收盘价（主数据源）
-    
+
     Args:
         symbols: 股票代码列表，格式如 "300476", "603893"
-    
+
     Returns:
         {symbol: current_price} 字典
     """
     prices = {}
     today = datetime.now().strftime("%Y%m%d")
-    
+
     try:
         import tushare as ts
         import os
@@ -49,20 +54,19 @@ def _get_current_prices(symbols: List[str]) -> Dict[str, float]:
         else:
             print("⚠️ Tushare token 未找到，使用备用 AKShare")
             raise ValueError("No token")
-        
+
         for symbol in symbols:
             if symbol.startswith('6'):
                 ts_code = f"{symbol}.SH"
             else:
                 ts_code = f"{symbol}.SZ"
-            
+
             df = pro.daily(ts_code=ts_code, start_date=today, end_date=today)
             if df is not None and len(df) > 0:
                 price = float(df.iloc[0]['close'])
                 prices[symbol] = price
                 print(f"✅ {symbol} 收盘价：¥{price:.2f}")
             else:
-                # 尝试前一天
                 from datetime import timedelta
                 yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y%m%d")
                 df = pro.daily(ts_code=ts_code, start_date=yesterday, end_date=yesterday)
@@ -75,7 +79,6 @@ def _get_current_prices(symbols: List[str]) -> Dict[str, float]:
                     print(f"⚠️ {symbol} 获取失败，使用默认价 ¥10.00")
     except Exception as e:
         print(f"⚠️ Tushare 获取失败：{e}，切换到 AKShare 备用")
-        # 备用：AKShare
         try:
             import akshare as ak
             for symbol in symbols:
@@ -104,18 +107,17 @@ class AttributionResult:
     total_return_rate: float
     benchmark_return_rate: float
     excess_return: float
-    stock_selection_effect: float   # 选股效应
-    industry_allocation_effect: float  # 行业配置效应
-    timing_effect: float           # 择时效应
-    by_stock: List[Dict]           # 个股归因
-    by_industry: Dict[str, Dict]   # 行业归因
-    trading_attribution: Dict       # 交易归因
+    stock_selection_effect: float
+    industry_allocation_effect: float
+    timing_effect: float
+    by_stock: List[Dict]
+    by_industry: Dict[str, Dict]
+    trading_attribution: Dict
 
 
 class PerformanceAttribution:
-    """绩效归因分析器"""
+    """绩效归因分析器 — 使用 AccountService"""
 
-    # 行业分类映射
     SECTOR_CLASSIFICATION = {
         '000001': '银行', '600000': '银行', '600036': '银行', '601398': '银行',
         '601288': '银行', '601328': '交通银行', '601818': '银行', '601988': '银行',
@@ -138,7 +140,7 @@ class PerformanceAttribution:
         '688472': '新能源', '002475': '消费电子',
     }
 
-    def __init__(self, account):
+    def __init__(self, account: AccountService):
         self.account = account
         self.reports_dir = Path('./reports/attribution')
         self.reports_dir.mkdir(parents=True, exist_ok=True)
@@ -153,12 +155,48 @@ class PerformanceAttribution:
         return self.SECTOR_CLASSIFICATION.get(code, '其他')
 
     def _load_benchmark_data(self) -> Dict:
-        """加载基准数据 (简化版本 - 使用静态数据)"""
+        """加载基准数据"""
         return {'hs300': 0.0, 'sh50': 0.0}
+
+    def _get_position_dicts(self) -> List[Dict]:
+        """将 AccountService 的 Position 转换为旧格式 dict 列表"""
+        positions = self.account.get_positions()
+        result = []
+        for p in positions:
+            result.append({
+                "symbol": p.symbol,
+                "name": p.name,
+                "quantity": p.quantity,
+                "avg_price": p.avg_cost,
+                "current_price": p.current_price,
+                "cost": p.avg_cost * p.quantity,
+                "market_value": p.market_value,
+            })
+        return result
+
+    def _get_trade_dicts(self) -> List[Dict]:
+        """将 AccountService 的 Trade 转换为旧格式 dict 列表"""
+        trades = self.account.get_trade_history(limit=1000)
+        result = []
+        for t in trades:
+            result.append({
+                "trade_id": t.trade_id,
+                "symbol": t.symbol,
+                "name": t.name,
+                "direction": "买" if t.direction.value == "BUY" else "卖",
+                "price": t.price,
+                "quantity": t.quantity,
+                "amount": t.amount,
+                "reason": t.reason,
+                "status": "filled",
+                "timestamp": t.created_at,
+                "agent_id": t.agent_id,
+            })
+        return result
 
     def calculate_returns_attribution(self) -> Dict:
         """计算收益归因 - 使用真实市价"""
-        positions = self.account.get_positions()
+        positions = self._get_position_dicts()
         if not positions:
             return {
                 'stock_selection': 0.0,
@@ -171,10 +209,9 @@ class PerformanceAttribution:
         total_cost = 0.0
         total_market_value = 0.0
 
-        # 获取真实市价
         symbols = [self._get_stock_code(pos["symbol"]) for pos in positions]
         current_prices = _get_current_prices(symbols)
-        
+
         for pos in positions:
             symbol_code = self._get_stock_code(pos["symbol"])
             current_price = current_prices.get(symbol_code, pos["avg_price"])
@@ -186,7 +223,6 @@ class PerformanceAttribution:
 
         total_return_rate = (total_return / total_cost * 100) if total_cost > 0 else 0
 
-        # 简化的归因分解（实际应该用更复杂的模型）
         return {
             'stock_selection': total_return_rate * 0.6,
             'industry_allocation': total_return_rate * 0.25,
@@ -196,9 +232,8 @@ class PerformanceAttribution:
 
     def calculate_risk_attribution(self) -> Dict:
         """计算风险归因 (持仓集中度分析)"""
-        positions = self.account.get_positions()
+        positions = self._get_position_dicts()
 
-        # 默认返回值
         default_result = {
             'concentration_risk': '无持仓',
             'position_hhi': 0.0,
@@ -210,11 +245,10 @@ class PerformanceAttribution:
         if not positions:
             return default_result
 
-        total_market_value = sum(pos["cost"] for pos in positions)  # 暂时用成本代替市值
+        total_market_value = sum(pos["cost"] for pos in positions)
         if total_market_value <= 0:
             return default_result
 
-        # 持仓集中度
         position_weights = []
         sector_weights = {}
         for pos in positions:
@@ -223,11 +257,9 @@ class PerformanceAttribution:
             sector = self._get_sector(pos["symbol"])
             sector_weights[sector] = sector_weights.get(sector, 0) + weight
 
-        # Herfindahl 指数
         hhi = sum(w ** 2 for w in position_weights)
         sector_hhi = sum(w ** 2 for w in sector_weights.values())
 
-        # 风险评级
         if hhi > 0.25:
             concentration_risk = '极高'
         elif hhi > 0.15:
@@ -247,7 +279,7 @@ class PerformanceAttribution:
 
     def calculate_trading_attribution(self) -> Dict:
         """计算交易归因"""
-        trades = self.account.trade_log.get("trades", [])
+        trades = self._get_trade_dicts()
         if not trades:
             return {
                 'total_trades': 0,
@@ -260,7 +292,7 @@ class PerformanceAttribution:
 
         buy_count = sum(1 for t in trades if t.get("direction") == "买")
         sell_count = sum(1 for t in trades if t.get("direction") == "卖")
-        total_fees = 0.0  # 虚拟账户暂不记录手续费
+        total_fees = 0.0
 
         sell_trades = [t for t in trades if t.get("direction") == "卖"]
         if sell_trades:
@@ -288,13 +320,11 @@ class PerformanceAttribution:
     def calculate_by_stock(self) -> List[Dict]:
         """按股票归因"""
         result = []
-        positions = self.account.get_positions()
-        
-        
-        # 获取真实市价
+        positions = self._get_position_dicts()
+
         symbols = [self._get_stock_code(pos["symbol"]) for pos in positions]
         current_prices = _get_current_prices(symbols)
-        
+
         for pos in positions:
             symbol_code = self._get_stock_code(pos["symbol"])
             current_price = current_prices.get(symbol_code, pos["avg_price"])
@@ -355,11 +385,12 @@ class PerformanceAttribution:
 
     def generate_comprehensive_report(self) -> str:
         """生成综合归因报告"""
-        positions = self.account.get_positions()
-        # 使用真实市价计算市值
+        positions = self._get_position_dicts()
         by_stock_data = self.calculate_by_stock()
         market_value = sum(s['market_value'] for s in by_stock_data)
-        total_value = self.account.get_available_cash() + market_value
+        balance = self.account.get_balance()
+        cash = balance.cash
+        total_value = balance.total_assets
 
         returns_attribution = self.calculate_returns_attribution()
         risk_attribution = self.calculate_risk_attribution()
@@ -368,21 +399,22 @@ class PerformanceAttribution:
         by_industry = self.calculate_by_industry()
 
         benchmark_return = 0.0
+        initial_capital = 1_000_000
 
         report = {
             'report_date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            'account_id': self.account.account_data.get("account_id", "ACC001"),
+            'account_id': self.account.account_id,
             'summary': {
                 'total_value': round(total_value, 2),
-                'cash': round(self.account.get_available_cash(), 2),
+                'cash': round(cash, 2),
                 'market_value': round(market_value, 2),
-                'initial_capital': self.account.account_data.get("initial_capital", 1000000),
-                'total_return': round(total_value - self.account.account_data.get("initial_capital", 1000000), 2),
-                'total_return_rate': round((total_value - self.account.account_data.get("initial_capital", 1000000)) / max(self.account.account_data.get("initial_capital", 1000000), 1) * 100, 2),
+                'initial_capital': initial_capital,
+                'total_return': round(total_value - initial_capital, 2),
+                'total_return_rate': round((total_value - initial_capital) / max(initial_capital, 1) * 100, 2),
                 'position_count': len(positions),
-                'trade_count': len(self.account.trade_log.get("trades", [])),
+                'trade_count': len(self._get_trade_dicts()),
                 'benchmark_return_rate': benchmark_return,
-                'excess_return': round((total_value - self.account.account_data.get("initial_capital", 1000000)) / max(self.account.account_data.get("initial_capital", 1000000), 1) * 100 - benchmark_return, 2)
+                'excess_return': round((total_value - initial_capital) / max(initial_capital, 1) * 100 - benchmark_return, 2)
             },
             'returns_attribution': returns_attribution,
             'risk_attribution': risk_attribution,
@@ -413,7 +445,7 @@ class PerformanceAttribution:
 
         md = f"""# 📊 全面复盘归因报告
 
-**报告时间**: {report['report_date']}  
+**报告时间**: {report['report_date']}
 **账户**: {report['account_id']}
 
 ---
@@ -501,8 +533,17 @@ class PerformanceAttribution:
 
 def main():
     """测试"""
-    from virtual_account import VirtualAccount
-    account = VirtualAccount()
+    from accounts.account_db import AccountDB, Account
+    db = AccountDB()
+    if not db.get_account("virtual_2026"):
+        acct = Account(
+            account_id="virtual_2026",
+            account_name="虚拟账户",
+            initial_capital=1_000_000,
+            cash=1_000_000,
+        )
+        db.create_account(acct)
+    account = AccountService("virtual_2026")
     attribution = PerformanceAttribution(account)
     report = attribution.generate_comprehensive_report()
     print(report)

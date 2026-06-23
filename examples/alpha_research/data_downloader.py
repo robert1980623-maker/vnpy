@@ -6,29 +6,77 @@
 - 并发下载（ThreadPoolExecutor）
 - 增量检测（跳过已有最新数据的股票）
 - 失败队列（持久化 + 自动重试）
-- 双数据源（Tushare 主 + AKShare/Baostock 备）
+- 多数据源（MultiSourceManager 可配置优先级 + 自动降级）
+- 双数据源（Tushare 主 + AKShare/Baostock 备，无 Manager 时的回退）
 
 用法:
     from data_downloader import DataDownloader, DownloaderConfig
     config = DownloaderConfig(max_workers=4)
     downloader = DataDownloader(config)
     results = downloader.download_batch(['000001.SZSE', '000002.SZSE'])
+
+    # 使用 MultiSourceManager（P0-2 多数据源支持）
+    from akshare_source import create_default_manager
+    manager = create_default_manager()
+    config = DownloaderConfig(max_workers=4, source_manager=manager)
+    downloader = DataDownloader(config)
 """
 
 import asyncio
 import json
 import logging
 import os
+import signal
 import sys
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed, Future
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timedelta
 from pathlib import Path
-from threading import Lock
+from threading import Lock, Event
 from typing import Dict, List, Optional, Literal, Callable, Tuple
 
 import pandas as pd
+
+# tqdm 可选依赖：缺失时回退到简单的内置进度显示
+try:
+    from tqdm import tqdm as _tqdm
+    HAS_TQDM = True
+except ImportError:
+    HAS_TQDM = False
+
+    class _SimpleProgressBar:
+        """极简内置进度条（无 tqdm 时的回退方案）"""
+
+        def __init__(self, total: int, desc: str = '', disable: bool = False):
+            self.total = total
+            self.desc = desc
+            self.disable = disable
+            self.n = 0
+            self._lock = Lock()
+
+        def update(self, n: int = 1):
+            with self._lock:
+                self.n += n
+                if not self.disable and self.total > 0:
+                    pct = self.n * 100 // self.total
+                    bar_len = 30
+                    filled = bar_len * self.n // self.total
+                    bar = '=' * filled + '-' * (bar_len - filled)
+                    print(
+                        f'\r{self.desc}[{bar}] {self.n}/{self.total} ({pct}%)',
+                        end='', flush=True,
+                    )
+
+        def set_description(self, desc: str):
+            self.desc = desc
+
+        def close(self):
+            if not self.disable and self.total > 0:
+                print()  # 换行
+
+    def _tqdm(*args, **kwargs):  # type: ignore[misc]
+        return _SimpleProgressBar(*args, **kwargs)
 
 
 # ==================== 限频控制 ====================
@@ -86,6 +134,14 @@ from download_data_akshare import (
     USE_TUSHARE,
 )
 
+# P0-2: MultiSourceManager 可选导入（多数据源管理）
+try:
+    from akshare_source import MultiSourceManager, create_default_manager
+    HAS_MULTI_SOURCE = True
+except ImportError:
+    HAS_MULTI_SOURCE = False
+    MultiSourceManager = None  # type: ignore
+
 # 失败队列文件路径
 _FAILED_DOWNLOADS_FILE = Path(__file__).parent / 'failed_downloads.json'
 _FAILED_LOCK = Lock()
@@ -113,6 +169,8 @@ class DownloaderConfig:
         failed_queue_file: 失败队列文件路径
         validate: 下载后是否自动校验数据质量
         notify_on_failure: 校验失败时是否发送飞书通知
+        source_manager: P0-2 多数据源管理器（MultiSourceManager 实例）
+        source_config_path: P0-2 数据源配置文件路径（YAML）
     """
     max_workers: int = 4
     stock_delay: float = 1.0
@@ -126,6 +184,10 @@ class DownloaderConfig:
     failed_queue_file: str = './failed_downloads.json'
     validate: bool = False
     notify_on_failure: bool = False
+    progress: bool = True
+    graceful_shutdown: bool = True
+    source_manager: object = None  # Optional[MultiSourceManager]
+    source_config_path: Optional[str] = None
 
 
 @dataclass
@@ -266,6 +328,10 @@ class DataDownloader:
         data_dir: Optional[Path] = None,
         validate: bool = False,
         notify_on_failure: bool = False,
+        progress: bool = True,
+        graceful_shutdown: bool = True,
+        source_manager: object = None,
+        source_config_path: Optional[str] = None,
     ):
         """
         Args:
@@ -279,6 +345,10 @@ class DataDownloader:
             data_dir: 数据目录（用于增量检测）
             validate: 下载后是否自动校验数据质量
             notify_on_failure: 校验失败时是否发送飞书通知
+            progress: 是否显示进度条（默认 True，需 tqdm；无 tqdm 时回退到内置进度条）
+            graceful_shutdown: 是否注册 SIGINT/SIGTERM 处理器以支持优雅关闭（默认 True）
+            source_manager: P0-2 多数据源管理器（MultiSourceManager 实例）
+            source_config_path: P0-2 数据源配置文件路径（YAML），无 source_manager 时自动创建
         """
         if config is not None:
             self.config = config
@@ -292,6 +362,10 @@ class DataDownloader:
             self._failed_file = Path(config.failed_queue_file)
             self.validate = config.validate
             self.notify_on_failure = config.notify_on_failure
+            self.progress = config.progress
+            self.graceful_shutdown = config.graceful_shutdown
+            self._source_manager = config.source_manager
+            self._source_config_path = config.source_config_path
         else:
             self.config = DownloaderConfig(
                 max_workers=max_workers,
@@ -302,6 +376,10 @@ class DataDownloader:
                 timeout=timeout,
                 validate=validate,
                 notify_on_failure=notify_on_failure,
+                progress=progress,
+                graceful_shutdown=graceful_shutdown,
+                source_manager=source_manager,
+                source_config_path=source_config_path,
             )
             self.max_workers = max_workers
             self.max_retries = max_retries
@@ -313,6 +391,21 @@ class DataDownloader:
             self._failed_file = _FAILED_DOWNLOADS_FILE
             self.validate = validate
             self.notify_on_failure = notify_on_failure
+            self.progress = progress
+            self.graceful_shutdown = graceful_shutdown
+            self._source_manager = source_manager
+            self._source_config_path = source_config_path
+
+        # P0-2: 初始化 MultiSourceManager（如已配置）
+        if self._source_manager is None and self._source_config_path and HAS_MULTI_SOURCE:
+            try:
+                from akshare_source import load_source_config
+                cfg = load_source_config(self._source_config_path)
+                self._source_manager = create_default_manager(cfg)
+                logger.info("✅ MultiSourceManager 已从配置加载: %s", self._source_config_path)
+            except Exception as e:
+                logger.warning("MultiSourceManager 初始化失败 (%s)，将使用传统数据源轮转", e)
+                self._source_manager = None
 
         self._stats_lock = Lock()
         self._stats = {
@@ -323,7 +416,12 @@ class DataDownloader:
             'baostock': 0,
             'failed': 0,
             'skipped': 0,
+            'multi_source': 0,  # P0-2: 通过 MultiSourceManager 成功获取的次数
         }
+        # Graceful shutdown 支持
+        self._shutdown_event = Event()
+        # 上一次 batch 的部分结果（Ctrl+C 时保存已下载数据）
+        self._last_partial_results: List[DownloadResult] = []
 
     # ---------- 增量检测 ----------
 
@@ -401,22 +499,46 @@ class DataDownloader:
 
     def _download_one(self, symbol: str) -> DownloadResult:
         """
-        下载单只股票（Phase 3 Fix 2: 每次 retry 只尝试一个数据源，轮换使用）
+        下载单只股票。
 
-        重试策略：
-        - attempt 1: Tushare（主数据源）
-        - attempt 2: AKShare（备用）
-        - attempt 3: Baostock（备选）
-        每次 retry 只调用 1 个数据源，避免浪费 API 配额。
+        P0-2: 如果配置了 MultiSourceManager，优先使用多数据源管理器（自动降级）。
+        回退: 传统数据源轮转（Tushare → AKShare → Baostock）。
 
         Returns:
             DownloadResult
         """
         start_time = time.time()
         last_error = None
-        delay = self.base_delay
 
-        # Phase 3 Fix 2: 构建数据源列表，每个 retry 轮换一个
+        # P0-2: 优先使用 MultiSourceManager
+        if self._source_manager is not None:
+            try:
+                df, source_name = self._source_manager.fetch(symbol, None, None)
+                if df is not None and not df.empty:
+                    self._save_bars(symbol, df)
+                    remove_from_failed_queue(symbol)
+                    validation = self._run_validation(symbol, df)
+                    with self._stats_lock:
+                        self._stats['multi_source'] += 1
+                    return DownloadResult(
+                        symbol=symbol,
+                        status='success',
+                        source=source_name,
+                        rows=len(df),
+                        duration=time.time() - start_time,
+                        validation=validation,
+                    )
+                else:
+                    last_error = f"multi_source: all sources returned empty for {symbol}"
+                    logger.debug(last_error)
+                    # 继续尝试传统数据源作为回退
+            except Exception as e:
+                last_error = f"multi_source: {e}"
+                logger.debug(last_error)
+                # 继续尝试传统数据源作为回退
+
+        # 传统数据源轮转（回退路径）
+        delay = self.base_delay
         sources: List[Tuple[str, Callable]] = []
         if USE_TUSHARE:
             sources.append(('tushare', get_stock_bars_tushare))
@@ -462,10 +584,27 @@ class DataDownloader:
         )
 
     def _save_bars(self, symbol: str, bars: pd.DataFrame):
-        """保存 K 线数据到 CSV"""
+        """保存 K 线数据到 CSV（原子写入，crash-safe）
+
+        先写临时文件，再 os.replace() 覆盖目标文件。
+        os.replace() 在 POSIX 上是原子操作，Windows 上也是原子的（Python 3.3+）。
+        这样即使写入中途崩溃，目标文件要么保持旧版本，要么是完整的新版本，
+        不会出现截断或半写状态。
+        """
         self.data_dir.mkdir(parents=True, exist_ok=True)
         csv_path = self.data_dir / f"{symbol}.csv"
-        bars.to_csv(csv_path, index=False)
+        tmp_path = csv_path.with_suffix('.csv.tmp')
+        try:
+            bars.to_csv(tmp_path, index=False)
+            os.replace(tmp_path, csv_path)
+        except Exception:
+            # 清理临时文件
+            try:
+                if tmp_path.exists():
+                    tmp_path.unlink()
+            except OSError:
+                pass
+            raise
 
     def _run_validation(self, symbol: str, bars: pd.DataFrame) -> Optional[dict]:
         """下载后运行数据质量校验（如已启用）
@@ -536,13 +675,47 @@ class DataDownloader:
         # 向后兼容：返回 dict 列表
         return [r.to_dict() for r in results]
 
+    # ---------- Graceful Shutdown ----------
+
+    def shutdown_requested(self) -> bool:
+        """是否已收到关闭信号"""
+        return self._shutdown_event.is_set()
+
+    def request_shutdown(self):
+        """主动请求优雅关闭（也可由 SIGINT/SIGTERM 触发）"""
+        self._shutdown_event.set()
+        logger.info("🛑 收到关闭请求，将在完成进行中的下载后停止")
+
+    def reset_shutdown(self):
+        """重置 shutdown 标志（用于测试或复用时）"""
+        self._shutdown_event.clear()
+
+    def get_partial_results(self) -> List[DownloadResult]:
+        """返回上一次 batch 中被中断时已完成的结果（Ctrl+C 时保存已下载数据）"""
+        return list(self._last_partial_results)
+
+    # ---------- 批量下载（内部实现） ----------
+
     def _do_download(
         self,
         symbols: List[str],
         incremental: bool = True,
         concurrent: bool = True,
     ) -> List[DownloadResult]:
-        """批量下载的内部实现"""
+        """批量下载的内部实现
+
+        支持:
+        - tqdm 进度条（缺失时回退到内置进度条）
+        - graceful shutdown（Ctrl+C 时保存已下载数据并退出）
+
+        Shutdown 语义:
+        - batch 开始前调用 request_shutdown() → 不提交任何任务，全部 skipped
+        - batch 进行中触发 SIGINT/request_shutdown() → 停止提交新任务，进行中的任务完成
+        - batch 结束后自动清除 shutdown 标志，下一次 batch 可正常启动
+        """
+        # 注意：不在这里 clear() shutdown 标志，尊重 batch 开始前外部设置的 shutdown 请求
+        self._last_partial_results = []
+
         # 增量过滤
         if incremental:
             symbols = self.filter_fresh(symbols)
@@ -553,10 +726,95 @@ class DataDownloader:
 
         logger.info(f"📥 准备下载 {len(symbols)} 只股票 (并发={concurrent}, workers={self.max_workers})")
 
-        results = []
-        if concurrent and self.max_workers > 1:
-            with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-                future_to_symbol = {executor.submit(self._download_one, s): s for s in symbols}
+        # 注册 SIGINT/SIGTERM 处理器（graceful shutdown）
+        prev_sigint = None
+        prev_sigterm = None
+        if self.graceful_shutdown:
+            try:
+                prev_sigint = signal.getsignal(signal.SIGINT)
+                prev_sigterm = signal.getsignal(signal.SIGTERM)
+
+                def _signal_handler(signum, frame):
+                    sig_name = signal.Signals(signum).name
+                    logger.warning(
+                        f"⚠️  收到 {sig_name}，正在优雅关闭 "
+                        f"(已完成 {len(self._last_partial_results)}/{len(symbols)})..."
+                    )
+                    self._shutdown_event.set()
+
+                signal.signal(signal.SIGINT, _signal_handler)
+                signal.signal(signal.SIGTERM, _signal_handler)
+            except (ValueError, OSError):
+                # 在非主线程注册 signal 会抛 ValueError，忽略
+                prev_sigint = None
+                prev_sigterm = None
+
+        results: List[DownloadResult] = []
+        try:
+            if concurrent and self.max_workers > 1:
+                results = self._download_concurrent(symbols)
+            else:
+                results = self._download_serial(symbols)
+        finally:
+            # 恢复原有 signal handler
+            if prev_sigint is not None:
+                try:
+                    signal.signal(signal.SIGINT, prev_sigint)
+                    signal.signal(signal.SIGTERM, prev_sigterm)
+                except (ValueError, OSError):
+                    pass
+            # 清除 shutdown 标志，让下一次 batch 可以从干净状态开始
+            # （本次 batch 的 shutdown 效果已通过 results 中的 skipped 体现）
+            self._shutdown_event.clear()
+
+        # 保存部分结果（用于 Ctrl+C 后查询已下载数据）
+        self._last_partial_results = list(results)
+
+        # 汇总
+        stats = self.get_stats()
+        shutdown_note = " (被中断)" if self._shutdown_event.is_set() else ""
+        multi_note = f", MultiSource={stats.get('multi_source', 0)}" if self._source_manager else ""
+        logger.info(
+            f"✅ 下载完成{shutdown_note}: 成功 {stats['success']}/{stats['total']} "
+            f"(Tushare={stats['tushare']}, AKShare={stats['akshare']}, "
+            f"Baostock={stats['baostock']}{multi_note}, "
+            f"失败={stats['failed']}, 跳过={stats['skipped']})"
+        )
+        return results
+
+    def _download_concurrent(self, symbols: List[str]) -> List[DownloadResult]:
+        """并发下载（ThreadPoolExecutor）+ 进度条 + graceful shutdown"""
+        results: List[DownloadResult] = []
+
+        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            # 仅在未 shutdown 时提交任务
+            future_to_symbol: Dict[Future, str] = {}
+            for s in symbols:
+                if self._shutdown_event.is_set():
+                    break
+                future_to_symbol[executor.submit(self._download_one, s)] = s
+
+            # 进度条
+            total = len(future_to_symbol)
+            skipped = len(symbols) - total
+            if skipped > 0:
+                # 为跳过的（未提交的）股票填充 skipped 结果
+                submitted_symbols = set(future_to_symbol.values())
+                for s in symbols:
+                    if s not in submitted_symbols:
+                        r = DownloadResult(
+                            symbol=s, status='skipped', source='none',
+                            error='shutdown requested before submission',
+                        )
+                        self._update_stats(r)
+                        results.append(r)
+
+            pbar = _tqdm(
+                total=total,
+                desc='Downloading',
+                disable=not self.progress,
+            )
+            try:
                 for future in as_completed(future_to_symbol):
                     symbol = future_to_symbol[future]
                     try:
@@ -571,28 +829,86 @@ class DataDownloader:
                         add_to_failed_queue(symbol, str(e))
                     self._update_stats(result)
                     results.append(result)
-        else:
+                    pbar.update(1)
+
+                    # 进度条描述
+                    stats = self.get_stats()
+                    pbar.set_description(
+                        f"OK={stats['success']} FAIL={stats['failed']}"
+                    )
+            except KeyboardInterrupt:
+                # 理论上被 signal handler 捕获，这里做兜底
+                logger.warning("⚠️  KeyboardInterrupt 捕获，正在等待进行中的任务...")
+                self._shutdown_event.set()
+            finally:
+                pbar.close()
+
+        return results
+
+    def _download_serial(self, symbols: List[str]) -> List[DownloadResult]:
+        """串行下载 + 进度条 + graceful shutdown"""
+        results: List[DownloadResult] = []
+        pbar = _tqdm(
+            total=len(symbols),
+            desc='Downloading',
+            disable=not self.progress,
+        )
+        try:
             for i, symbol in enumerate(symbols):
+                if self._shutdown_event.is_set():
+                    # 为剩余股票填充 skipped 结果
+                    for remaining in symbols[i:]:
+                        r = DownloadResult(
+                            symbol=remaining, status='skipped', source='none',
+                            error='shutdown requested',
+                        )
+                        self._update_stats(r)
+                        results.append(r)
+                    break
+
                 result = self._download_one(symbol)
                 self._update_stats(result)
                 results.append(result)
-                if i < len(symbols) - 1:
-                    time.sleep(self.stock_delay)
+                pbar.update(1)
 
-        # 汇总
-        stats = self.get_stats()
-        logger.info(
-            f"✅ 下载完成: 成功 {stats['success']}/{stats['total']} "
-            f"(Tushare={stats['tushare']}, AKShare={stats['akshare']}, "
-            f"Baostock={stats['baostock']}, 失败={stats['failed']}, "
-            f"跳过={stats['skipped']})"
-        )
+                stats = self.get_stats()
+                pbar.set_description(
+                    f"OK={stats['success']} FAIL={stats['failed']}"
+                )
+
+                if i < len(symbols) - 1 and not self._shutdown_event.is_set():
+                    time.sleep(self.stock_delay)
+        finally:
+            pbar.close()
+
         return results
 
     def get_stats(self) -> dict:
         """返回下载统计"""
         with self._stats_lock:
             return dict(self._stats)
+
+    def get_source_status(self) -> dict:
+        """
+        P0-2: 返回 MultiSourceManager 中各数据源的状态。
+
+        Returns:
+            dict: 数据源状态字典，未配置 MultiSourceManager 时返回空字典。
+        """
+        if self._source_manager is not None:
+            return self._source_manager.get_status()
+        return {}
+
+    def health_check_sources(self) -> dict:
+        """
+        P0-2: 对所有数据源执行健康检查。
+
+        Returns:
+            dict: {source_name: bool}，未配置时返回空字典。
+        """
+        if self._source_manager is not None:
+            return self._source_manager.health_check_all()
+        return {}
 
     # ---------- 异步下载（asyncio） ----------
 
@@ -601,23 +917,46 @@ class DataDownloader:
 
     async def _download_one_async(self, symbol: str) -> DownloadResult:
         """
-        异步下载单只股票
+        异步下载单只股票。
 
-        使用 asyncio.to_thread 包装同步的数据源调用，
-        使用 AsyncRateLimiter 控制调用频率。
-
-        重试策略与 _download_one 完全一致：
-        - attempt 1: Tushare（主数据源）
-        - attempt 2: AKShare（备用）
-        - attempt 3: Baostock（备选）
+        P0-2: 如果配置了 MultiSourceManager，优先使用多数据源管理器。
+        回退: 传统数据源轮转（Tushare → AKShare → Baostock）。
 
         Returns:
             DownloadResult
         """
         start_time = time.time()
         last_error = None
-        delay = self.base_delay
 
+        # P0-2: 优先使用 MultiSourceManager
+        if self._source_manager is not None:
+            try:
+                df, source_name = await asyncio.to_thread(
+                    self._source_manager.fetch, symbol, None, None
+                )
+                if df is not None and not df.empty:
+                    await asyncio.to_thread(self._save_bars, symbol, df)
+                    await asyncio.to_thread(remove_from_failed_queue, symbol)
+                    validation = await asyncio.to_thread(self._run_validation, symbol, df)
+                    with self._stats_lock:
+                        self._stats['multi_source'] += 1
+                    return DownloadResult(
+                        symbol=symbol,
+                        status='success',
+                        source=source_name,
+                        rows=len(df),
+                        duration=time.time() - start_time,
+                        validation=validation,
+                    )
+                else:
+                    last_error = f"multi_source: all sources returned empty for {symbol}"
+                    logger.debug(last_error)
+            except Exception as e:
+                last_error = f"multi_source: {e}"
+                logger.debug(last_error)
+
+        # 传统数据源轮转（回退路径）
+        delay = self.base_delay
         sources: List[Tuple[str, Callable]] = []
         if USE_TUSHARE:
             sources.append(('tushare', get_stock_bars_tushare))
@@ -704,31 +1043,52 @@ class DataDownloader:
 
         logger.info(f"📥 准备异步下载 {len(symbols)} 只股票")
 
-        # 使用 asyncio.gather 并发执行所有下载
-        tasks = [self._download_one_async(s) for s in symbols]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        # 使用 asyncio.as_completed 模式实现进度条
+        pending_tasks = {asyncio.create_task(self._download_one_async(s)): s for s in symbols}
+        processed: List[DownloadResult] = []
 
-        # 处理异常结果
-        processed = []
-        for i, result in enumerate(results):
-            if isinstance(result, Exception):
-                result = DownloadResult(
-                    symbol=symbols[i],
-                    status='failed',
-                    source='none',
-                    error=str(result),
+        pbar = _tqdm(
+            total=len(pending_tasks),
+            desc='Async downloading',
+            disable=not self.progress,
+        )
+
+        try:
+            while pending_tasks:
+                done, _ = await asyncio.wait(
+                    pending_tasks.keys(),
+                    return_when=asyncio.FIRST_COMPLETED,
                 )
-                await asyncio.to_thread(add_to_failed_queue, symbols[i], str(result))
-            # 使用 to_thread 避免 threading.Lock 阻塞事件循环
-            await asyncio.to_thread(self._update_stats, result)
-            processed.append(result)
+                for task in done:
+                    symbol = pending_tasks.pop(task)
+                    try:
+                        result = task.result()
+                    except Exception as e:
+                        result = DownloadResult(
+                            symbol=symbol,
+                            status='failed',
+                            source='none',
+                            error=str(e),
+                        )
+                        await asyncio.to_thread(add_to_failed_queue, symbol, str(e))
+                    await asyncio.to_thread(self._update_stats, result)
+                    processed.append(result)
+                    pbar.update(1)
+
+                    stats = self.get_stats()
+                    pbar.set_description(
+                        f"OK={stats['success']} FAIL={stats['failed']}"
+                    )
+        finally:
+            pbar.close()
 
         # 汇总
         stats = self.get_stats()
+        multi_note = f", MultiSource={stats.get('multi_source', 0)}" if self._source_manager else ""
         logger.info(
             f"✅ 异步下载完成: 成功 {stats['success']}/{stats['total']} "
             f"(Tushare={stats['tushare']}, AKShare={stats['akshare']}, "
-            f"Baostock={stats['baostock']}, 失败={stats['failed']}, "
-            f"跳过={stats['skipped']})"
+            f"Baostock={stats['baostock']}{multi_note}, "
+            f"失败={stats['failed']}, 跳过={stats['skipped']})"
         )
         return processed

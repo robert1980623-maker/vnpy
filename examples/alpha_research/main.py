@@ -25,6 +25,7 @@
 import argparse
 import sys
 import logging
+import json
 from pathlib import Path
 from datetime import datetime
 from typing import Optional, List
@@ -349,47 +350,78 @@ def run_paper_trading(
             logger.error("缺少 pandas 依赖，请运行：pip3 install pandas numpy")
             logger.error("或查看 QUICKSTART.md 获取详细安装指南")
             return {}
-        
-        # 导入模拟交易模块
-        from paper_trading import PaperTradingAccount
-        
+
+        # Phase 3: 优先使用 AccountService
+        from accounts.account_service import AccountService
+        from accounts.account_db import AccountDB, Account
+
+        # 确保账户存在
+        db = AccountDB()
+        if not db.get_account("virtual_2026"):
+            acct = Account(
+                account_id="virtual_2026",
+                account_name="虚拟账户",
+                initial_capital=initial_capital,
+                cash=initial_capital,
+            )
+            db.create_account(acct)
+
         # 创建账户
-        account = PaperTradingAccount(
-            initial_capital=initial_capital,
-            data_dir=data_dir
-        )
-        
+        account = AccountService("virtual_2026")
+
         # 买入股票
         bought_stocks = []
         for stock in stocks:
             try:
-                order_id = account.buy(stock, volume=volume_per_stock)
-                if order_id:
+                # 默认价格 10 元，数量 volume_per_stock
+                result = account.buy(
+                    symbol=stock,
+                    name="",
+                    price=10.0,
+                    quantity=volume_per_stock,
+                    source_module="main.py",
+                )
+                if result.success:
                     bought_stocks.append(stock)
                     logger.info(f"买入 {stock}，数量：{volume_per_stock}")
             except Exception as e:
                 logger.warning(f"买入 {stock} 失败：{e}")
                 continue
-        
+
         # 打印组合概览
         logger.info("=" * 60)
         logger.info("模拟交易完成，组合概览:")
-        
-        summary = account.get_portfolio_summary()
-        logger.info(f"总资产：¥{summary['total_value']:,.2f}")
-        logger.info(f"可用资金：¥{summary['capital']:,.2f}")
-        logger.info(f"总盈亏：¥{summary['total_profit']:,.2f} ({summary['total_return_pct']:.2%})")
-        logger.info(f"持仓数量：{summary['position_count']}")
-        
-        # 保存结果（统一路径）
+
+        balance = account.get_balance()
+        positions = account.get_positions()
+        logger.info(f"总资产：¥{balance.total_assets:,.2f}")
+        logger.info(f"可用资金：¥{balance.cash:,.2f}")
+        logger.info(f"持仓市值：¥{balance.market_value:,.2f}")
+        logger.info(f"持仓数量：{len(positions)}")
+
+        summary = {
+            'total_value': balance.total_assets,
+            'capital': balance.cash,
+            'total_profit': balance.realized_pnl + balance.unrealized_pnl,
+            'total_return_pct': (
+                (balance.total_assets - initial_capital) / initial_capital
+                if initial_capital > 0 else 0
+            ),
+            'position_count': len(positions),
+        }
+
+        # 保存结果
         output_dir = Path("./paper_trading")
         output_dir.mkdir(exist_ok=True)
-        account.save_to_file(str(output_dir))
+
+        # 保存为 JSON
+        summary_file = output_dir / "portfolio_summary.json"
+        with open(summary_file, 'w', encoding='utf-8') as f:
+            json.dump(summary, f, indent=2, ensure_ascii=False)
+
         logger.info(f"交易记录已保存到：{output_dir.absolute()}")
-        logger.info(f"  - 持仓：{output_dir}/positions.json")
-        logger.info(f"  - 成交：{output_dir}/trades.csv")
-        logger.info(f"  - 概览：{output_dir}/portfolio_summary.json")
-        
+        logger.info(f"  - 概览：{summary_file}")
+
         return summary
         
     except Exception as e:
