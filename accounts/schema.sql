@@ -72,3 +72,26 @@ CREATE INDEX IF NOT EXISTS idx_trades_account ON trades(account_id);
 CREATE INDEX IF NOT EXISTS idx_trades_date ON trades(trade_date);
 CREATE INDEX IF NOT EXISTS idx_positions_account ON positions(account_id);
 CREATE INDEX IF NOT EXISTS idx_snapshots_account_date ON daily_snapshots(account_id, trade_date);
+
+-- 🆕 审计日志表
+CREATE TABLE IF NOT EXISTS audit_log (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id      TEXT NOT NULL REFERENCES accounts(account_id),
+    operation       TEXT NOT NULL,  -- BUY, SELL, SYNC, SNAPSHOT, ADJUST, MANUAL
+    symbol          TEXT,
+    quantity        REAL,
+    price           REAL,
+    amount          REAL,
+    cash_before     REAL,
+    cash_after      REAL,
+    agent_id        TEXT DEFAULT 'system',
+    source_module   TEXT,           -- 调用方模块名 (e.g. "daily_trading.py")
+    details         TEXT,           -- JSON 扩展字段
+    created_at      TEXT DEFAULT (datetime('now', 'localtime'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_account_date
+    ON audit_log(account_id, created_at);
+
+CREATE INDEX IF NOT EXISTS idx_audit_operation
+    ON audit_log(account_id, operation);

@@ -265,13 +265,13 @@ class AccountDB:
     
     # ==================== 快照操作 ====================
     
-    def save_snapshot(self, account_id: str, trade_date: str, 
-                      cash: float, market_value: float, 
+    def save_snapshot(self, account_id: str, trade_date: str,
+                      cash: float, market_value: float,
                       realized_pnl: float = 0, unrealized_pnl: float = 0) -> bool:
         """保存每日快照"""
         conn = get_connection()
         total_assets = cash + market_value
-        
+
         try:
             conn.execute("""
                 INSERT INTO daily_snapshots (account_id, trade_date, cash,
@@ -283,8 +283,7 @@ class AccountDB:
                     total_market_value = excluded.total_market_value,
                     total_assets = excluded.total_assets,
                     realized_pnl = excluded.realized_pnl,
-                    unrealized_pnl = excluded.unrealized_pnl,
-                    updated_at = excluded.created_at
+                    unrealized_pnl = excluded.unrealized_pnl
             """, (account_id, trade_date, cash, market_value, total_assets,
                   realized_pnl, unrealized_pnl, 0, 0, datetime.now().isoformat()))
             conn.commit()
@@ -293,30 +292,30 @@ class AccountDB:
             conn.close()
     
     # ==================== 工具方法 ====================
-    
+
     def get_account_summary(self, account_id: str) -> Dict:
         """获取账户摘要"""
         conn = get_connection()
         try:
             # 账户信息
             account = conn.execute(
-                "SELECT * FROM accounts WHERE account_id = ?", 
+                "SELECT * FROM accounts WHERE account_id = ?",
                 (account_id,)
             ).fetchone()
-            
+
             # 持仓统计
             positions = conn.execute(
                 "SELECT COUNT(*) as cnt, SUM(market_value) as mv, SUM(unrealized_pnl) as pnl FROM positions WHERE account_id = ?",
                 (account_id,)
             ).fetchone()
-            
+
             # 今日交易
             today = datetime.now().strftime('%Y%m%d')
             trades_today = conn.execute(
                 "SELECT COUNT(*) FROM trades WHERE account_id = ? AND trade_date = ?",
                 (account_id, today)
             ).fetchone()[0]
-            
+
             return {
                 'account': dict(account) if account else None,
                 'positions_count': positions['cnt'] or 0,
@@ -324,6 +323,40 @@ class AccountDB:
                 'unrealized_pnl': positions['pnl'] or 0,
                 'trades_today': trades_today
             }
+        finally:
+            conn.close()
+
+    def execute_in_transaction(self, operations: List[Callable]) -> bool:
+        """在单个事务内执行多个数据库操作
+
+        Args:
+            operations: 接收 conn 的 callable 列表
+
+        Returns:
+            True 如果全部成功, False 如果回滚
+
+        用法:
+            def update_cash(conn):
+                conn.execute("UPDATE accounts SET cash = ? WHERE account_id = ?",
+                            (new_cash, account_id))
+
+            def update_position(conn):
+                conn.execute("INSERT OR REPLACE INTO positions ...")
+
+            db.execute_in_transaction([update_cash, update_position])
+        """
+        conn = get_connection()
+        try:
+            for op in operations:
+                op(conn)
+            conn.commit()
+            return True
+        except Exception as e:
+            conn.rollback()
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Transaction failed, rolled back: {e}")
+            return False
         finally:
             conn.close()
 
