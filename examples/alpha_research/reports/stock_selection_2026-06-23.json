@@ -1,0 +1,207 @@
+{
+  "date": "2026-06-23",
+  "time": "09:00:03",
+  "total_count": 10,
+  "stocks": [
+    {
+      "symbol": "000563_sz",
+      "name": "",
+      "strategies": [
+        "价值",
+        "破净",
+        "高息"
+      ],
+      "score": 7,
+      "reasons": [
+        "PE=11.0, PB=0.8, 股息率=3.1%",
+        "PB=0.8",
+        "股息率=3.1%"
+      ],
+      "pe": 10.95,
+      "roe": 0,
+      "dividend_yield": 3.15,
+      "revenue_growth": 0,
+      "profit_growth": 0
+    },
+    {
+      "symbol": "600731_sh",
+      "name": "",
+      "strategies": [
+        "价值",
+        "破净",
+        "高息"
+      ],
+      "score": 7,
+      "reasons": [
+        "PE=12.8, PB=0.9, 股息率=3.8%",
+        "PB=0.9",
+        "股息率=3.8%"
+      ],
+      "pe": 12.79,
+      "roe": 0,
+      "dividend_yield": 3.77,
+      "revenue_growth": 0,
+      "profit_growth": 0
+    },
+    {
+      "symbol": "601318_sh",
+      "name": "",
+      "strategies": [
+        "价值",
+        "破净",
+        "高息"
+      ],
+      "score": 7,
+      "reasons": [
+        "PE=6.7, PB=0.9, 股息率=5.5%",
+        "PB=0.9",
+        "股息率=5.5%"
+      ],
+      "pe": 6.73,
+      "roe": 0,
+      "dividend_yield": 5.47,
+      "revenue_growth": 0,
+      "profit_growth": 0
+    },
+    {
+      "symbol": "605266_sh",
+      "name": "",
+      "strategies": [
+        "价值",
+        "破净",
+        "高息"
+      ],
+      "score": 7,
+      "reasons": [
+        "PE=16.0, PB=0.9, 股息率=7.8%",
+        "PB=0.9",
+        "股息率=7.8%"
+      ],
+      "pe": 16.04,
+      "roe": 0,
+      "dividend_yield": 7.79,
+      "revenue_growth": 0,
+      "profit_growth": 0
+    },
+    {
+      "symbol": "601187_sh",
+      "name": "",
+      "strategies": [
+        "价值",
+        "破净",
+        "高息"
+      ],
+      "score": 7,
+      "reasons": [
+        "PE=7.1, PB=0.7, 股息率=4.2%",
+        "PB=0.7",
+        "股息率=4.2%"
+      ],
+      "pe": 7.1,
+      "roe": 0,
+      "dividend_yield": 4.16,
+      "revenue_growth": 0,
+      "profit_growth": 0
+    },
+    {
+      "symbol": "600035_sh",
+      "name": "",
+      "strategies": [
+        "价值",
+        "破净",
+        "高息"
+      ],
+      "score": 7,
+      "reasons": [
+        "PE=11.9, PB=0.7, 股息率=4.6%",
+        "PB=0.7",
+        "股息率=4.6%"
+      ],
+      "pe": 11.92,
+      "roe": 0,
+      "dividend_yield": 4.57,
+      "revenue_growth": 0,
+      "profit_growth": 0
+    },
+    {
+      "symbol": "300039_sz",
+      "name": "",
+      "strategies": [
+        "价值",
+        "破净",
+        "高息"
+      ],
+      "score": 7,
+      "reasons": [
+        "PE=17.2, PB=1.0, 股息率=3.1%",
+        "PB=1.0",
+        "股息率=3.1%"
+      ],
+      "pe": 17.19,
+      "roe": 0,
+      "dividend_yield": 3.05,
+      "revenue_growth": 0,
+      "profit_growth": 0
+    },
+    {
+      "symbol": "000528_sz",
+      "name": "",
+      "strategies": [
+        "价值",
+        "破净",
+        "高息"
+      ],
+      "score": 7,
+      "reasons": [
+        "PE=10.5, PB=0.9, 股息率=4.0%",
+        "PB=0.9",
+        "股息率=4.0%"
+      ],
+      "pe": 10.46,
+      "roe": 0,
+      "dividend_yield": 3.95,
+      "revenue_growth": 0,
+      "profit_growth": 0
+    },
+    {
+      "symbol": "601818_sh",
+      "name": "",
+      "strategies": [
+        "价值",
+        "破净",
+        "高息"
+      ],
+      "score": 7,
+      "reasons": [
+        "PE=4.8, PB=0.4, 股息率=6.2%",
+        "PB=0.4",
+        "股息率=6.2%"
+      ],
+      "pe": 4.81,
+      "roe": 0,
+      "dividend_yield": 6.17,
+      "revenue_growth": 0,
+      "profit_growth": 0
+    },
+    {
+      "symbol": "603368_sh",
+      "name": "",
+      "strategies": [
+        "价值",
+        "破净",
+        "高息"
+      ],
+      "score": 7,
+      "reasons": [
+        "PE=9.3, PB=0.8, 股息率=4.3%",
+        "PB=0.8",
+        "股息率=4.3%"
+      ],
+      "pe": 9.34,
+      "roe": 0,
+      "dividend_yield": 4.3,
+      "revenue_growth": 0,
+      "profit_growth": 0
+    }
+  ]
+}

@@ -1,0 +1,87 @@
+{
+  "date": "2026-06-23",
+  "buy": [
+    {
+      "symbol": "605266_sh",
+      "name": "",
+      "reason": "价值+破净+高息",
+      "score": 7,
+      "pe": 16.042,
+      "roe": null
+    },
+    {
+      "symbol": "300039_sz",
+      "name": "",
+      "reason": "价值+破净+高息",
+      "score": 7,
+      "pe": 17.194,
+      "roe": null
+    },
+    {
+      "symbol": "600035_sh",
+      "name": "",
+      "reason": "价值+破净+高息",
+      "score": 7,
+      "pe": 11.921,
+      "roe": null
+    },
+    {
+      "symbol": "603368_sh",
+      "name": "",
+      "reason": "价值+破净+高息",
+      "score": 7,
+      "pe": 9.3388,
+      "roe": null
+    },
+    {
+      "symbol": "000528_sz",
+      "name": "",
+      "reason": "价值+破净+高息",
+      "score": 7,
+      "pe": 10.4588,
+      "roe": null
+    },
+    {
+      "symbol": "000563_sz",
+      "name": "",
+      "reason": "价值+破净+高息",
+      "score": 7,
+      "pe": 10.9505,
+      "roe": null
+    },
+    {
+      "symbol": "600731_sh",
+      "name": "",
+      "reason": "价值+破净+高息",
+      "score": 7,
+      "pe": 12.7902,
+      "roe": null
+    },
+    {
+      "symbol": "601818_sh",
+      "name": "",
+      "reason": "价值+破净+高息",
+      "score": 7,
+      "pe": 4.8117,
+      "roe": null
+    },
+    {
+      "symbol": "601318_sh",
+      "name": "",
+      "reason": "价值+破净+高息",
+      "score": 7,
+      "pe": 6.7339,
+      "roe": null
+    },
+    {
+      "symbol": "601187_sh",
+      "name": "",
+      "reason": "价值+破净+高息",
+      "score": 7,
+      "pe": 7.1028,
+      "roe": null
+    }
+  ],
+  "sell": [],
+  "hold": []
+}

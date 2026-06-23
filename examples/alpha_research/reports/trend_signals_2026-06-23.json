@@ -1,0 +1,64 @@
+{
+  "report_date": "2026-06-23",
+  "scan_time": "14:00:00",
+  "data_coverage": {
+    "total_scanned": 8739,
+    "recent_data": 5503,
+    "strong_signals": 616,
+    "extremely_strong": 191,
+    "medium_signals": 217
+  },
+  "market_sentiment": "偏强 - 大量个股出现技术面突破信号",
+  "top_signals": [
+    {
+      "code": "000970_sz",
+      "score": 14,
+      "close": 14.52,
+      "signals": ["均线多头排列", "金叉(MA5>MA20)", "5日+29.8%", "20日+29.9%", "放量", "20日新高"],
+      "atr_pct": 4.2,
+      "risk_level": "中"
+    },
+    {
+      "code": "600007_sh",
+      "score": 13,
+      "close": 22.76,
+      "signals": ["均线多头排列", "金叉(MA5>MA20)", "5日+7.7%", "放量", "20日新高"],
+      "atr_pct": 3.1,
+      "risk_level": "低"
+    },
+    {
+      "code": "920261_bj",
+      "score": 13,
+      "close": 15.43,
+      "signals": ["均线多头排列", "金叉(MA5>MA20)", "5日+7.6%", "放量", "20日新高"],
+      "atr_pct": 3.0,
+      "risk_level": "低"
+    }
+  ],
+  "risk_warnings": [
+    {
+      "code": "301313_sz",
+      "mom_5d": 56.5,
+      "mom_20d": 47.0,
+      "warning": "短期涨幅过大，追高风险极高"
+    },
+    {
+      "code": "603929_sh",
+      "mom_5d": 48.4,
+      "mom_20d": 38.7,
+      "warning": "短期涨幅过大，追高风险极高"
+    },
+    {
+      "code": "920578_bj",
+      "mom_5d": 36.8,
+      "mom_20d": 39.6,
+      "warning": "短期涨幅过大，追高风险大"
+    }
+  ],
+  "recommendations": [
+    "市场整体偏强，191只个股出现极强技术信号",
+    "优先关注低ATR、稳健上涨品种（如600007_sh、920261_bj）",
+    "避免追高短期涨幅超过30%的个股",
+    "建议结合基本面和资金面进一步筛选"
+  ]
+}
