@@ -1,12 +1,78 @@
 """VNPY 统一 CLI 入口"""
 from __future__ import annotations
 
+import os
+import subprocess
 import sys
 
 import click
 
 from .utils.config import load_cli_config
 from .utils.logging import setup_logging
+from .utils.logging import get_logger as _get_logger
+
+
+def _ensure_tushare_token() -> str | None:
+    """Ensure TUSHARE_TOKEN is loaded from environment or ~/.zshrc.
+
+    Cron jobs run without an interactive shell, so ~/.zshrc is not sourced.
+    This function attempts to source it when the token is missing.
+
+    Returns the token source ('env', 'zshrc', '.env', or None).
+    """
+    import os as _os
+    import subprocess as _subprocess
+
+    # Already set via environment — nothing to do
+    if _os.environ.get('TUSHARE_TOKEN'):
+        logger = _get_logger(__name__)
+        logger.debug("TUSHARE_TOKEN: loaded from environment")
+        return 'env'
+
+    logger = _get_logger(__name__)
+
+    # Attempt 1: source ~/.zshrc and extract the token
+    zshrc = _os.path.expanduser('~/.zshrc')
+    if _os.path.exists(zshrc):
+        try:
+            result = _subprocess.run(
+                ['zsh', '-c', f'source {zshrc} && env | grep TUSHARE_TOKEN'],
+                capture_output=True, text=True, timeout=5,
+            )
+            for line in result.stdout.splitlines():
+                if line.startswith('TUSHARE_TOKEN='):
+                    token = line.split('=', 1)[1].strip()
+                    if token:
+                        _os.environ['TUSHARE_TOKEN'] = token
+                        logger.info(
+                            f"TUSHARE_TOKEN: sourced from ~/.zshrc "
+                            f"(masked: {token[:4]}...{token[-4:]})"
+                        )
+                        return 'zshrc'
+        except Exception as e:
+            logger.debug(f"Failed to source ~/.zshrc: {e}")
+
+    # Attempt 2: check .env in project root
+    project_root = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+    env_path = _os.path.join(project_root, '.env')
+    if _os.path.exists(env_path):
+        try:
+            with open(env_path) as f:
+                for line in f:
+                    if line.startswith('TUSHARE_TOKEN='):
+                        token = line.split('=', 1)[1].strip()
+                        if token:
+                            _os.environ['TUSHARE_TOKEN'] = token
+                            logger.info(
+                                f"TUSHARE_TOKEN: loaded from .env "
+                                f"(masked: {token[:4]}...{token[-4:]})"
+                            )
+                            return '.env'
+        except Exception as e:
+            logger.debug(f"Failed to read .env: {e}")
+
+    logger.warning("TUSHARE_TOKEN: not found (env, ~/.zshrc, or .env)")
+    return None
 
 
 CONTEXT_SETTINGS = dict(
@@ -58,7 +124,10 @@ def cli(ctx: click.Context, verbose: int, config_path: str | None,
         trace_id=trace_id,
     )
 
-    # 3. Inject into context
+    # 3. Ensure TUSHARE_TOKEN is available (fix cron env issue)
+    _ensure_tushare_token()
+
+    # 4. Inject into context
     ctx.ensure_object(dict)
     ctx.obj['config'] = cfg
     ctx.obj['verbose'] = verbose

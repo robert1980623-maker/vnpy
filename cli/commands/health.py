@@ -78,6 +78,60 @@ def _check_data() -> tuple[str, str]:
         return '❌', f"Error: {e}"
 
 
+def _check_env() -> tuple[str, str]:
+    """Check TUSHARE_TOKEN environment variable sourcing.
+
+    Returns (status, detail) where detail includes the token source.
+    """
+    import os as _os
+    token = _os.environ.get('TUSHARE_TOKEN', '')
+
+    if token:
+        masked = f"{token[:4]}...{token[-4:]}"
+        detail = f"TUSHARE_TOKEN configured ({masked})"
+
+        # Try to determine the source by re-running the sourcing logic
+        zshrc = _os.path.expanduser('~/.zshrc')
+        if _os.path.exists(zshrc):
+            try:
+                import subprocess
+                result = subprocess.run(
+                    ['zsh', '-c',
+                     f'source {zshrc} && echo "$TUSHARE_TOKEN"'],
+                    capture_output=True, text=True, timeout=5,
+                )
+                sourced = result.stdout.strip()
+                if sourced == token:
+                    detail += " [from ~/.zshrc]"
+                elif _os.environ.get('TUSHARE_TOKEN') == token:
+                    # It's already set before sourcing — must have been env
+                    pass
+            except Exception:
+                pass
+
+        # Fallback: if .env has the token
+        project_root = _os.path.dirname(
+            _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+        )
+        env_path = _os.path.join(project_root, '.env')
+        if _os.path.exists(env_path):
+            try:
+                with open(env_path) as f:
+                    for line in f:
+                        if line.startswith('TUSHARE_TOKEN=') and                                 line.split('=', 1)[1].strip() == token:
+                            detail += " [from .env]"
+                            break
+            except Exception:
+                pass
+
+        status = '✅'
+    else:
+        detail = "TUSHARE_TOKEN not set"
+        status = '❌'
+
+    return status, detail
+
+
 def _check_services() -> tuple[str, str]:
     """Check external service connectivity."""
     services = []
@@ -127,6 +181,13 @@ def health_services():
     click.echo(f"{status} Services: {detail}")
 
 
+@health.command(name='env')
+def health_env():
+    """检查环境变量加载 (TUSHARE_TOKEN 来源)"""
+    status, detail = _check_env()
+    click.echo(f"{status} Env:       {detail}")
+
+
 @health.command(name='all')
 def health_all():
     """全面健康检查"""
@@ -134,6 +195,9 @@ def health_all():
 
     sys_status, sys_detail = _check_system()
     click.echo(f"{sys_status} System:     {sys_detail}")
+
+    env_status, env_detail = _check_env()
+    click.echo(f"{env_status} Env:        {env_detail}")
 
     data_status, data_detail = _check_data()
     click.echo(f"{data_status} Data:       {data_detail}")

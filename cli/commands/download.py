@@ -1,6 +1,7 @@
 """vnpy download - 数据下载命令组"""
 from __future__ import annotations
 
+import os
 from datetime import datetime
 
 import click
@@ -74,6 +75,12 @@ def download_tushare(symbols, force, validate, dry_run):
         args.append('--validate')
 
     if dry_run:
+        token = os.environ.get('TUSHARE_TOKEN', '')
+        if token:
+            masked = f"{token[:4]}...{token[-4:]}"
+            click.echo(f"[DRY-RUN] TUSHARE_TOKEN: {masked}")
+        else:
+            click.echo("[DRY-RUN] TUSHARE_TOKEN: not set (⚠️ check env sourcing)")
         click.echo(f"[DRY-RUN] Would run: tushare_pro_downloader.py {' '.join(args)}")
         return
 

@@ -29,6 +29,7 @@ import os
 import signal
 import sys
 import time
+from collections import deque
 from concurrent.futures import ThreadPoolExecutor, as_completed, Future
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timedelta
@@ -81,50 +82,73 @@ except ImportError:
 
 # ==================== 限频控制 ====================
 
-class RateLimiter:
+class SlidingWindowRateLimiter:
     """
-    简单的令牌桶限流器（线程安全）
+    60s 滑动窗口计数器（线程安全）
 
-    用于控制 API 调用频率，避免触发数据源限频。
+    用于控制 API 调用频率，避免 burst。
     Tushare 限频 200次/分钟，默认设置 180次/分钟（留 10% 余量）。
+
+    相比简单间隔检查：
+    - 不允许任何 60s 窗口内超过 max_count 次调用
+    - 避免并发场景下的 burst 问题
     """
 
     def __init__(self, max_per_minute: int = 180):
-        self.interval = 60.0 / max_per_minute
+        self.max_count = max_per_minute
         self._lock = Lock()
-        self._last_call = 0.0
+        self._timestamps: deque = deque(maxlen=max_per_minute)
 
     def wait(self):
         """等待直到可以发起下一次调用"""
         with self._lock:
             now = time.time()
-            wait = self.interval - (now - self._last_call)
-            if wait > 0:
-                time.sleep(wait)
-            self._last_call = time.time()
+            # 移除 60s 之前的旧时间戳
+            while self._timestamps and now - self._timestamps[0] > 60:
+                self._timestamps.popleft()
+
+            # 如果已达上限，等待到最早的_timeStamp 超过 60s
+            if len(self._timestamps) >= self.max_count:
+                sleep_for = 60 - (now - self._timestamps[0]) + 0.01
+                time.sleep(sleep_for)
+
+            self._timestamps.append(time.time())
 
 
-class AsyncRateLimiter:
+# 向后兼容：保留 RateLimiter 类名作为滑动窗口的别名
+RateLimiter = SlidingWindowRateLimiter
+
+
+class AsyncSlidingWindowRateLimiter:
     """
-    异步令牌桶限流器（asyncio 协程安全）
+    异步 60s 滑动窗口计数器（asyncio 协程安全）
 
-    用于控制异步 API 调用频率，避免触发数据源限频。
-    与 RateLimiter 逻辑一致，但使用 asyncio.Lock + asyncio.sleep。
+    用于控制异步 API 调用频率，避免 burst。
     """
 
     def __init__(self, max_per_minute: int = 180):
-        self.interval = 60.0 / max_per_minute
+        self.max_count = max_per_minute
         self._lock = asyncio.Lock()
-        self._last_call = 0.0
+        self._timestamps: deque = deque(maxlen=max_per_minute)
 
     async def wait(self):
         """异步等待直到可以发起下一次调用"""
         async with self._lock:
             now = time.time()
-            wait = self.interval - (now - self._last_call)
-            if wait > 0:
-                await asyncio.sleep(wait)
-            self._last_call = time.time()
+            # 移除 60s 之前的旧时间戳
+            while self._timestamps and now - self._timestamps[0] > 60:
+                self._timestamps.popleft()
+
+            # 如果已达上限，计算等待时间
+            if len(self._timestamps) >= self.max_count:
+                sleep_for = 60 - (now - self._timestamps[0]) + 0.01
+                await asyncio.sleep(sleep_for)
+
+            self._timestamps.append(time.time())
+
+
+# 向后兼容：保留 AsyncRateLimiter 类名作为异步滑动窗口的别名
+AsyncRateLimiter = AsyncSlidingWindowRateLimiter
 
 # 导入底层下载函数（直接调用，不开子进程）
 from download_data_akshare import (
@@ -145,6 +169,19 @@ except ImportError:
 # 失败队列文件路径
 _FAILED_DOWNLOADS_FILE = Path(__file__).parent / 'failed_downloads.json'
 _FAILED_LOCK = Lock()
+
+# Phase 4B: 原子写入的失败队列（模块级单例，跨进程安全）
+from atomic_failed_queue import AtomicFailedQueue
+_failed_queue: Optional[AtomicFailedQueue] = None
+
+
+def _get_failed_queue() -> AtomicFailedQueue:
+    """获取模块级失败队列实例（懒初始化）"""
+    global _failed_queue
+    if _failed_queue is None:
+        _failed_queue = AtomicFailedQueue(_FAILED_DOWNLOADS_FILE)
+    return _failed_queue
+
 
 logger = logging.getLogger(__name__)
 
@@ -229,66 +266,46 @@ class DownloadResult:
         return self.validation.get('passed', False)
 
 
-# ==================== 失败队列 ====================
+# ==================== 失败队列（Phase 4B: 原子写入） ====================
 
 def load_failed_downloads() -> dict:
-    """加载失败队列（线程安全）"""
-    with _FAILED_LOCK:
-        if _FAILED_DOWNLOADS_FILE.exists():
-            try:
-                with open(_FAILED_DOWNLOADS_FILE, 'r') as f:
-                    return json.load(f)
-            except Exception:
-                return {}
-        return {}
+    """加载失败队列（线程安全 + 跨进程安全）
+
+    Phase 4B: 委托给 AtomicFailedQueue，使用 fsync + rename 原子读取。
+    """
+    return _get_failed_queue().get_all()
 
 
 def save_failed_downloads(failed: dict):
-    """保存失败队列（线程安全）"""
-    with _FAILED_LOCK:
-        with open(_FAILED_DOWNLOADS_FILE, 'w') as f:
-            json.dump(failed, f, indent=2)
+    """保存失败队列（线程安全 + 原子写入）
+
+    Phase 4B: 委托给 AtomicFailedQueue._save_atomic()。
+    """
+    _get_failed_queue()._save_atomic(failed)
 
 
 def add_to_failed_queue(symbol: str, error: str):
-    """添加失败股票到队列"""
-    with _FAILED_LOCK:
-        failed = {}
-        if _FAILED_DOWNLOADS_FILE.exists():
-            try:
-                with open(_FAILED_DOWNLOADS_FILE, 'r') as f:
-                    failed = json.load(f)
-            except Exception:
-                failed = {}
-        if symbol not in failed:
-            failed[symbol] = {'error': error, 'count': 1, 'last_try': datetime.now().isoformat()}
-        else:
-            failed[symbol]['count'] += 1
-            failed[symbol]['last_try'] = datetime.now().isoformat()
-        with open(_FAILED_DOWNLOADS_FILE, 'w') as f:
-            json.dump(failed, f, indent=2)
+    """添加失败股票到队列（原子写入）
+
+    Phase 4B: 使用 AtomicFailedQueue.add()，保证崩溃安全。
+    """
+    _get_failed_queue().add(symbol, error)
 
 
 def remove_from_failed_queue(symbol: str):
-    """从失败队列移除（成功后调用）"""
-    with _FAILED_LOCK:
-        if not _FAILED_DOWNLOADS_FILE.exists():
-            return
-        try:
-            with open(_FAILED_DOWNLOADS_FILE, 'r') as f:
-                failed = json.load(f)
-            if symbol in failed:
-                del failed[symbol]
-                with open(_FAILED_DOWNLOADS_FILE, 'w') as f:
-                    json.dump(failed, f, indent=2)
-        except Exception:
-            pass
+    """从失败队列移除（成功后调用，原子写入）
+
+    Phase 4B: 使用 AtomicFailedQueue.remove()。
+    """
+    _get_failed_queue().remove(symbol)
 
 
 def get_retry_candidates(max_retry_count: int = 3) -> list:
-    """获取可重试的股票（未超过最大重试次数）"""
-    failed = load_failed_downloads()
-    return [s for s, info in failed.items() if info['count'] < max_retry_count]
+    """获取可重试的股票（未超过最大重试次数）
+
+    Phase 4B: 使用 AtomicFailedQueue.get_retry_candidates()。
+    """
+    return _get_failed_queue().get_retry_candidates(max_retry_count)
 
 
 # ==================== DataDownloader ====================
@@ -422,12 +439,14 @@ class DataDownloader:
         self._shutdown_event = Event()
         # 上一次 batch 的部分结果（Ctrl+C 时保存已下载数据）
         self._last_partial_results: List[DownloadResult] = []
+        # Phase 4B: 原子写入的失败队列实例
+        self.failed_queue = AtomicFailedQueue(self._failed_file)
 
     # ---------- 增量检测 ----------
 
     def is_up_to_date(self, symbol: str, max_age_days: int = 1) -> bool:
         """
-        检查股票数据是否已是最新（优化：用 tail 读最后一行，不读全量）
+        检查股票数据是否已是最新（优化：用 seek 读文件末尾，不读全量）
 
         Args:
             symbol: 股票代码
@@ -440,27 +459,52 @@ class DataDownloader:
         if not csv_path.exists():
             return False
         try:
-            # Phase 3 Fix 1: 用 tail 只读最后 2 行（header + last row）
-            import subprocess
-            result = subprocess.run(
-                ['tail', '-2', str(csv_path)],
-                capture_output=True, text=True, timeout=5
-            )
-            if result.returncode != 0:
+            # Phase 4A Fix 1: 用 Python 原生 seek 读文件末尾 4KB（跨平台，无 subprocess 开销）
+            file_size = csv_path.stat().st_size
+            read_size = min(4096, file_size)
+            with open(csv_path, 'rb') as f:
+                f.seek(file_size - read_size)
+                tail = f.read(read_size).decode('utf-8', errors='ignore')
+
+            # 处理文件末尾有换行符的情况（.getLast_line 会多余的空行）
+            tail_lines = tail.split('\n')
+            # 移除尾部空行
+            while tail_lines and not tail_lines[-1].strip():
+                tail_lines.pop()
+
+            if not tail_lines:
                 return False
-            lines = result.stdout.strip().split('\n')
-            if len(lines) < 2:
+            if len(tail_lines) == 1:
+                # 只有一行：可能是只有 header，或者没有换行符结尾的单行数据
+                first_line = tail_lines[0].strip()
+                if not first_line:
+                    return False
+                if first_line.startswith('date,'):
+                    return False
+                last_line = first_line
+            elif len(tail_lines) == 2:
+                # 两行可能是：[header, data] 或 [data, data]
+                # 检查第一行是否为 header
+                if tail_lines[0].strip().startswith('date,'):
+                    # 正常情况：header + data（无尾部换行符）
+                    last_line = tail_lines[1].strip()
+                else:
+                    # 两行都是数据，用最后一行
+                    last_line = tail_lines[-1].strip()
+            else:
+                last_line = tail_lines[-2].strip()  # 倒数第二行是最后一条数据
+
+            if not last_line:
                 return False
-            # 解析 header 和 last row
-            header = lines[0].split(',')
-            last_row = dict(zip(header, lines[1].split(',')))
-            # 找日期列
-            for col in ['date', 'datetime', 'trade_date']:
-                if col in last_row:
-                    last_date = pd.to_datetime(last_row[col]).date()
-                    threshold = datetime.now().date() - timedelta(days=max_age_days)
-                    return last_date >= threshold
-            return False
+
+            # 解析最后一行，找日期列
+            first_col = last_line.split(',', 1)[0]
+            last_date = pd.to_datetime(first_col, errors='coerce')
+            if pd.isna(last_date):
+                return False
+
+            threshold = datetime.now().date() - timedelta(days=max_age_days)
+            return last_date.date() >= threshold
         except Exception as e:
             logger.debug(f"增量检测失败 {symbol}: {e}")
             return False
@@ -516,7 +560,7 @@ class DataDownloader:
                 df, source_name = self._source_manager.fetch(symbol, None, None)
                 if df is not None and not df.empty:
                     self._save_bars(symbol, df)
-                    remove_from_failed_queue(symbol)
+                    self.failed_queue.remove(symbol)  # Phase 4B: 原子写入
                     validation = self._run_validation(symbol, df)
                     with self._stats_lock:
                         self._stats['multi_source'] += 1
@@ -554,7 +598,7 @@ class DataDownloader:
                 bars = source_fn(symbol, None, None)
                 if bars is not None and not bars.empty:
                     self._save_bars(symbol, bars)
-                    remove_from_failed_queue(symbol)
+                    self.failed_queue.remove(symbol)  # Phase 4B: 原子写入
                     validation = self._run_validation(symbol, bars)
                     return DownloadResult(
                         symbol=symbol,
@@ -574,7 +618,7 @@ class DataDownloader:
                 delay *= 2
 
         # 全部失败
-        add_to_failed_queue(symbol, last_error or "未知错误")
+        self.failed_queue.add(symbol, last_error or "未知错误")  # Phase 4B: 原子写入
         return DownloadResult(
             symbol=symbol,
             status='failed',
@@ -826,7 +870,7 @@ class DataDownloader:
                             source='none',
                             error=str(e),
                         )
-                        add_to_failed_queue(symbol, str(e))
+                        self.failed_queue.add(symbol, str(e))  # Phase 4B
                     self._update_stats(result)
                     results.append(result)
                     pbar.update(1)
@@ -936,7 +980,7 @@ class DataDownloader:
                 )
                 if df is not None and not df.empty:
                     await asyncio.to_thread(self._save_bars, symbol, df)
-                    await asyncio.to_thread(remove_from_failed_queue, symbol)
+                    await asyncio.to_thread(self.failed_queue.remove, symbol)  # Phase 4B
                     validation = await asyncio.to_thread(self._run_validation, symbol, df)
                     with self._stats_lock:
                         self._stats['multi_source'] += 1
@@ -973,7 +1017,7 @@ class DataDownloader:
                 bars = await asyncio.to_thread(source_fn, symbol, None, None)
                 if bars is not None and not bars.empty:
                     await asyncio.to_thread(self._save_bars, symbol, bars)
-                    await asyncio.to_thread(remove_from_failed_queue, symbol)
+                    await asyncio.to_thread(self.failed_queue.remove, symbol)  # Phase 4B
                     validation = await asyncio.to_thread(self._run_validation, symbol, bars)
                     return DownloadResult(
                         symbol=symbol,
@@ -993,7 +1037,7 @@ class DataDownloader:
                 delay *= 2
 
         # 全部失败
-        await asyncio.to_thread(add_to_failed_queue, symbol, last_error or "未知错误")
+        await asyncio.to_thread(self.failed_queue.add, symbol, last_error or "未知错误")  # Phase 4B
         return DownloadResult(
             symbol=symbol,
             status='failed',
@@ -1070,7 +1114,7 @@ class DataDownloader:
                             source='none',
                             error=str(e),
                         )
-                        await asyncio.to_thread(add_to_failed_queue, symbol, str(e))
+                        await asyncio.to_thread(self.failed_queue.add, symbol, str(e))  # Phase 4B
                     await asyncio.to_thread(self._update_stats, result)
                     processed.append(result)
                     pbar.update(1)
