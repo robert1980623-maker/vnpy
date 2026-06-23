@@ -1,6 +1,7 @@
 """
 账户数据库访问层
 SQLite 持久化封装
+Phase 5: 使用连接池优化并发性能
 """
 import sqlite3
 import json
@@ -37,13 +38,21 @@ DB_PATH = Path(__file__).parent / "trading.db"
 INIT_LOCK_FILE = Path(__file__).parent / ".init_db.lock"
 
 
+# 导入连接池
+from accounts.connection_pool import get_connection_pool
+
+
 def get_connection():
-    """获取数据库连接（启用 WAL 模式解决 AL-02 并发写入问题）"""
-    conn = sqlite3.connect(DB_PATH, timeout=30)  # 30秒 busy timeout
-    conn.row_factory = sqlite3.Row
-    # 启用 WAL 模式：支持并发读写，提升并发性能
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA busy_timeout=30000")  # 30秒等待锁
+    """获取数据库连接（通过连接池，用于向后兼容）
+
+    注意: 使用此函数获取的连接需要手动 close，连接会返回到池中。
+    更推荐使用 pool.get_connection() with 语句自动管理。
+
+    Returns:
+        sqlite3.Connection: 数据库连接
+    """
+    pool = get_connection_pool()
+    conn = pool._acquire(timeout=5.0)
     return conn
 
 
@@ -52,7 +61,7 @@ def init_db():
     # 使用文件锁确保只有一个进程能初始化数据库
     lock_file = INIT_LOCK_FILE
     lock_file.touch(exist_ok=True)
-    
+
     if sys.platform == 'win32':
         import threading
         global _init_db_locks
@@ -80,11 +89,14 @@ def _init_db_unlocked():
     with open(schema_path) as f:
         schema = f.read()
 
-    conn = get_connection()
-    conn.executescript(schema)
-    _migrate_db(conn)
-    conn.commit()
-    conn.close()
+    pool = get_connection_pool()
+    conn = pool._acquire(timeout=5.0)
+    try:
+        conn.executescript(schema)
+        _migrate_db(conn)
+        conn.commit()
+    finally:
+        pool._release(conn)
 
 
 def _migrate_db(conn):
@@ -140,19 +152,20 @@ class Position:
 
 class AccountDB:
     """账户数据库操作类"""
-    
+
     def __init__(self):
         init_db()
-    
+
     # ==================== 账户操作 ====================
-    
+
     def create_account(self, account: Account) -> bool:
         """创建账户"""
-        conn = get_connection()
+        pool = get_connection_pool()
+        conn = pool._acquire(timeout=5.0)
         try:
             conn.execute("""
-                INSERT INTO accounts (account_id, account_name, account_type, 
-                    initial_capital, cash, currency, status, risk_level, 
+                INSERT INTO accounts (account_id, account_name, account_type,
+                    initial_capital, cash, currency, status, risk_level,
                     created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
@@ -165,25 +178,27 @@ class AccountDB:
         except sqlite3.IntegrityError:
             return False  # 账户已存在
         finally:
-            conn.close()
-    
+            pool._release(conn)
+
     def get_account(self, account_id: str) -> Optional[Account]:
         """获取账户"""
-        conn = get_connection()
+        pool = get_connection_pool()
+        conn = pool._acquire(timeout=5.0)
         try:
             row = conn.execute(
-                "SELECT * FROM accounts WHERE account_id = ?", 
+                "SELECT * FROM accounts WHERE account_id = ?",
                 (account_id,)
             ).fetchone()
             if row:
                 return Account(**dict(row))
             return None
         finally:
-            conn.close()
-    
+            pool._release(conn)
+
     def update_cash(self, account_id: str, cash: float) -> bool:
         """更新现金"""
-        conn = get_connection()
+        pool = get_connection_pool()
+        conn = pool._acquire(timeout=5.0)
         try:
             conn.execute(
                 "UPDATE accounts SET cash = ?, updated_at = ? WHERE account_id = ?",
@@ -192,22 +207,23 @@ class AccountDB:
             conn.commit()
             return True
         finally:
-            conn.close()
-    
+            pool._release(conn)
+
     # ==================== 持仓操作 ====================
-    
+
     def update_position(
-        self, account_id: str, symbol: str, quantity: int, 
+        self, account_id: str, symbol: str, quantity: int,
         avg_cost: float, current_price: float = 0
     ) -> bool:
         """更新持仓"""
-        conn = get_connection()
+        pool = get_connection_pool()
+        conn = pool._acquire(timeout=5.0)
         market_value = quantity * current_price
         unrealized_pnl = quantity * (current_price - avg_cost)
-        
+
         try:
             conn.execute("""
-                INSERT INTO positions (account_id, symbol, quantity, avg_cost, 
+                INSERT INTO positions (account_id, symbol, quantity, avg_cost,
                     current_price, market_value, unrealized_pnl, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(account_id, symbol) DO UPDATE SET
@@ -217,16 +233,17 @@ class AccountDB:
                     market_value = excluded.market_value,
                     unrealized_pnl = excluded.unrealized_pnl,
                     updated_at = excluded.updated_at
-            """, (account_id, symbol, quantity, avg_cost, current_price, 
+            """, (account_id, symbol, quantity, avg_cost, current_price,
                   market_value, unrealized_pnl, datetime.now().isoformat()))
             conn.commit()
             return True
         finally:
-            conn.close()
-    
+            pool._release(conn)
+
     def get_positions(self, account_id: str) -> List[Position]:
         """获取所有持仓"""
-        conn = get_connection()
+        pool = get_connection_pool()
+        conn = pool._acquire(timeout=5.0)
         try:
             rows = conn.execute(
                 "SELECT * FROM positions WHERE account_id = ? AND quantity > 0",
@@ -234,22 +251,56 @@ class AccountDB:
             ).fetchall()
             return [Position(**dict(row)) for row in rows]
         finally:
-            conn.close()
-    
+            pool._release(conn)
+
+    def get_positions_batch(self, account_ids: List[str]) -> Dict[str, List[Position]]:
+        """批量获取多个账户的持仓
+
+        Args:
+            account_ids: 账户ID列表
+
+        Returns:
+            Dict[str, List[Position]]: 账户ID -> 持仓列表的映射
+        """
+        if not account_ids:
+            return {}
+
+        pool = get_connection_pool()
+        conn = pool._acquire(timeout=5.0)
+        try:
+            placeholders = ",".join("?" * len(account_ids))
+            query = f"""
+                SELECT account_id, symbol, symbol_name, quantity, avg_cost,
+                       current_price, market_value, unrealized_pnl, updated_at
+                FROM positions
+                WHERE account_id IN ({placeholders}) AND quantity > 0
+            """
+            rows = conn.execute(query, account_ids).fetchall()
+
+            # 按 account_id 分组
+            result: Dict[str, List[Position]] = {aid: [] for aid in account_ids}
+            for row in rows:
+                pos = Position(**dict(row))
+                result[pos.account_id].append(pos)
+            return result
+        finally:
+            pool._release(conn)
+
     # ==================== 交易记录 ====================
-    
+
     def add_trade(
         self, account_id: str, symbol: str, trade_type: str,
         quantity: int, price: float, commission: float = 0,
         symbol_name: str = "", order_id: str = None
     ) -> int:
         """添加交易记录"""
-        conn = get_connection()
+        pool = get_connection_pool()
+        conn = pool._acquire(timeout=5.0)
         amount = quantity * price
         now = datetime.now()
         trade_date = now.strftime('%Y%m%d')
         trade_time = now.strftime('%H:%M:%S')
-        
+
         try:
             cursor = conn.execute("""
                 INSERT INTO trades (account_id, symbol, symbol_name, trade_type,
@@ -262,11 +313,12 @@ class AccountDB:
             conn.commit()
             return cursor.lastrowid
         finally:
-            conn.close()
-    
+            pool._release(conn)
+
     def get_trades(self, account_id: str, limit: int = 100) -> List[Dict]:
         """获取交易记录"""
-        conn = get_connection()
+        pool = get_connection_pool()
+        conn = pool._acquire(timeout=5.0)
         try:
             rows = conn.execute(
                 "SELECT * FROM trades WHERE account_id = ? ORDER BY created_at DESC LIMIT ?",
@@ -274,15 +326,48 @@ class AccountDB:
             ).fetchall()
             return [dict(row) for row in rows]
         finally:
-            conn.close()
-    
+            pool._release(conn)
+
+    def get_trades_batch(self, account_ids: List[str], limit: int = 100) -> Dict[str, List[Dict]]:
+        """批量获取多个账户的交易记录
+
+        Args:
+            account_ids: 账户ID列表
+            limit: 每个账户的交易记录数上限
+
+        Returns:
+            Dict[str, List[Dict]]: 账户ID -> 交易记录列表的映射
+        """
+        if not account_ids:
+            return {}
+
+        pool = get_connection_pool()
+        conn = pool._acquire(timeout=5.0)
+        try:
+            placeholders = ",".join("?" * len(account_ids))
+            query = f"""
+                SELECT * FROM trades
+                WHERE account_id IN ({placeholders})
+                ORDER BY created_at DESC LIMIT ?
+            """
+            rows = conn.execute(query, account_ids + [limit]).fetchall()
+            result: Dict[str, List[Dict]] = {aid: [] for aid in account_ids}
+
+            for row in rows:
+                d = dict(row)
+                result[d['account_id']].append(d)
+            return result
+        finally:
+            pool._release(conn)
+
     # ==================== 快照操作 ====================
-    
+
     def save_snapshot(self, account_id: str, trade_date: str,
                       cash: float, market_value: float,
                       realized_pnl: float = 0, unrealized_pnl: float = 0) -> bool:
         """保存每日快照"""
-        conn = get_connection()
+        pool = get_connection_pool()
+        conn = pool._acquire(timeout=5.0)
         total_assets = cash + market_value
 
         try:
@@ -302,13 +387,86 @@ class AccountDB:
             conn.commit()
             return True
         finally:
-            conn.close()
-    
+            pool._release(conn)
+
+    def get_balance_batch(self, account_ids: List[str]) -> Dict[str, Dict]:
+        """批量获取多个账户的余额信息
+
+        Args:
+            account_ids: 账户ID列表
+
+        Returns:
+            Dict[str, Dict]: 账户ID -> 余额信息的映射
+        """
+        if not account_ids:
+            return {}
+
+        pool = get_connection_pool()
+        conn = pool._acquire(timeout=5.0)
+        try:
+            # 获取账户余额
+            placeholders = ",".join("?" * len(account_ids))
+            accounts_query = f"""
+                SELECT account_id, cash, initial_capital, status
+                FROM accounts
+                WHERE account_id IN ({placeholders})
+            """
+            accounts = conn.execute(accounts_query, account_ids).fetchall()
+
+            # 获取持仓总市值
+            positions_query = f"""
+                SELECT account_id, SUM(market_value) as total_mv,
+                       SUM(unrealized_pnl) as total_pnl, COUNT(*) as pos_count
+                FROM positions
+                WHERE account_id IN ({placeholders}) AND quantity > 0
+                GROUP BY account_id
+            """
+            positions = conn.execute(positions_query, account_ids).fetchall()
+
+            # 构建结果
+            result: Dict[str, Dict] = {}
+            for row in accounts:
+                aid = row['account_id']
+                result[aid] = {
+                    'account_id': aid,
+                    'cash': row['cash'],
+                    'initial_capital': row['initial_capital'],
+                    'status': row['status'],
+                    'total_market_value': 0,
+                    'unrealized_pnl': 0,
+                    'positions_count': 0,
+                }
+
+            for row in positions:
+                aid = row['account_id']
+                if aid in result:
+                    result[aid]['total_market_value'] = row['total_mv'] or 0
+                    result[aid]['unrealized_pnl'] = row['total_pnl'] or 0
+                    result[aid]['positions_count'] = row['pos_count'] or 0
+
+            # 补充没有持仓的账户
+            for aid in account_ids:
+                if aid not in result:
+                    result[aid] = {
+                        'account_id': aid,
+                        'cash': 0,
+                        'initial_capital': 0,
+                        'status': 'unknown',
+                        'total_market_value': 0,
+                        'unrealized_pnl': 0,
+                        'positions_count': 0,
+                    }
+
+            return result
+        finally:
+            pool._release(conn)
+
     # ==================== 工具方法 ====================
 
     def get_account_summary(self, account_id: str) -> Dict:
         """获取账户摘要"""
-        conn = get_connection()
+        pool = get_connection_pool()
+        conn = pool._acquire(timeout=5.0)
         try:
             # 账户信息
             account = conn.execute(
@@ -337,7 +495,7 @@ class AccountDB:
                 'trades_today': trades_today
             }
         finally:
-            conn.close()
+            pool._release(conn)
 
     def execute_in_transaction(self, operations: list) -> any:
         """在单个事务内执行多个数据库操作
@@ -370,7 +528,8 @@ class AccountDB:
             result = db.execute_in_transaction([compute])
             # result == some_value
         """
-        conn = get_connection()
+        pool = get_connection_pool()
+        conn = pool._acquire(timeout=5.0)
         try:
             last_result = None
             has_result = False
@@ -388,11 +547,12 @@ class AccountDB:
             logger.error(f"Transaction failed, rolled back: {e}")
             raise
         finally:
-            conn.close()
+            pool._release(conn)
 
 
 # 初始化并导出单例
 _db = None
+
 
 def get_db() -> AccountDB:
     global _db
@@ -404,7 +564,7 @@ def get_db() -> AccountDB:
 if __name__ == '__main__':
     # 测试
     db = get_db()
-    
+
     # 创建 robert 账户（如果不存在）
     if not db.get_account('robert'):
         account = Account(
@@ -415,7 +575,7 @@ if __name__ == '__main__':
         )
         db.create_account(account)
         print("✅ 账户 robert 已创建")
-    
+
     # 获取摘要
     summary = db.get_account_summary('robert')
     print(f"\n📊 账户摘要:")
@@ -427,30 +587,30 @@ if __name__ == '__main__':
 
 class TradingAccount(AccountDB):
     """交易账户（支持买卖操作）"""
-    
+
     def __init__(self, account_id: str):
         super().__init__()
         self.account_id = account_id
         self.account = self.get_account(account_id)
         if not self.account:
             raise ValueError(f"账户 {account_id} 不存在")
-    
+
     @property
     def cash(self) -> float:
         """当前现金"""
         return self.account.cash
-    
+
     @property
     def positions(self) -> List[Position]:
         """当前持仓"""
         return self.get_positions(self.account_id)
-    
-    def can_buy(self, symbol: str, quantity: int, price: float, 
+
+    def can_buy(self, symbol: str, quantity: int, price: float,
                 commission_rate: float = 0.0003) -> bool:
         """检查是否可以买入"""
         required = quantity * price * (1 + commission_rate)
         return self.cash >= required
-    
+
     def buy(self, symbol: str, quantity: int, price: float,
             symbol_name: str = "", commission_rate: float = 0.0003) -> Dict:
         """
@@ -459,14 +619,14 @@ class TradingAccount(AccountDB):
         """
         commission = quantity * price * commission_rate
         total_cost = quantity * price + commission
-        
+
         if not self.can_buy(symbol, quantity, price, commission_rate):
             return {
-                'success': False, 
+                'success': False,
                 'message': f'现金不足，需要 ¥{total_cost:,.2f}，当前可用 ¥{self.cash:,.2f}',
                 'trade_id': None
             }
-        
+
         # 记录交易
         trade_id = self.add_trade(
             account_id=self.account_id,
@@ -477,11 +637,11 @@ class TradingAccount(AccountDB):
             commission=commission,
             symbol_name=symbol_name
         )
-        
+
         # 更新现金
         new_cash = self.cash - total_cost
         self.update_cash(self.account_id, new_cash)
-        
+
         # 更新持仓
         current_pos = self.get_position(symbol)
         if current_pos:
@@ -492,10 +652,10 @@ class TradingAccount(AccountDB):
         else:
             # 新建持仓
             self.update_position(self.account_id, symbol, quantity, price, price)
-        
+
         # 刷新账户
         self.account = self.get_account(self.account_id)
-        
+
         return {
             'success': True,
             'message': f'买入 {symbol} {quantity}股 @ ¥{price:.2f}',
@@ -503,10 +663,11 @@ class TradingAccount(AccountDB):
             'cost': total_cost,
             'remaining_cash': new_cash
         }
-    
+
     def get_position(self, symbol: str) -> Optional[Position]:
         """获取单只股票持仓"""
-        conn = get_connection()
+        pool = get_connection_pool()
+        conn = pool._acquire(timeout=5.0)
         try:
             row = conn.execute(
                 "SELECT * FROM positions WHERE account_id = ? AND symbol = ?",
@@ -514,8 +675,8 @@ class TradingAccount(AccountDB):
             ).fetchone()
             return Position(**dict(row)) if row else None
         finally:
-            conn.close()
-    
+            pool._release(conn)
+
     def sell(self, symbol: str, quantity: int, price: float,
              commission_rate: float = 0.0003) -> Dict:
         """
@@ -528,10 +689,10 @@ class TradingAccount(AccountDB):
                 'message': f'持仓不足，当前 {pos.quantity if pos else 0} 股，需要 {quantity} 股',
                 'trade_id': None
             }
-        
+
         commission = quantity * price * commission_rate
         proceeds = quantity * price - commission
-        
+
         # 记录交易
         trade_id = self.add_trade(
             account_id=self.account_id,
@@ -541,28 +702,31 @@ class TradingAccount(AccountDB):
             price=price,
             commission=commission
         )
-        
+
         # 更新现金
         new_cash = self.cash + proceeds
         self.update_cash(self.account_id, new_cash)
-        
+
         # 更新持仓
         remaining = pos.quantity - quantity
         if remaining > 0:
             self.update_position(self.account_id, symbol, remaining, pos.avg_cost, price)
         else:
             # 清仓
-            conn = get_connection()
-            conn.execute(
-                "DELETE FROM positions WHERE account_id = ? AND symbol = ?",
-                (self.account_id, symbol)
-            )
-            conn.commit()
-            conn.close()
-        
+            pool = get_connection_pool()
+            conn = pool._acquire(timeout=5.0)
+            try:
+                conn.execute(
+                    "DELETE FROM positions WHERE account_id = ? AND symbol = ?",
+                    (self.account_id, symbol)
+                )
+                conn.commit()
+            finally:
+                pool._release(conn)
+
         # 刷新账户
         self.account = self.get_account(self.account_id)
-        
+
         return {
             'success': True,
             'message': f'卖出 {symbol} {quantity}股 @ ¥{price:.2f}',
@@ -570,31 +734,35 @@ class TradingAccount(AccountDB):
             'proceeds': proceeds,
             'remaining_cash': new_cash
         }
-    
+
     def get_total_assets(self) -> float:
         """总资产 = 现金 + 持仓市值"""
         positions = self.positions
         market_value = sum(p.market_value for p in positions)
         return self.cash + market_value
-    
+
     def get_pnl(self) -> Dict:
         """盈亏统计"""
         positions = self.positions
         unrealized = sum(p.unrealized_pnl for p in positions)
-        
+
         # 已实现盈亏（需要从交易记录计算）
-        conn = get_connection()
-        result = conn.execute("""
-            SELECT 
-                SUM(CASE WHEN trade_type = 'SELL' THEN amount - commission ELSE 0 END) -
-                SUM(CASE WHEN trade_type = 'BUY' THEN amount + commission ELSE 0 END) as realized
-            FROM trades WHERE account_id = ?
-        """, (self.account_id,)).fetchone()
-        realized = result['realized'] or 0
-        
-        return {
-            'unrealized_pnl': unrealized,
-            'realized_pnl': realized,
-            'total_pnl': unrealized + realized,
-            'return_pct': (unrealized + realized) / self.account.initial_capital * 100
-        }
+        pool = get_connection_pool()
+        conn = pool._acquire(timeout=5.0)
+        try:
+            result = conn.execute("""
+                SELECT
+                    SUM(CASE WHEN trade_type = 'SELL' THEN amount - commission ELSE 0 END) -
+                    SUM(CASE WHEN trade_type = 'BUY' THEN amount + commission ELSE 0 END) as realized
+                FROM trades WHERE account_id = ?
+            """, (self.account_id,)).fetchone()
+            realized = result['realized'] or 0
+
+            return {
+                'unrealized_pnl': unrealized,
+                'realized_pnl': realized,
+                'total_pnl': unrealized + realized,
+                'return_pct': (unrealized + realized) / self.account.initial_capital * 100
+            }
+        finally:
+            pool._release(conn)

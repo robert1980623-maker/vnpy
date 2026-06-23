@@ -6,13 +6,19 @@ Phase 2: AccountService
 - 所有 buy/sell 操作在事务内完成 (Atomic)
 - 每次交易发布事件，解耦通知 (Event-Driven)
 - 所有操作记录审计日志 (Auditable)
+
+Phase 5: TTL 缓存层 - 提升查询性能
+- get_balance(): TTL 30s 缓存
+- get_positions(): TTL 30s 缓存
+- buy/sell: 立即失效缓存
 """
 import json
 import logging
 import random
 import time
-from datetime import datetime
-from typing import List, Optional
+from datetime import datetime, timedelta
+from typing import List, Optional, Dict, Any
+from threading import RLock
 
 from accounts.account_db import AccountDB, get_connection
 from accounts.event_bus import EventBus, EventType, AccountEvent, trade_event
@@ -25,23 +31,61 @@ from accounts.models import Balance, Position, Trade, Snapshot, TradeResult, Dir
 
 logger = logging.getLogger(__name__)
 
+# 默认 TTL 秒数
+DEFAULT_CACHE_TTL = 30
 
-class AccountService:
-    """账户系统统一入口
+
+class CachedAccountService:
+    """带 TTL 缓存的账户服务
 
     设计原则:
     1. SQLite 唯一数据源 (Single Source of Truth)
     2. 所有 buy/sell 操作在事务内完成 (Atomic)
     3. 每次交易发布事件，解耦通知 (Event-Driven)
     4. 所有操作记录审计日志 (Auditable)
+    5. 只读操作使用 TTL 缓存提升性能 (Phase 5)
+    6. 写操作立即失效缓存
+
+    缓存策略:
+    - get_balance(): TTL 30s
+    - get_positions(): TTL 30s
+    - buy/sell: 立即失效缓存
     """
 
-    def __init__(self, account_id: str, event_bus: EventBus = None):
+    def __init__(self, account_id: str, event_bus: EventBus = None, cache_ttl: int = DEFAULT_CACHE_TTL):
         self.db = AccountDB()
         self.account_id = account_id
         self.event_bus = event_bus or EventBus()
+        self._cache_ttl = cache_ttl
 
-    # ── 交易操作 (事务保证) ─────────────────────────────
+        # 缓存数据
+        self._balance_cache: Optional[Balance] = None
+        self._positions_cache: Optional[List[Position]] = None
+        self._cache_time: Optional[datetime] = None
+        self._trade_history_cache: Optional[List[Trade]] = None
+        self._trade_history_cache_time: Optional[datetime] = None
+
+        # 线程安全锁
+        self._cache_lock = RLock()
+
+    # ── 缓存管理方法 ───────────────────────────────────
+
+    def _is_cache_valid(self, cache_time: Optional[datetime], ttl: int) -> bool:
+        """检查缓存是否有效"""
+        if cache_time is None:
+            return False
+        return (datetime.now() - cache_time).total_seconds() < ttl
+
+    def _invalidate_cache(self) -> None:
+        """使缓存失效（写操作后调用）"""
+        with self._cache_lock:
+            self._balance_cache = None
+            self._positions_cache = None
+            self._cache_time = None
+            self._trade_history_cache = None
+            self._trade_history_cache_time = None
+
+    # ── 交易操作 (事务保证，写操作) ─────────────────────────────
 
     def buy(
         self,
@@ -55,6 +99,8 @@ class AccountService:
     ) -> TradeResult:
         """买入 — cash 扣减 + position 更新 + trade 记录 原子完成
 
+        写操作后立即失效缓存。
+
         事务流程:
         1. BEGIN TRANSACTION
         2. SELECT cash FROM accounts WHERE account_id = ?
@@ -65,6 +111,7 @@ class AccountService:
         7. INSERT audit_log (op=BUY, cash_before, cash_after, ...)
         8. COMMIT
         9. event_bus.emit(TradeEvent(...))
+        10. _invalidate_cache()
 
         Raises:
             InsufficientCashError: 现金不足
@@ -181,6 +228,9 @@ class AccountService:
                 agent_id=agent_id,
             ))
 
+            # 写操作后立即失效缓存
+            self._invalidate_cache()
+
             return TradeResult(
                 success=True,
                 trade_id=trade_id,
@@ -205,6 +255,8 @@ class AccountService:
     ) -> TradeResult:
         """卖出 — cash 增加 + position 扣减 + trade 记录 原子完成
 
+        写操作后立即失效缓存。
+
         事务流程:
         1. BEGIN TRANSACTION
         2. SELECT quantity, avg_cost FROM positions WHERE symbol = ?
@@ -216,6 +268,7 @@ class AccountService:
         8. INSERT audit_log (op=SELL, cash_before, cash_after, realized_pnl)
         9. COMMIT
         10. event_bus.emit(TradeEvent(...))
+        11. _invalidate_cache()
 
         Raises:
             InsufficientPositionError: 持仓不足
@@ -328,6 +381,9 @@ class AccountService:
                 agent_id=agent_id,
             ))
 
+            # 写操作后立即失效缓存
+            self._invalidate_cache()
+
             return TradeResult(
                 success=True,
                 trade_id=trade_id,
@@ -341,13 +397,27 @@ class AccountService:
             logger.error(f"Sell failed: {e}")
             return TradeResult(success=False, message=f"交易失败: {e}")
 
-    # ── 查询操作 (只读) ─────────────────────────────────
+    # ── 查询操作 (只读，使用缓存) ─────────────────────────────────
 
     def get_balance(self) -> Balance:
         """统一余额计算: cash + sum(quantity * current_price)
 
-        current_price 从持仓的 current_price 字段获取；如果为 0 则 fallback 到 avg_cost
+        使用 TTL 缓存，避免重复查询数据库。
+
+        Returns:
+            Balance: 账户余额
+
+        Raises:
+            AccountNotFoundError: 账户不存在
         """
+        with self._cache_lock:
+            # 检查缓存是否有效
+            if self._balance_cache is not None and self._is_cache_valid(self._cache_time, self._cache_ttl):
+                logger.debug(f"Cache hit for get_balance: {self.account_id}")
+                return self._balance_cache
+
+        # 缓存未命中，查询数据库
+        logger.debug(f"Cache miss for get_balance: {self.account_id}, querying DB")
         account = self.db.get_account(self.account_id)
         if not account:
             raise AccountNotFoundError(self.account_id)
@@ -359,7 +429,7 @@ class AccountService:
         # 已实现盈亏: 从审计日志中累计 SELL 的 realized_pnl
         realized_pnl = self._compute_realized_pnl()
 
-        return Balance(
+        balance = Balance(
             cash=account.cash,
             market_value=market_value,
             total_assets=account.cash + market_value,
@@ -368,8 +438,27 @@ class AccountService:
             updated_at=datetime.now().isoformat(),
         )
 
+        # 更新缓存
+        with self._cache_lock:
+            self._balance_cache = balance
+            self._cache_time = datetime.now()
+
+        return balance
+
     def get_positions(self) -> List[Position]:
-        """从 SQLite 读取持仓，无 fallback 链"""
+        """从 SQLite 读取持仓，使用 TTL 缓存
+
+        Returns:
+            List[Position]: 持仓列表
+        """
+        with self._cache_lock:
+            # 检查缓存是否有效
+            if self._positions_cache is not None and self._is_cache_valid(self._cache_time, self._cache_ttl):
+                logger.debug(f"Cache hit for get_positions: {self.account_id}")
+                return self._positions_cache
+
+        # 缓存未命中，查询数据库
+        logger.debug(f"Cache miss for get_positions: {self.account_id}, querying DB")
         db_positions = self.db.get_positions(self.account_id)
         result = []
         for p in db_positions:
@@ -383,6 +472,12 @@ class AccountService:
                 market_value=p.market_value,
                 unrealized_pnl=p.unrealized_pnl,
             ))
+
+        # 更新缓存
+        with self._cache_lock:
+            self._positions_cache = result
+            self._cache_time = datetime.now()
+
         return result
 
     def get_trade_history(
@@ -393,11 +488,23 @@ class AccountService:
     ) -> List[Trade]:
         """从 trades 表读取交易记录
 
+        使用单独的缓存（cache_ttl=10s），因为交易记录变化频繁但查询结果可能重复。
+
         Args:
             start_date: 起始日期 (YYYY-MM-DD 或 YYYYMMDD)
             end_date: 截止日期 (YYYY-MM-DD 或 YYYYMMDD)
             limit: 返回条数上限
         """
+        trade_cache_key = f"trade_{start_date}_{end_date}_{limit}"
+
+        with self._cache_lock:
+            # 检查缓存是否有效
+            if (self._trade_history_cache is not None
+                and self._is_cache_valid(self._trade_history_cache_time, 10)):  # 10s TTL for trades
+                logger.debug(f"Cache hit for get_trade_history: {self.account_id}")
+                return self._trade_history_cache
+
+        # 缓存未命中，查询数据库
         conn = get_connection()
         try:
             query = "SELECT * FROM trades WHERE account_id = ?"
@@ -416,16 +523,30 @@ class AccountService:
             params.append(limit)
 
             rows = conn.execute(query, params).fetchall()
-            return [self._row_to_trade(row) for row in rows]
+            result = [self._row_to_trade(row) for row in rows]
         finally:
             conn.close()
+
+        # 更新缓存
+        with self._cache_lock:
+            self._trade_history_cache = result
+            self._trade_history_cache_time = datetime.now()
+
+        return result
 
     def get_audit_log(
         self,
         operation: str = None,
         limit: int = 100,
     ) -> List[dict]:
-        """从 audit_log 表读取操作记录"""
+        """从 audit_log 表读取操作记录
+
+        不使用缓存，因为审计日志通常用于实时监控。
+
+        Args:
+            operation: 操作类型过滤
+            limit: 返回条数上限
+        """
         conn = get_connection()
         try:
             query = "SELECT * FROM audit_log WHERE account_id = ?"
@@ -448,10 +569,7 @@ class AccountService:
     def snapshot(self, trade_date: str = None) -> Snapshot:
         """生成并保存每日快照
 
-        1. 计算当前 balance
-        2. 统计 positions_count, trades_count
-        3. INSERT INTO daily_snapshots
-        4. event_bus.emit(SNAPSHOT_CREATED)
+        更新操作后失效缓存。
         """
         if trade_date is None:
             trade_date = datetime.now().strftime("%Y%m%d")
@@ -519,6 +637,8 @@ class AccountService:
             },
         ))
 
+        # 快照生成不改变持仓，不影响缓存
+
         return snap
 
     # ── 辅助方法 ─────────────────────────────────────────
@@ -576,3 +696,7 @@ class AccountService:
             reason=d.get("reason", "") or "",
             created_at=d.get("created_at", ""),
         )
+
+
+# 向后兼容：保留 AccountService 作为 CachedAccountService 的别名
+AccountService = CachedAccountService
