@@ -8,6 +8,10 @@
 - 计算真实收益
 - 生成交易记录
 - 支持多策略
+
+迁移到 AccountService — 2026-06-23
+注意：本文件保留自实现回测引擎，因 AccountService 主要面向实盘账户管理。
+回测结果可选择性同步到 AccountService。
 """
 
 import json
@@ -17,6 +21,14 @@ from datetime import datetime, timedelta
 from dataclasses import dataclass, asdict
 from typing import List, Dict, Optional
 import random
+
+# Phase 3: 引入 AccountService（可选，用于同步回测结果）
+try:
+    from accounts.account_service import AccountService
+    from accounts.account_db import AccountDB, Account
+    HAS_ACCOUNT_SERVICE = True
+except ImportError:
+    HAS_ACCOUNT_SERVICE = False
 
 
 @dataclass

@@ -20,7 +20,23 @@ from dataclasses import dataclass
 from typing import Optional, List
 from enum import Enum
 
-from paper_trading_system import PaperTradingAccount, Trade
+# Phase 3: 尝试使用 AccountService，回退到 PaperTradingAccount
+try:
+    from accounts.account_service import AccountService
+    from accounts.account_db import AccountDB, Account
+    HAS_ACCOUNT_SERVICE = True
+except ImportError:
+    HAS_ACCOUNT_SERVICE = False
+
+try:
+    from paper_trading_system import PaperTradingAccount, Trade
+except ImportError:
+    # 如果 paper_trading_system 不可用，创建简单的基类
+    class PaperTradingAccount:
+        def __init__(self, initial_cash=1000000.0):
+            self.cash = initial_cash
+            self.positions = {}
+    Trade = None
 
 # 初始化 Tushare
 ts.set_token('612016803bce9d11dda0846c5352ad7e4077ead71657cd6ee50b8bf5')

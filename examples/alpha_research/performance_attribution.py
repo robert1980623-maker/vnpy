@@ -159,24 +159,45 @@ class PerformanceAttribution:
         return {'hs300': 0.0, 'sh50': 0.0}
 
     def _get_position_dicts(self) -> List[Dict]:
-        """将 AccountService 的 Position 转换为旧格式 dict 列表"""
+        """将 AccountService 的 Position 转换为旧格式 dict 列表
+
+        支持两种格式：
+        - AccountService Position 对象（属性访问）
+        - 字典格式（键访问）
+        """
         positions = self.account.get_positions()
         result = []
         for p in positions:
+            # 支持 Position 对象或字典
+            if isinstance(p, dict):
+                symbol = p.get("symbol")
+                name = p.get("name", "")
+                quantity = p.get("quantity", 0)
+                avg_price = p.get("avg_cost", p.get("avg_price", 0))
+                current_price = p.get("current_price", avg_price)
+                market_value = p.get("market_value", avg_price * quantity)
+            else:
+                symbol = p.symbol
+                name = p.name
+                quantity = p.quantity
+                avg_price = p.avg_cost
+                current_price = p.current_price
+                market_value = p.market_value
+
             result.append({
-                "symbol": p.symbol,
-                "name": p.name,
-                "quantity": p.quantity,
-                "avg_price": p.avg_cost,
-                "current_price": p.current_price,
-                "cost": p.avg_cost * p.quantity,
-                "market_value": p.market_value,
+                "symbol": symbol,
+                "name": name,
+                "quantity": quantity,
+                "avg_price": avg_price,
+                "current_price": current_price,
+                "cost": avg_price * quantity,
+                "market_value": market_value,
             })
         return result
 
     def _get_trade_dicts(self) -> List[Dict]:
         """将 AccountService 的 Trade 转换为旧格式 dict 列表"""
-        trades = self.account.get_trade_history(limit=1000)
+        trades = self.account.get_trade_history(limit=1000) or []
         result = []
         for t in trades:
             result.append({
