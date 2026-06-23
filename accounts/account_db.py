@@ -79,11 +79,24 @@ def _init_db_unlocked():
     schema_path = Path(__file__).parent / "schema.sql"
     with open(schema_path) as f:
         schema = f.read()
-    
+
     conn = get_connection()
     conn.executescript(schema)
+    _migrate_db(conn)
     conn.commit()
     conn.close()
+
+
+def _migrate_db(conn):
+    """增量迁移：为已有表添加新列（幂等）
+
+    Phase 2: 为 trades 表添加 reason / agent_id 列
+    """
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(trades)").fetchall()}
+    if "reason" not in cols:
+        conn.execute("ALTER TABLE trades ADD COLUMN reason TEXT DEFAULT ''")
+    if "agent_id" not in cols:
+        conn.execute("ALTER TABLE trades ADD COLUMN agent_id TEXT DEFAULT 'system'")
 
 
 @dataclass
@@ -326,14 +339,18 @@ class AccountDB:
         finally:
             conn.close()
 
-    def execute_in_transaction(self, operations: List[Callable]) -> bool:
+    def execute_in_transaction(self, operations: list) -> any:
         """在单个事务内执行多个数据库操作
 
         Args:
             operations: 接收 conn 的 callable 列表
 
         Returns:
-            True 如果全部成功, False 如果回滚
+            最后一个非 None 的 callable 返回值；如果所有 callable 都返回 None，
+            则成功时返回 True。
+
+        Raises:
+            Exception: 任何 callable 抛出异常时，事务回滚并重新抛出异常。
 
         用法:
             def update_cash(conn):
@@ -344,19 +361,32 @@ class AccountDB:
                 conn.execute("INSERT OR REPLACE INTO positions ...")
 
             db.execute_in_transaction([update_cash, update_position])
+
+        带返回值的用法:
+            def compute(conn):
+                # ... 计算
+                return some_value
+
+            result = db.execute_in_transaction([compute])
+            # result == some_value
         """
         conn = get_connection()
         try:
+            last_result = None
+            has_result = False
             for op in operations:
-                op(conn)
+                r = op(conn)
+                if r is not None:
+                    last_result = r
+                    has_result = True
             conn.commit()
-            return True
+            return last_result if has_result else True
         except Exception as e:
             conn.rollback()
             import logging
             logger = logging.getLogger(__name__)
             logger.error(f"Transaction failed, rolled back: {e}")
-            return False
+            raise
         finally:
             conn.close()
 

@@ -101,10 +101,9 @@ class TestAccountDbTransaction:
             # 使用无效SQL语句触发错误
             conn.execute("INSERT INTO nonexistent_table (account_id) VALUES (?)", (self.test_account_id,))
 
-        # 执行事务 - 应该失败并回滚
-        result = self.db.execute_in_transaction([update_cash_op, failing_op])
-
-        assert result is False  # 事务失败
+        # 执行事务 - 应该失败并回滚，异常被重新抛出
+        with pytest.raises(Exception):
+            self.db.execute_in_transaction([update_cash_op, failing_op])
 
         # 验证数据没有被部分更新（回滚生效）
         updated_account = self.db.get_account(self.test_account_id)
@@ -190,10 +189,9 @@ class TestAccountDbTransaction:
             """第二个操作 - 故意失败"""
             conn.execute("INVALID SQL STATEMENT")  # 无效SQL导致失败
 
-        # 执行事务 - 应该失败
-        result = self.db.execute_in_transaction([first_update_op, second_failing_op])
-
-        assert result is False  # 事务失败
+        # 执行事务 - 应该失败，异常被重新抛出
+        with pytest.raises(Exception):
+            self.db.execute_in_transaction([first_update_op, second_failing_op])
 
         # 验证第一个操作也被回滚了
         updated_account = self.db.get_account(self.test_account_id)

@@ -26,6 +26,9 @@ from .account_db import (
     AccountDB,
     get_db
 )
+from .account_service import AccountService
+from .feishu_sync import FeishuSyncService
+from .virtual_account_compat import VirtualAccount
 
 __all__ = [
     # Models
@@ -50,5 +53,10 @@ __all__ = [
     'trade_event',
     # Database
     'AccountDB',
-    'get_db'
+    'get_db',
+    # Services
+    'AccountService',
+    'FeishuSyncService',
+    # Compat (deprecated)
+    'VirtualAccount',
 ]
