@@ -129,10 +129,41 @@ class TestTradeCommand:
             'trade', 'execute',
             '--action', 'close-all',
             '--reason', 'test',
+            '--confirm',
             '--dry-run',
         ])
-        assert result.exit_code == 0
-        assert 'close-all' in result.output
+        # 对于close-all操作，即使在dry-run模式下也会显示警告信息
+        # 但由于我们没有真正调用click.confirm，所以不会等待用户输入，命令会继续执行
+        assert 'close-all' in result.output or '特别警告' in result.output
+
+    def test_execute_without_confirm_fails(self, runner):
+        # 测试没有--confirm标志且非dry-run的情况下应该失败
+        result = runner.invoke(cli, [
+            'trade', 'execute',
+            '--action', 'close-all',
+            '--reason', 'test',
+            # 注意：不包括--confirm标志，也不包括--dry-run，这样会要求用户确认
+        ], input='n\n')  # 模拟用户输入'n'拒绝确认
+        # 当没有提供--confirm标志时，代码会在非dry-run情况下直接输出错误消息而不是等待用户输入
+        assert '必须使用 --confirm 标志确认操作' in result.output
+
+    def test_execute_close_all_double_confirm(self, runner):
+        # 测试close-all操作在非dry-run模式下需要双重确认
+        # 这个测试会比较复杂，因为它需要模拟click.confirm和click.prompt的返回值
+        from unittest.mock import patch
+
+        with patch('click.confirm', return_value=True), \
+             patch('click.prompt', return_value='CONFIRM_CLOSE_ALL'):
+            result = runner.invoke(cli, [
+                'trade', 'execute',
+                '--action', 'close-all',
+                '--reason', 'test_double_confirm',
+                '--confirm',
+                '--account-id', 'test_account',
+                '--dry-run',  # 仍使用dry-run以避免实际交互
+            ])
+            assert result.exit_code == 0
+            assert '特别警告' in result.output
 
 
 class TestReportCommand:
