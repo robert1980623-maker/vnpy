@@ -446,7 +446,7 @@ class DataDownloader:
 
     def is_up_to_date(self, symbol: str, max_age_days: int = 1) -> bool:
         """
-        检查股票数据是否已是最新（优化：用 seek 读文件末尾，不读全量）
+        检查股票数据是否已是最新（使用 pandas 读取最后几行，更健壮）
 
         Args:
             symbol: 股票代码
@@ -459,55 +459,115 @@ class DataDownloader:
         if not csv_path.exists():
             return False
         try:
-            # Phase 4A Fix 1: 用 Python 原生 seek 读文件末尾 4KB（跨平台，无 subprocess 开销）
-            file_size = csv_path.stat().st_size
-            read_size = min(4096, file_size)
-            with open(csv_path, 'rb') as f:
-                f.seek(file_size - read_size)
-                tail = f.read(read_size).decode('utf-8', errors='ignore')
+            # 为了检测是否有header，我们需要读取第一行并检查是否包含常见字段名
+            with open(csv_path, 'r', encoding='utf-8') as f:
+                first_line = f.readline().strip()
 
-            # 处理文件末尾有换行符的情况（.getLast_line 会多余的空行）
-            tail_lines = tail.split('\n')
-            # 移除尾部空行
-            while tail_lines and not tail_lines[-1].strip():
-                tail_lines.pop()
+            # 分析第一行判断是否是header
+            first_cols = first_line.split(',')
+            is_header_line = any(col.lower() in ['date', 'datetime', 'dt', 'time', 'timestamp', 'open', 'high', 'low', 'close', 'volume', 'amount', 'symbol']
+                               for col in first_cols[:5])  # 检查前5列，通常日期和价格字段在前
 
-            if not tail_lines:
-                return False
-            if len(tail_lines) == 1:
-                # 只有一行：可能是只有 header，或者没有换行符结尾的单行数据
-                first_line = tail_lines[0].strip()
-                if not first_line:
-                    return False
-                if first_line.startswith('date,'):
-                    return False
-                last_line = first_line
-            elif len(tail_lines) == 2:
-                # 两行可能是：[header, data] 或 [data, data]
-                # 检查第一行是否为 header
-                if tail_lines[0].strip().startswith('date,'):
-                    # 正常情况：header + data（无尾部换行符）
-                    last_line = tail_lines[1].strip()
-                else:
-                    # 两行都是数据，用最后一行
-                    last_line = tail_lines[-1].strip()
+            # 根据是否有header读取数据
+            if is_header_line:
+                # 有header，常规读取
+                df = pd.read_csv(csv_path)
             else:
-                last_line = tail_lines[-2].strip()  # 倒数第二行是最后一条数据
+                # 没有header，指定header=None
+                df = pd.read_csv(csv_path, header=None)
 
-            if not last_line:
+            if df.empty:
                 return False
 
-            # 解析最后一行，找日期列
-            first_col = last_line.split(',', 1)[0]
-            last_date = pd.to_datetime(first_col, errors='coerce')
+            # 确定日期列
+            date_column = None
+            for col in df.columns:
+                if str(col).lower() in ['date', 'datetime', 'dt', 'time', 'timestamp']:
+                    date_column = col
+                    break
+
+            # 如果没有找到日期列，尝试第一列
+            if date_column is None:
+                date_column = df.columns[0]
+
+            # 确保有数据行
+            if len(df) == 0:
+                return False
+
+            # 获取最后一行的日期值
+            last_row = df.iloc[-1]
+
+            # 获取日期列的值，如果没有该列则使用第一列
+            if date_column in last_row:
+                last_date_str = last_row[date_column]
+            else:
+                # 使用第一列
+                last_date_str = last_row.iloc[0] if hasattr(last_row, 'iloc') else last_row[df.columns[0]]
+
+            # 解析日期
+            last_date = pd.to_datetime(str(last_date_str), errors='coerce')
             if pd.isna(last_date):
                 return False
 
+            # 检查是否在允许的最大天数范围内
             threshold = datetime.now().date() - timedelta(days=max_age_days)
             return last_date.date() >= threshold
+
+        except pd.errors.EmptyDataError:
+            return False
         except Exception as e:
             logger.debug(f"增量检测失败 {symbol}: {e}")
-            return False
+            # 在出错的情况下，回退到原始的seek方法
+            try:
+                # Phase 4A Fix 1: 用 Python 原生 seek 读文件末尾 4KB（跨平台，无 subprocess 开销）
+                file_size = csv_path.stat().st_size
+                read_size = min(4096, file_size)
+                with open(csv_path, 'rb') as f:
+                    f.seek(file_size - read_size)
+                    tail = f.read(read_size).decode('utf-8', errors='ignore')
+
+                # 处理文件末尾有换行符的情况
+                tail_lines = tail.split('\n')
+                # 移除尾部空行
+                while tail_lines and not tail_lines[-1].strip():
+                    tail_lines.pop()
+
+                if not tail_lines:
+                    return False
+                if len(tail_lines) == 1:
+                    # 只有一行：可能是只有 header，或者没有换行符结尾的单行数据
+                    first_line = tail_lines[0].strip()
+                    if not first_line:
+                        return False
+                    if first_line.startswith('date,'):
+                        return False
+                    last_line = first_line
+                elif len(tail_lines) == 2:
+                    # 两行可能是：[header, data] 或 [data, data]
+                    # 检查第一行是否为 header
+                    if tail_lines[0].strip().startswith('date,'):
+                        # 正常情况：header + data（无尾部换行符）
+                        last_line = tail_lines[1].strip()
+                    else:
+                        # 两行都是数据，用最后一行
+                        last_line = tail_lines[-1].strip()
+                else:
+                    last_line = tail_lines[-2].strip()  # 倒数第二行是最后一条数据
+
+                if not last_line:
+                    return False
+
+                # 解析最后一行，找日期列
+                first_col = last_line.split(',', 1)[0]
+                last_date = pd.to_datetime(first_col, errors='coerce')
+                if pd.isna(last_date):
+                    return False
+
+                threshold = datetime.now().date() - timedelta(days=max_age_days)
+                return last_date.date() >= threshold
+            except Exception:
+                logger.debug(f"回退方法也失败 {symbol}: {e}")
+                return False
 
     def filter_fresh(self, symbols: List[str]) -> List[str]:
         """过滤掉已有最新数据的股票，返回需要下载的列表"""
