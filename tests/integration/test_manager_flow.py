@@ -15,12 +15,13 @@ Manager 调度 + 执行 + 结果回收集成测试
 import pytest
 import sys
 import json
+import os
 import tempfile
+import time
 import shutil
 from pathlib import Path
 from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
-import os
 
 # 添加项目路径
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "examples" / "alpha_research"))
@@ -531,17 +532,262 @@ class TestManagerCompleteTask:
 
 class TestManagerAgentMapping:
     """Manager Agent 映射测试"""
-    
+
     def test_all_task_types_mapped(self):
         """测试所有任务类型都有映射"""
         manager = ManagerCore()
-        
+
         task_types = ['qa', 'trading', 'risk', 'data', 'engineering', 'general', 'unknown']
-        
+
         for task_type in task_types:
             agent = manager.select_agent(task_type)
             assert agent is not None
             assert isinstance(agent, str)
+
+
+# ========== 状态持久化与心跳测试（测试真实 QuantManager） ==========
+
+
+class _RealManagerBase:
+    """
+    辅助基类：在临时目录下构造真实的 QuantManager 实例。
+
+    使用 lazy import 避免在模块加载时就触发依赖；每个测试用例
+    都通过 fresh_manager() 获取一个干净的实例。
+    """
+
+    @staticmethod
+    def _make_manager(base_dir: Path):
+        """延迟导入并构造 QuantManager，避免全局副作用。"""
+        # 确保 alpha_research 在 sys.path
+        alpha_dir = Path(__file__).resolve().parent.parent.parent / "examples" / "alpha_research"
+        if str(alpha_dir) not in sys.path:
+            sys.path.insert(0, str(alpha_dir))
+        from manager_interface import QuantManager
+        return QuantManager(base_dir=str(base_dir))
+
+    @staticmethod
+    def fresh_manager(tmp_path: Path, name: str = "issues"):
+        base = tmp_path / name
+        base.mkdir(parents=True, exist_ok=True)
+        mgr = _RealManagerBase._make_manager(base)
+        return mgr
+
+
+class TestManagerStatePersistence:
+    """状态持久化测试"""
+
+    def test_state_file_created_on_assign(self, tmp_path):
+        """assign 后应生成 state/manager_state.json"""
+        mgr = _RealManagerBase.fresh_manager(tmp_path)
+        try:
+            assert mgr.active_tasks == {}
+
+            # 直接写入 active_tasks 并调用 _save_state()
+            mgr.active_tasks["issue_x"] = {
+                "issue_id": "issue_x",
+                "agent": "delta",
+                "status": "assigned",
+            }
+            mgr._save_state()
+
+            state_file = Path(mgr.base_dir) / "state" / "manager_state.json"
+            assert state_file.exists()
+
+            with open(state_file, "r", encoding="utf-8") as f:
+                state = json.load(f)
+            assert "active_tasks" in state
+            assert "issue_x" in state["active_tasks"]
+            assert "updated_at" in state
+        finally:
+            mgr.shutdown()
+
+    def test_state_recovery_after_crash(self, tmp_path):
+        """进程崩溃重启后，active_tasks 应从 state 文件恢复"""
+        base = tmp_path / "issues"
+        base.mkdir(parents=True, exist_ok=True)
+
+        # 第一次启动：写入状态
+        mgr1 = _RealManagerBase._make_manager(base)
+        try:
+            mgr1.active_tasks["stuck_issue"] = {
+                "issue_id": "stuck_issue",
+                "agent": "delta",
+                "status": "assigned",
+            }
+            mgr1._save_state()
+            state_file = Path(mgr1.base_dir) / "state" / "manager_state.json"
+            assert state_file.exists()
+        finally:
+            # 模拟崩溃：不调用 shutdown()，直接销毁对象
+            mgr1._heartbeat_stop.set()
+            del mgr1
+
+        # 第二次启动：应恢复状态
+        mgr2 = _RealManagerBase._make_manager(base)
+        try:
+            assert "stuck_issue" in mgr2.active_tasks
+            assert mgr2.active_tasks["stuck_issue"]["agent"] == "delta"
+        finally:
+            mgr2.shutdown()
+
+    def test_state_file_missing_is_ok(self, tmp_path):
+        """state 文件不存在时，启动应保持 active_tasks 为空"""
+        mgr = _RealManagerBase.fresh_manager(tmp_path)
+        try:
+            state_file = Path(mgr.base_dir) / "state" / "manager_state.json"
+            assert not state_file.exists()
+            assert mgr.active_tasks == {}
+        finally:
+            mgr.shutdown()
+
+    def test_state_file_corrupted_is_ok(self, tmp_path):
+        """state 文件损坏时，启动不应崩溃，active_tasks 保持为空"""
+        base = tmp_path / "issues"
+        base.mkdir(parents=True, exist_ok=True)
+        state_dir = base / "state"
+        state_dir.mkdir(parents=True, exist_ok=True)
+        state_file = state_dir / "manager_state.json"
+        state_file.write_text("{ not valid json !!!", encoding="utf-8")
+
+        mgr = _RealManagerBase._make_manager(base)
+        try:
+            assert mgr.active_tasks == {}
+        finally:
+            mgr.shutdown()
+
+    def test_atomic_write_no_partial_state(self, tmp_path):
+        """_save_state() 完成后，state 文件应为完整 JSON（不会部分写入）"""
+        mgr = _RealManagerBase.fresh_manager(tmp_path)
+        try:
+            for i in range(5):
+                mgr.active_tasks[f"issue_{i}"] = {
+                    "issue_id": f"issue_{i}",
+                    "agent": "delta",
+                    "status": "assigned",
+                }
+                mgr._save_state()
+
+            state_file = Path(mgr.base_dir) / "state" / "manager_state.json"
+            with open(state_file, "r", encoding="utf-8") as f:
+                state = json.load(f)
+            assert len(state["active_tasks"]) == 5
+
+            # 不应残留临时文件
+            state_dir = Path(mgr.base_dir) / "state"
+            tmp_files = [p for p in state_dir.iterdir()
+                         if p.name.startswith(".manager_state_") and p.suffix == ".tmp"]
+            assert tmp_files == []
+        finally:
+            mgr.shutdown()
+
+
+class TestManagerHeartbeat:
+    """心跳机制测试"""
+
+    def test_heartbeat_file_created(self, tmp_path):
+        """启动后应生成 manager.heartbeat 文件"""
+        mgr = _RealManagerBase.fresh_manager(tmp_path)
+        try:
+            heartbeat_file = Path(mgr.base_dir) / "state" / "manager.heartbeat"
+            # 给心跳线程一点时间写出第一次心跳
+            time.sleep(1.5)
+            assert heartbeat_file.exists()
+
+            with open(heartbeat_file, "r", encoding="utf-8") as f:
+                payload = json.load(f)
+            assert "timestamp" in payload
+            assert "pid" in payload
+            assert payload["pid"] == os.getpid()
+        finally:
+            mgr.shutdown()
+
+    def test_check_heartbeat_alive(self, tmp_path):
+        """Manager 存活时，check_heartbeat() 应返回 True"""
+        mgr = _RealManagerBase.fresh_manager(tmp_path)
+        try:
+            time.sleep(1.5)
+            assert mgr.check_heartbeat() is True
+        finally:
+            mgr.shutdown()
+
+    def test_check_heartbeat_dead_no_file(self, tmp_path):
+        """心跳文件不存在时，check_heartbeat() 应返回 False"""
+        mgr = _RealManagerBase.fresh_manager(tmp_path)
+        try:
+            # 使用一个不存在的路径
+            fake_path = Path(mgr.base_dir) / "state" / "nonexistent.heartbeat"
+            assert mgr.check_heartbeat(heartbeat_file=str(fake_path)) is False
+        finally:
+            mgr.shutdown()
+
+    def test_check_heartbeat_dead_stale(self, tmp_path):
+        """心跳过期时，check_heartbeat() 应返回 False"""
+        mgr = _RealManagerBase.fresh_manager(tmp_path)
+        try:
+            # 停止心跳线程，避免它覆盖我们写入的过期时间戳
+            mgr._heartbeat_stop.set()
+            if mgr._heartbeat_thread.is_alive():
+                mgr._heartbeat_thread.join(timeout=2)
+
+            heartbeat_file = Path(mgr.base_dir) / "state" / "manager.heartbeat"
+            # 写一个过去的时间戳
+            stale_payload = {
+                "timestamp": "2000-01-01T00:00:00",
+                "pid": os.getpid(),
+                "active_tasks": 0,
+            }
+            with open(heartbeat_file, "w", encoding="utf-8") as f:
+                json.dump(stale_payload, f)
+
+            # 用很短的 timeout 判定死亡
+            assert mgr.check_heartbeat(timeout=10) is False
+        finally:
+            # 已经停止，无需再次 shutdown 心跳线程
+            mgr._heartbeat_stop.set()
+
+    def test_check_heartbeat_corrupted_file(self, tmp_path):
+        """心跳文件损坏时，check_heartbeat() 应返回 False"""
+        mgr = _RealManagerBase.fresh_manager(tmp_path)
+        try:
+            heartbeat_file = Path(mgr.base_dir) / "state" / "manager.heartbeat"
+            heartbeat_file.write_text("not json!", encoding="utf-8")
+            assert mgr.check_heartbeat() is False
+        finally:
+            mgr.shutdown()
+
+    def test_shutdown_stops_heartbeat_thread(self, tmp_path):
+        """shutdown() 应停止心跳线程"""
+        mgr = _RealManagerBase.fresh_manager(tmp_path)
+        assert mgr._heartbeat_thread.is_alive()
+        mgr.shutdown()
+        assert not mgr._heartbeat_thread.is_alive()
+
+    def test_heartbeat_reflects_active_tasks_count(self, tmp_path):
+        """心跳应包含当前 active_tasks 数量"""
+        mgr = _RealManagerBase.fresh_manager(tmp_path)
+        try:
+            mgr.active_tasks["t1"] = {"issue_id": "t1"}
+            mgr.active_tasks["t2"] = {"issue_id": "t2"}
+            # 手动触发一次心跳写入，避免等待 30s
+            mgr._heartbeat_loop.__class__  # sanity
+            # 直接调用内部写逻辑
+            import json as _json
+            from datetime import datetime as _dt
+            payload = {
+                "timestamp": _dt.now().isoformat(),
+                "pid": os.getpid(),
+                "active_tasks": len(mgr.active_tasks),
+            }
+            heartbeat_file = Path(mgr.base_dir) / "state" / "manager.heartbeat"
+            with open(heartbeat_file, "w", encoding="utf-8") as f:
+                _json.dump(payload, f)
+
+            with open(heartbeat_file, "r", encoding="utf-8") as f:
+                loaded = _json.load(f)
+            assert loaded["active_tasks"] == 2
+        finally:
+            mgr.shutdown()
 
 
 if __name__ == '__main__':

@@ -11,8 +11,11 @@ Manager 接口 (P0-2 增强版 - 状态追踪)
 """
 
 import json
+import os
 import sys
 import time
+import tempfile
+import threading
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
@@ -33,6 +36,11 @@ from file_lock import FileLock
 class QuantManager:
     """量化 Manager - 协调调度中心 (P0-2 增强版)"""
     
+    # 心跳间隔（秒），watchdog 应在 >2x 此值时判定 Manager 死亡
+    HEARTBEAT_INTERVAL = 30
+    # 心跳过期阈值（秒），超过此时间未更新视为 Manager 崩溃
+    HEARTBEAT_TIMEOUT = 90
+
     def __init__(self, base_dir: str = "./issues"):
         self.base_dir = Path(base_dir)
         self.issue_queue = IssueQueue(base_dir=base_dir)
@@ -51,6 +59,141 @@ class QuantManager:
         cfg = get_manager_config()
         self.default_timeout_minutes = cfg.get('default_timeout_minutes', 30)
         self.max_retries = cfg.get('max_retries', 3)
+
+        # 状态持久化：active_tasks 落盘到 state/manager_state.json
+        self._state_dir = self.base_dir / 'state'
+        self._state_dir.mkdir(parents=True, exist_ok=True)
+        self._state_file = self._state_dir / 'manager_state.json'
+        self._state_lock = threading.Lock()
+
+        # 启动时从 state 文件恢复 active_tasks（进程崩溃恢复）
+        self._load_state()
+
+        # 心跳机制：后台线程每 HEARTBEAT_INTERVAL 秒写一次时间戳
+        self._heartbeat_file = self._state_dir / 'manager.heartbeat'
+        self._heartbeat_stop = threading.Event()
+        self._heartbeat_thread = threading.Thread(
+            target=self._heartbeat_loop,
+            daemon=True,
+            name='QuantManager-Heartbeat',
+        )
+        self._heartbeat_thread.start()
+
+    # ========== 状态持久化与心跳 ==========
+
+    def _load_state(self):
+        """
+        从 state/manager_state.json 恢复 active_tasks。
+
+        进程崩溃重启后，恢复 processing 状态的任务，避免 Issue 永久卡住。
+        文件不存在或解析失败时，active_tasks 保持空 dict。
+        """
+        if not self._state_file.exists():
+            return
+
+        try:
+            with open(self._state_file, 'r', encoding='utf-8') as f:
+                state = json.load(f)
+            loaded = state.get('active_tasks', {})
+            if isinstance(loaded, dict):
+                self.active_tasks.update(loaded)
+                if loaded:
+                    print(f"🔄 Manager 恢复 {len(loaded)} 个活跃任务 (来自 {self._state_file})")
+        except (json.JSONDecodeError, OSError) as e:
+            # 状态文件损坏时不阻塞启动，记录告警后从空状态开始
+            print(f"⚠️  状态文件加载失败（将从空状态启动）：{e}")
+
+    def _save_state(self):
+        """
+        原子写入 active_tasks 到 state/manager_state.json。
+
+        先写临时文件再 os.replace()，避免写入中途崩溃导致状态文件损坏。
+        每次状态变更（assign/complete/fail/retry）都应调用此方法。
+        """
+        with self._state_lock:
+            state = {
+                'active_tasks': self.active_tasks,
+                'updated_at': datetime.now().isoformat(),
+            }
+            # 写同目录的临时文件，保证 rename 原子性（同一文件系统）
+            try:
+                fd, tmp_path = tempfile.mkstemp(
+                    prefix='.manager_state_',
+                    suffix='.tmp',
+                    dir=str(self._state_dir),
+                )
+                try:
+                    with os.fdopen(fd, 'w', encoding='utf-8') as f:
+                        json.dump(state, f, ensure_ascii=False, indent=2)
+                    os.replace(tmp_path, str(self._state_file))
+                except Exception:
+                    # 写入失败时清理临时文件
+                    try:
+                        os.unlink(tmp_path)
+                    except OSError:
+                        pass
+                    raise
+            except OSError as e:
+                # 持久化失败不应阻塞主流程，仅记录
+                print(f"⚠️  状态持久化失败：{e}")
+
+    def _heartbeat_loop(self):
+        """
+        后台心跳线程：每 HEARTBEAT_INTERVAL 秒写一次当前时间戳到 manager.heartbeat。
+
+        外部 watchdog 可通过 check_heartbeat() 判断 Manager 是否存活。
+        线程设为 daemon=True，主进程退出时自动终止。
+        """
+        while not self._heartbeat_stop.is_set():
+            try:
+                payload = {
+                    'timestamp': datetime.now().isoformat(),
+                    'pid': os.getpid(),
+                    'active_tasks': len(self.active_tasks),
+                }
+                # 直接覆盖写；文件极小，无需原子 rename
+                with open(self._heartbeat_file, 'w', encoding='utf-8') as f:
+                    json.dump(payload, f, ensure_ascii=False)
+            except OSError as e:
+                # 心跳写入失败不应退出线程，等待下次重试
+                print(f"⚠️  心跳写入失败：{e}")
+            self._heartbeat_stop.wait(self.HEARTBEAT_INTERVAL)
+
+    def check_heartbeat(self, heartbeat_file: str = None, timeout: float = None) -> bool:
+        """
+        检查 Manager 心跳是否存活（供外部 watchdog 调用）。
+
+        Args:
+            heartbeat_file: 心跳文件路径，默认为 self._heartbeat_file
+            timeout: 过期阈值（秒），默认为 self.HEARTBEAT_TIMEOUT
+
+        Returns:
+            True 表示 Manager 存活（心跳在阈值内更新），False 表示疑似崩溃
+        """
+        heartbeat_file = Path(heartbeat_file) if heartbeat_file else self._heartbeat_file
+        timeout = timeout if timeout is not None else self.HEARTBEAT_TIMEOUT
+
+        if not heartbeat_file.exists():
+            return False
+
+        try:
+            with open(heartbeat_file, 'r', encoding='utf-8') as f:
+                payload = json.load(f)
+            last_ts = payload.get('timestamp')
+            if not last_ts:
+                return False
+            last_beat = datetime.fromisoformat(last_ts)
+            age = (datetime.now() - last_beat).total_seconds()
+            return age <= timeout
+        except (json.JSONDecodeError, OSError, ValueError):
+            return False
+
+    def shutdown(self):
+        """优雅关闭：停止心跳线程并做最终状态持久化。"""
+        self._heartbeat_stop.set()
+        if self._heartbeat_thread.is_alive():
+            self._heartbeat_thread.join(timeout=2)
+        self._save_state()
 
     def handle_error_report(self, issue: Issue):
         """处理错误上报"""
@@ -80,7 +223,8 @@ class QuantManager:
             timeout_minutes=self.default_timeout_minutes
         )
         self.active_tasks[issue.id] = task
-        
+        self._save_state()  # 持久化：进程崩溃后可恢复
+
         try:
             if severity == 'P0':
                 self.handle_p0(task, issue)
@@ -93,6 +237,7 @@ class QuantManager:
             print(f"⚠️ 处理任务时异常：{e}")
             if issue.id in self.active_tasks:
                 del self.active_tasks[issue.id]
+                self._save_state()  # 持久化清理
             raise
         
         return task
@@ -276,6 +421,7 @@ class QuantManager:
         # 从活跃任务中移除
         if issue_id in self.active_tasks:
             del self.active_tasks[issue_id]
+            self._save_state()  # 持久化清理
         
         print(f"✅ Issue {issue_id} 已标记为完成")
         
@@ -477,6 +623,7 @@ class QuantManager:
         if success:
             self.issue_queue.update_status(issue_id, 'resolved', resolution=resolution)
             del self.active_tasks[issue_id]
+            self._save_state()  # 持久化清理
             return self.generate_completion_report(issue_id, resolution)
         else:
             # 重新打开问题，状态设为 pending
@@ -489,6 +636,7 @@ class QuantManager:
             # 从活跃任务中移除，不重新调度
             if issue_id in self.active_tasks:
                 del self.active_tasks[issue_id]
+                self._save_state()  # 持久化清理
             return None
     
     def resolve_issue(self, issue_id: str, resolution: str, success: bool = True) -> bool:
