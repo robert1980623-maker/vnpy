@@ -570,7 +570,7 @@ class DataDownloader:
 
                 threshold = datetime.now().date() - timedelta(days=max_age_days)
                 return last_date.date() >= threshold
-            except Exception:
+            except Exception as e:
                 logger.debug(f"回退方法也失败 {symbol}: {e}")
                 return False
 
@@ -778,13 +778,13 @@ class DataDownloader:
         try:
             bars.to_csv(tmp_path, index=False)
             os.replace(tmp_path, csv_path)
-        except Exception:
+        except Exception as e:
             # 清理临时文件
             try:
                 if tmp_path.exists():
                     tmp_path.unlink()
-            except OSError:
-                pass
+            except OSError as cleanup_error:
+                logger.warning(f"Failed to clean up temporary file: {cleanup_error}")
             raise
 
     def _run_validation(self, symbol: str, bars: pd.DataFrame) -> Optional[dict]:

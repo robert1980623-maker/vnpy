@@ -10,6 +10,7 @@ Phase 5: 性能优化 - 连接池管理
 """
 import sqlite3
 import threading
+import logging
 from contextlib import contextmanager
 from queue import Queue, Empty
 from typing import Optional
@@ -17,6 +18,8 @@ from pathlib import Path
 
 
 DB_PATH = Path(__file__).parent / "trading.db"
+
+logger = logging.getLogger(__name__)
 
 
 class ConnectionPool:
@@ -112,14 +115,15 @@ class ConnectionPool:
             # 检查连接是否仍然有效
             conn.execute("SELECT 1").fetchone()
             self._pool.put_nowait(conn)
-        except Exception:
+        except Exception as e:
             # 连接已损坏，关闭并从活动连接中移除
+            logger.warning(f"Database connection check failed: {e}")
             with self._state_lock:
                 self._active_connections.discard(conn)
             try:
                 conn.close()
-            except Exception:
-                pass
+            except Exception as close_error:
+                logger.warning(f"Failed to close damaged connection: {close_error}")
 
     def _create_connection(self) -> sqlite3.Connection:
         """创建新的数据库连接
@@ -151,8 +155,8 @@ class ConnectionPool:
             for conn in list(self._active_connections):
                 try:
                     conn.close()
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning(f"Failed to close active connection: {e}")
             self._active_connections.clear()
 
             # 清空池中的连接
@@ -160,7 +164,8 @@ class ConnectionPool:
                 try:
                     conn = self._pool.get_nowait()
                     conn.close()
-                except Exception:
+                except Exception as e:
+                    logger.warning(f"Failed to close pooled connection: {e}")
                     pass
             self._created = 0
 

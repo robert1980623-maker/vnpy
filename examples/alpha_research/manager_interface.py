@@ -16,6 +16,7 @@ import sys
 import time
 import tempfile
 import threading
+import logging
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
@@ -31,6 +32,8 @@ from alert_notifier import AlertNotifier, Alert
 from vnpy_config import get_manager_config
 from glm_error_analyzer import GLMErrorAnalyzer
 from file_lock import FileLock
+
+logger = logging.getLogger(__name__)
 
 
 class QuantManager:
@@ -126,12 +129,13 @@ class QuantManager:
                     with os.fdopen(fd, 'w', encoding='utf-8') as f:
                         json.dump(state, f, ensure_ascii=False, indent=2)
                     os.replace(tmp_path, str(self._state_file))
-                except Exception:
+                except Exception as e:
                     # 写入失败时清理临时文件
+                    logger.warning(f"State persistence failed: {e}")
                     try:
                         os.unlink(tmp_path)
-                    except OSError:
-                        pass
+                    except OSError as cleanup_error:
+                        logger.warning(f"Failed to clean up temporary file: {cleanup_error}")
                     raise
             except OSError as e:
                 # 持久化失败不应阻塞主流程，仅记录
@@ -234,7 +238,7 @@ class QuantManager:
                 self.handle_p2(task, issue)
         except Exception as e:
             # MG-01 修复：确保异常时也从 active_tasks 清理
-            print(f"⚠️ 处理任务时异常：{e}")
+            logger.warning(f"Handling task exception: {e}")
             if issue.id in self.active_tasks:
                 del self.active_tasks[issue.id]
                 self._save_state()  # 持久化清理
@@ -260,7 +264,7 @@ class QuantManager:
             if glm_result['confidence'] >= 0.7:
                 return glm_result['task_type']
         except Exception as e:  # pragma: no cover
-            print(f"⚠️  GLM 分析失败：{e}")
+            logger.warning(f"GLM analysis failed: {e}")
         
         return rule_result['task_type']
     
@@ -374,7 +378,7 @@ class QuantManager:
                     resolution='数据已更新'
                 )
         except Exception as e:  # pragma: no cover
-            print(f"   ❌ 调度失败：{e}")
+            logger.warning(f"Scheduling failed: {e}")
     
     def auto_retry_or_queue(self, issue: Issue):
         """自动重试（线程安全）"""
