@@ -16,12 +16,13 @@ def _ensure_tushare_token() -> str | None:
     """Ensure TUSHARE_TOKEN is loaded from environment or ~/.zshrc.
 
     Cron jobs run without an interactive shell, so ~/.zshrc is not sourced.
-    This function attempts to source it when the token is missing.
+    This function attempts to extract the token directly using Python.
 
     Returns the token source ('env', 'zshrc', '.env', or None).
     """
     import os as _os
-    import subprocess as _subprocess
+    import re
+    from pathlib import Path
 
     # Already set via environment — nothing to do
     if _os.environ.get('TUSHARE_TOKEN'):
@@ -31,26 +32,39 @@ def _ensure_tushare_token() -> str | None:
 
     logger = _get_logger(__name__)
 
-    # Attempt 1: source ~/.zshrc and extract the token
+    # Attempt 1: parse ~/.zshrc and extract the token
     zshrc = _os.path.expanduser('~/.zshrc')
     if _os.path.exists(zshrc):
         try:
-            result = _subprocess.run(
-                ['zsh', '-c', f'source {zshrc} && env | grep TUSHARE_TOKEN'],
-                capture_output=True, text=True, timeout=5,
-            )
-            for line in result.stdout.splitlines():
-                if line.startswith('TUSHARE_TOKEN='):
-                    token = line.split('=', 1)[1].strip()
-                    if token:
-                        _os.environ['TUSHARE_TOKEN'] = token
-                        logger.info(
-                            f"TUSHARE_TOKEN: sourced from ~/.zshrc "
-                            f"(masked: {token[:4]}...{token[-4:]})"
-                        )
-                        return 'zshrc'
+            text = Path(zshrc).read_text()
+
+            # Pattern explanation:
+            # ^\s*export\s+TUSHARE_TOKEN= : Start of line, whitespace, export, TUSHARE_TOKEN=
+            # (?:"([^"]*)"|'([^']*)'|(\S+)) : Match either:
+            #   - "content" (capture group 1)
+            #   - 'content' (capture group 2)
+            #   - unquoted non-whitespace content (capture group 3)
+            pattern = r'^\s*export\s+TUSHARE_TOKEN=(?:"([^"]*)"|\'([^\']*)\'|(\S+))'
+            matches = re.findall(pattern, text, re.MULTILINE)
+
+            if matches:
+                # matches is a list of tuples like [('', '', ''), ('value', '', ''), ('', 'value', '')]
+                # Each tuple has 3 groups, only one will have content based on which quote style was used
+                # Take the last match as the effective value in shell sourcing
+                last_match = matches[-1]  # Tuple of (double_quoted, single_quoted, unquoted)
+
+                # Extract the actual value from the matching group
+                token = next((val for val in last_match if val), '').strip()
+
+                if token:
+                    _os.environ['TUSHARE_TOKEN'] = token
+                    logger.info(
+                        f"TUSHARE_TOKEN: parsed from ~/.zshrc "
+                        f"(masked: {token[:4]}...{token[-4:]})"
+                    )
+                    return 'zshrc'
         except Exception as e:
-            logger.debug(f"Failed to source ~/.zshrc: {e}")
+            logger.debug(f"Failed to parse ~/.zshrc: {e}")
 
     # Attempt 2: check .env in project root
     project_root = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
@@ -60,7 +74,7 @@ def _ensure_tushare_token() -> str | None:
             with open(env_path) as f:
                 for line in f:
                     if line.startswith('TUSHARE_TOKEN='):
-                        token = line.split('=', 1)[1].strip()
+                        token = line.split('=', 1)[1].strip().strip('"\'')
                         if token:
                             _os.environ['TUSHARE_TOKEN'] = token
                             logger.info(
