@@ -442,6 +442,11 @@ class DataDownloader:
         # Phase 4B: 原子写入的失败队列实例
         self.failed_queue = AtomicFailedQueue(self._failed_file)
 
+        # 下载进度状态文件路径
+        self._progress_file = Path('./state/download_progress.json')
+        self._progress_file.parent.mkdir(parents=True, exist_ok=True)
+        self._progress_lock = Lock()
+
     # ---------- 增量检测 ----------
 
     def is_up_to_date(self, symbol: str, max_age_days: int = 1) -> bool:
@@ -601,6 +606,68 @@ class DataDownloader:
     # Phase 3 Fix 3: 限频控制（类级别共享，所有实例共用同一个限流器）
     _rate_limiter = RateLimiter(max_per_minute=180)
 
+    def _save_progress(self, symbol: str, attempt: int, source: str, error_message: str = ""):
+        """保存下载进度状态到文件"""
+        with self._progress_lock:
+            try:
+                # 读取现有状态
+                if self._progress_file.exists():
+                    with open(self._progress_file, 'r', encoding='utf-8') as f:
+                        progress_data = json.load(f)
+                else:
+                    progress_data = {}
+
+                # 更新状态
+                progress_data[symbol] = {
+                    'symbol': symbol,
+                    'attempt': attempt,
+                    'source': source,
+                    'timestamp': datetime.now().isoformat(),
+                    'error_message': error_message
+                }
+
+                # 原子写入新数据
+                temp_file = self._progress_file.with_suffix('.tmp')
+                with open(temp_file, 'w', encoding='utf-8') as f:
+                    json.dump(progress_data, f, ensure_ascii=False, indent=2)
+                os.replace(temp_file, self._progress_file)
+
+            except Exception as e:
+                logger.warning(f"保存下载进度状态失败: {e}")
+
+    def _remove_progress(self, symbol: str):
+        """移除指定股票的下载进度状态"""
+        with self._progress_lock:
+            try:
+                if self._progress_file.exists():
+                    with open(self._progress_file, 'r', encoding='utf-8') as f:
+                        progress_data = json.load(f)
+
+                    # 删除指定股票的状态
+                    if symbol in progress_data:
+                        del progress_data[symbol]
+
+                        # 原子写入新数据
+                        temp_file = self._progress_file.with_suffix('.tmp')
+                        with open(temp_file, 'w', encoding='utf-8') as f:
+                            json.dump(progress_data, f, ensure_ascii=False, indent=2)
+                        os.replace(temp_file, self._progress_file)
+
+            except Exception as e:
+                logger.warning(f"移除下载进度状态失败: {e}")
+
+    def get_download_progress(self) -> Dict:
+        """获取当前下载进度状态"""
+        try:
+            if self._progress_file.exists():
+                with open(self._progress_file, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            else:
+                return {}
+        except Exception as e:
+            logger.warning(f"读取下载进度状态失败: {e}")
+            return {}
+
     def _download_one(self, symbol: str) -> DownloadResult:
         """
         下载单只股票。
@@ -624,6 +691,8 @@ class DataDownloader:
                     validation = self._run_validation(symbol, df)
                     with self._stats_lock:
                         self._stats['multi_source'] += 1
+                    # 成功后移除进度状态
+                    self._remove_progress(symbol)
                     return DownloadResult(
                         symbol=symbol,
                         status='success',
@@ -640,6 +709,8 @@ class DataDownloader:
                 last_error = f"multi_source: {e}"
                 logger.debug(last_error)
                 # 继续尝试传统数据源作为回退
+                # 记录初始状态
+                self._save_progress(symbol, 0, "multi_source", str(e))
 
         # 传统数据源轮转（回退路径）
         delay = self.base_delay
@@ -660,6 +731,8 @@ class DataDownloader:
                     self._save_bars(symbol, bars)
                     self.failed_queue.remove(symbol)  # Phase 4B: 原子写入
                     validation = self._run_validation(symbol, bars)
+                    # 成功后移除进度状态
+                    self._remove_progress(symbol)
                     return DownloadResult(
                         symbol=symbol,
                         status='success',
@@ -672,6 +745,9 @@ class DataDownloader:
                 last_error = f"{source_name} attempt {attempt + 1}: {e}"
                 logger.debug(last_error)
 
+                # 记录每次重试的状态
+                self._save_progress(symbol, attempt + 1, source_name, str(e))
+
             # 重试前等待（指数退避）
             if attempt < self.max_retries - 1:
                 time.sleep(min(delay, self.max_delay))
@@ -679,6 +755,7 @@ class DataDownloader:
 
         # 全部失败
         self.failed_queue.add(symbol, last_error or "未知错误")  # Phase 4B: 原子写入
+        # 重试失败后仍然保留进度状态以便调试
         return DownloadResult(
             symbol=symbol,
             status='failed',
