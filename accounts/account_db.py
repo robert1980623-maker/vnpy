@@ -41,6 +41,8 @@ INIT_LOCK_FILE = Path(__file__).parent / ".init_db.lock"
 # 导入连接池
 from accounts.connection_pool import get_connection_pool
 
+# AccountService 在 TradingAccount 内延迟导入，避免与 account_service.py 循环依赖
+
 
 def get_connection():
     """获取数据库连接（通过连接池，用于向后兼容）
@@ -49,11 +51,44 @@ def get_connection():
     更推荐使用 pool.get_connection() with 语句自动管理。
 
     Returns:
-        sqlite3.Connection: 数据库连接
+        _PooledConnection: 数据库连接包装 (close() 会自动归还到池)
     """
     pool = get_connection_pool()
-    conn = pool._acquire(timeout=5.0)
-    return conn
+    raw_conn = pool._acquire(timeout=5.0)
+    return _PooledConnection(raw_conn, pool)
+
+
+class _PooledConnection:
+    """薄包装：使 conn.close() 把连接归还到池（修复文档与实现不一致）。
+
+    委托大部分操作到底层 sqlite3.Connection。close() 把连接归还到池
+    但不真正关闭底层连接（让连接可被复用）。多次 close 是幂等的。
+    """
+
+    __slots__ = ("_conn", "_pool", "_released")
+
+    def __init__(self, conn, pool):
+        self._conn = conn
+        self._pool = pool
+        self._released = False
+
+    def close(self):
+        if not self._released:
+            self._released = True
+            try:
+                self._pool._release(self._conn)
+            except Exception:
+                pass
+
+    def __getattr__(self, name):
+        return getattr(self._conn, name)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        self.close()
+        return False
 
 
 def init_db():
@@ -586,7 +621,11 @@ if __name__ == '__main__':
 
 
 class TradingAccount(AccountDB):
-    """交易账户（支持买卖操作）"""
+    """交易账户（支持买卖操作）
+
+    buy/sell 委托给 AccountService 保证事务原子性
+    (cash/position/trade 一次提交，崩溃自动回滚)。
+    """
 
     def __init__(self, account_id: str):
         super().__init__()
@@ -594,6 +633,13 @@ class TradingAccount(AccountDB):
         self.account = self.get_account(account_id)
         if not self.account:
             raise ValueError(f"账户 {account_id} 不存在")
+        # 延迟导入 AccountService，避免与 account_service.py 循环依赖
+        from accounts.account_service import AccountService
+        self._service = AccountService(account_id)
+
+    def _refresh_account(self) -> None:
+        """委托买/卖后刷新本地账户缓存"""
+        self.account = self.get_account(self.account_id)
 
     @property
     def cash(self) -> float:
@@ -614,54 +660,40 @@ class TradingAccount(AccountDB):
     def buy(self, symbol: str, quantity: int, price: float,
             symbol_name: str = "", commission_rate: float = 0.0003) -> Dict:
         """
-        买入股票
-        返回: {'success': bool, 'message': str, 'trade_id': int or None}
+        买入股票（委托给 AccountService，事务原子保证）
+
+        返回: {'success': bool, 'message': str, 'trade_id': str or None,
+               'cost': float, 'remaining_cash': float}
         """
+        result = self._service.buy(
+            symbol=symbol,
+            name=symbol_name,
+            price=price,
+            quantity=quantity,
+            reason="TradingAccount.buy",
+            agent_id="TradingAccount",
+            source_module="account_db",
+            commission_rate=commission_rate,
+        )
+
         commission = quantity * price * commission_rate
         total_cost = quantity * price + commission
 
-        if not self.can_buy(symbol, quantity, price, commission_rate):
+        if not result.success:
             return {
                 'success': False,
-                'message': f'现金不足，需要 ¥{total_cost:,.2f}，当前可用 ¥{self.cash:,.2f}',
-                'trade_id': None
+                'message': result.message or f'现金不足，需要 ¥{total_cost:,.2f}，当前可用 ¥{self.cash:,.2f}',
+                'trade_id': None,
             }
 
-        # 记录交易
-        trade_id = self.add_trade(
-            account_id=self.account_id,
-            symbol=symbol,
-            trade_type='BUY',
-            quantity=quantity,
-            price=price,
-            commission=commission,
-            symbol_name=symbol_name
-        )
-
-        # 更新现金
-        new_cash = self.cash - total_cost
-        self.update_cash(self.account_id, new_cash)
-
-        # 更新持仓
-        current_pos = self.get_position(symbol)
-        if current_pos:
-            # 加仓
-            new_qty = current_pos.quantity + quantity
-            new_avg = (current_pos.quantity * current_pos.avg_cost + quantity * price) / new_qty
-            self.update_position(self.account_id, symbol, new_qty, new_avg, price)
-        else:
-            # 新建持仓
-            self.update_position(self.account_id, symbol, quantity, price, price)
-
-        # 刷新账户
-        self.account = self.get_account(self.account_id)
+        self._refresh_account()
 
         return {
             'success': True,
-            'message': f'买入 {symbol} {quantity}股 @ ¥{price:.2f}',
-            'trade_id': trade_id,
+            'message': result.message or f'买入 {symbol} {quantity}股 @ ¥{price:.2f}',
+            'trade_id': result.trade_id or None,
             'cost': total_cost,
-            'remaining_cash': new_cash
+            'remaining_cash': result.cash_after,
         }
 
     def get_position(self, symbol: str) -> Optional[Position]:
@@ -680,59 +712,46 @@ class TradingAccount(AccountDB):
     def sell(self, symbol: str, quantity: int, price: float,
              commission_rate: float = 0.0003) -> Dict:
         """
-        卖出股票
+        卖出股票（委托给 AccountService，事务原子保证）
+
+        返回: {'success': bool, 'message': str, 'trade_id': str or None,
+               'proceeds': float, 'remaining_cash': float}
         """
-        pos = self.get_position(symbol)
-        if not pos or pos.quantity < quantity:
-            return {
-                'success': False,
-                'message': f'持仓不足，当前 {pos.quantity if pos else 0} 股，需要 {quantity} 股',
-                'trade_id': None
-            }
+        result = self._service.sell(
+            symbol=symbol,
+            price=price,
+            quantity=quantity,
+            reason="TradingAccount.sell",
+            agent_id="TradingAccount",
+            source_module="account_db",
+            commission_rate=commission_rate,
+        )
 
         commission = quantity * price * commission_rate
         proceeds = quantity * price - commission
 
-        # 记录交易
-        trade_id = self.add_trade(
-            account_id=self.account_id,
-            symbol=symbol,
-            trade_type='SELL',
-            quantity=quantity,
-            price=price,
-            commission=commission
-        )
-
-        # 更新现金
-        new_cash = self.cash + proceeds
-        self.update_cash(self.account_id, new_cash)
-
-        # 更新持仓
-        remaining = pos.quantity - quantity
-        if remaining > 0:
-            self.update_position(self.account_id, symbol, remaining, pos.avg_cost, price)
-        else:
-            # 清仓
-            pool = get_connection_pool()
-            conn = pool._acquire(timeout=5.0)
+        if not result.success:
+            available = 0
             try:
-                conn.execute(
-                    "DELETE FROM positions WHERE account_id = ? AND symbol = ?",
-                    (self.account_id, symbol)
-                )
-                conn.commit()
-            finally:
-                pool._release(conn)
+                pos = self.get_position(symbol)
+                if pos:
+                    available = pos.quantity
+            except Exception:
+                pass
+            return {
+                'success': False,
+                'message': result.message or f'持仓不足，当前 {available} 股，需要 {quantity} 股',
+                'trade_id': None,
+            }
 
-        # 刷新账户
-        self.account = self.get_account(self.account_id)
+        self._refresh_account()
 
         return {
             'success': True,
-            'message': f'卖出 {symbol} {quantity}股 @ ¥{price:.2f}',
-            'trade_id': trade_id,
+            'message': result.message or f'卖出 {symbol} {quantity}股 @ ¥{price:.2f}',
+            'trade_id': result.trade_id or None,
             'proceeds': proceeds,
-            'remaining_cash': new_cash
+            'remaining_cash': result.cash_after,
         }
 
     def get_total_assets(self) -> float:

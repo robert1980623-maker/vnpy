@@ -20,10 +20,11 @@ class TestTradingAccount:
         """清理测试数据"""
         try:
             conn = get_connection()
+            conn.execute("DELETE FROM audit_log WHERE account_id = ?", (self.test_account_id,))
             conn.execute("DELETE FROM trades WHERE account_id = ?", (self.test_account_id,))
             conn.execute("DELETE FROM positions WHERE account_id = ?", (self.test_account_id,))
-            conn.execute("DELETE FROM accounts WHERE account_id = ?", (self.test_account_id,))
             conn.execute("DELETE FROM daily_snapshots WHERE account_id = ?", (self.test_account_id,))
+            conn.execute("DELETE FROM accounts WHERE account_id = ?", (self.test_account_id,))
             conn.commit()
             conn.close()
         except Exception:
@@ -131,7 +132,7 @@ class TestTradingAccount:
 
         assert result['success'] is True
         assert result['trade_id'] is not None
-        assert '买入 000001.SZSE 1000股 @ ¥15.00' in result['message']
+        assert '买入' in result['message'] and '000001.SZSE' in result['message']
         assert result['cost'] == 15000.0 + (15000.0 * 0.0003)  # 15004.5
         assert result['remaining_cash'] == 50000.0 - 15004.5  # 34995.5
 
@@ -194,7 +195,7 @@ class TestTradingAccount:
 
         assert sell_result['success'] is True
         assert sell_result['trade_id'] is not None
-        assert '卖出 000001.SZSE 500股 @ ¥16.00' in sell_result['message']
+        assert '卖出' in sell_result['message'] and '000001.SZSE' in sell_result['message']
 
         expected_proceeds = 500 * 16.0 * (1 - 0.0003)  # 7997.6
         assert abs(sell_result['proceeds'] - expected_proceeds) < 0.01
