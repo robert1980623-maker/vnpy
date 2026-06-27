@@ -13,7 +13,8 @@ import json
 import csv
 from pathlib import Path
 from datetime import datetime, timedelta
-from virtual_account import VirtualAccount, Position
+from accounts.account_service import AccountService
+from accounts.account_db import AccountDB, Account
 import random
 from logger import TaskLogger
 
@@ -21,7 +22,7 @@ from logger import TaskLogger
 class DailyTrading:
     """每日交易"""
     
-    def __init__(self, account: VirtualAccount):
+    def __init__(self, account: AccountService):
         self.account = account
         self.data_dir = Path('./data/akshare/bars')
         self.today = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
@@ -73,17 +74,21 @@ class DailyTrading:
         buy_list = []
         sell_list = []
         
+        # 获取当前持仓
+        positions = self.account.get_positions()
+        position_dict = {pos.symbol: pos for pos in positions}
+        
         # 1. 清空表现差的持仓
-        for symbol, pos in list(self.account.positions.items()):
+        for symbol, pos in position_dict.items():
             if symbol in self.current_prices:
                 current_price = self.current_prices[symbol]
-                cost_rate = (current_price - pos.avg_price) / pos.avg_price * 100
+                cost_rate = (current_price - pos.avg_cost) / pos.avg_cost * 100
                 
                 # 亏损超过 5% 卖出
                 if cost_rate < -5:
                     sell_list.append({
                         'symbol': symbol,
-                        'volume': pos.volume,
+                        'volume': pos.quantity,
                         'price': current_price,
                         'reason': f'亏损 {cost_rate:.2f}%'
                     })
@@ -92,7 +97,7 @@ class DailyTrading:
         # 计算过去5天的收益率
         momentum_scores = {}
         for symbol, data in self.stock_data.items():
-            if symbol not in self.account.positions:
+            if symbol not in position_dict:
                 # 计算从开盘到收盘的收益率
                 return_rate = (data['close'] - data['open']) / data['open'] * 100
                 momentum_scores[symbol] = return_rate
@@ -103,7 +108,7 @@ class DailyTrading:
         
         # 每只买入 1000 股
         for symbol in top_symbols:
-            if symbol not in self.account.positions:
+            if symbol not in position_dict:
                 buy_list.append({
                     'symbol': symbol,
                     'volume': 1000,
@@ -118,19 +123,32 @@ class DailyTrading:
         total_cost = 0
         total_revenue = 0
         
+        # 获取交易历史
+        trade_history = self.account.get_trade_history()
+        
         # 执行卖出
         for trade in sell_list:
-            revenue = trade['price'] * trade['volume']
-            total_revenue += revenue
-            self.account.sell(trade['symbol'], trade['price'], trade['volume'], self.today, trade['reason'])
-            print(f"  卖出 {trade['symbol']} {trade['volume']}股 @ {trade['price']:.2f} ({trade['reason']})")
+            # 检查是否已经卖出
+            if not any(t.symbol == trade['symbol'] and t.direction.value == 'sell' and t.trade_date == self.today 
+                      for t in trade_history):
+                revenue = trade['price'] * trade['volume']
+                total_revenue += revenue
+                self.account.sell(trade['symbol'], trade['price'], trade['volume'], trade['reason'])
+                print(f"  卖出 {trade['symbol']} {trade['volume']}股 @ {trade['price']:.2f} ({trade['reason']})")
+            else:
+                print(f"  ⚠️  {trade['symbol']} 今日已卖出，跳过")
         
         # 执行买入
         for trade in buy_list:
-            cost = trade['price'] * trade['volume']
-            total_cost += cost
-            self.account.buy(trade['symbol'], trade['price'], trade['volume'], self.today, trade['reason'])
-            print(f"  买入 {trade['symbol']} {trade['volume']}股 @ {trade['price']:.2f} ({trade['reason']})")
+            # 检查是否已经买入
+            if not any(t.symbol == trade['symbol'] and t.direction.value == 'buy' and t.trade_date == self.today 
+                      for t in trade_history):
+                cost = trade['price'] * trade['volume']
+                total_cost += cost
+                self.account.buy(trade['symbol'], "", trade['price'], trade['volume'], trade['reason'])
+                print(f"  买入 {trade['symbol']} {trade['volume']}股 @ {trade['price']:.2f} ({trade['reason']})")
+            else:
+                print(f"  ⚠️  {trade['symbol']} 今日已买入，跳过")
         
         print(f"\n  交易成本: ¥{total_cost:.2f}")
         print(f"  交易收入: ¥{total_revenue:.2f}")
@@ -156,10 +174,13 @@ class DailyTrading:
             print("  无交易")
         
         # 显示账户状态
+        balance = self.account.get_balance()
+        positions = self.account.get_positions()
+        
         print(f"\n  账户状态:")
-        print(f"    现金: ¥{self.account.cash:.2f}")
-        print(f"    持仓: {len(self.account.positions)} 只")
-        print(f"    总市值: ¥{self.account.get_total_value():.2f}")
+        print(f"    现金: ¥{balance.cash:.2f}")
+        print(f"    持仓: {len(positions)} 只")
+        print(f"    总市值: ¥{balance.total_assets:.2f}")
 
 
 def main():
@@ -170,18 +191,34 @@ def main():
     print(f"当前时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     
     # 加载账户
-    account = VirtualAccount(initial_capital=50000, account_id='virtual_2026')
+    db = AccountDB()
+    if not db.get_account("virtual_2026"):
+        db.create_account(Account(
+            account_id="virtual_2026",
+            account_name="虚拟账户",
+            account_type="virtual",
+            initial_capital=50000,
+            cash=50000,
+            currency="CNY",
+            status="active",
+            risk_level="moderate",
+        ))
+    
+    account = AccountService("virtual_2026")
+    
+    balance = account.get_balance()
+    positions = account.get_positions()
+    trades = account.get_trade_history()
+    
     print(f"\n✅ 加载账户：virtual_2026")
-    print(f"   现金：¥{account.cash:.2f}")
-    print(f"   持仓：{len(account.positions)} 只")
-    print(f"   交易：{len(account.trades)} 笔")
+    print(f"   现金：¥{balance.cash:.2f}")
+    print(f"   持仓：{len(positions)} 只")
+    print(f"   交易：{len(trades)} 笔")
     
     # 运行每日交易
     daily_trading = DailyTrading(account)
     daily_trading.run_daily()
     
-    # 保存账户
-    account._save_account()
     print(f"\n✅ 账户已保存")
 
 
