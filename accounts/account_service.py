@@ -11,6 +11,10 @@ Phase 5: TTL 缓存层 - 提升查询性能
 - get_balance(): TTL 30s 缓存
 - get_positions(): TTL 30s 缓存
 - buy/sell: 立即失效缓存
+
+Phase 6: PriceUpdater 集成 - 解决持仓价格不更新问题
+- refresh_prices(): 更新所有持仓的当前价格
+- snapshot() 开头发起价格刷新
 """
 import json
 import logging
@@ -22,6 +26,7 @@ from threading import RLock
 
 from accounts.account_db import AccountDB, get_connection
 from accounts.event_bus import EventBus, EventType, AccountEvent, trade_event
+from accounts.price_updater import PriceUpdater
 from accounts.exceptions import (
     InsufficientCashError,
     InsufficientPositionError,
@@ -58,6 +63,9 @@ class CachedAccountService:
         self.event_bus = event_bus or EventBus()
         self._cache_ttl = cache_ttl
 
+        # Phase 6: PriceUpdater for refreshing position prices
+        self._price_updater = PriceUpdater()
+
         # 缓存数据
         self._balance_cache: Optional[Balance] = None
         self._positions_cache: Optional[List[Position]] = None
@@ -85,6 +93,28 @@ class CachedAccountService:
             self._trade_history_cache = None
             self._trade_history_cache_time = None
 
+    # ── Phase 6: 价格刷新 ─────────────────────────────────────
+
+    def refresh_prices(self) -> int:
+        """刷新所有持仓的当前价格
+
+        调用 PriceUpdater.refresh_positions() 更新 positions 表中的
+        current_price / market_value / unrealized_pnl。
+
+        Returns:
+            更新的持仓数量
+        """
+        try:
+            updated = self._price_updater.refresh_positions(self.account_id)
+            if updated > 0:
+                # 刷新后缓存失效，确保下次查询获取最新数据
+                self._invalidate_cache()
+                logger.info(f"Refreshed {updated} position prices for {self.account_id}")
+            return updated
+        except Exception as e:
+            logger.error(f"Failed to refresh prices: {e}")
+            return 0
+
     # ── 交易操作 (事务保证，写操作) ─────────────────────────────
 
     def buy(
@@ -96,6 +126,7 @@ class CachedAccountService:
         reason: str = "",
         agent_id: str = "system",
         source_module: str = "",
+        commission_rate: float = 0.0,
     ) -> TradeResult:
         """买入 — cash 扣减 + position 更新 + trade 记录 原子完成
 
@@ -118,6 +149,8 @@ class CachedAccountService:
             AccountNotFoundError: 账户不存在
         """
         amount = price * quantity
+        commission = amount * commission_rate
+        total_cost = amount + commission
         trade_id = self._generate_trade_id()
 
         def do_buy(conn):
@@ -130,11 +163,11 @@ class CachedAccountService:
                 raise AccountNotFoundError(self.account_id)
             cash_before = row[0]
 
-            # 2. 检查现金
-            if cash_before < amount:
-                raise InsufficientCashError(amount, cash_before)
+            # 2. 检查现金 (包含手续费)
+            if cash_before < total_cost:
+                raise InsufficientCashError(total_cost, cash_before)
 
-            cash_after = cash_before - amount
+            cash_after = cash_before - total_cost
 
             # 3. 更新 cash
             conn.execute(
@@ -191,7 +224,7 @@ class CachedAccountService:
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     self.account_id, symbol, name, "BUY", quantity, price,
-                    amount, 0.0,
+                    amount, commission,
                     now.strftime("%Y%m%d"), now.strftime("%H:%M:%S"),
                     trade_id, "filled", now.isoformat(),
                     reason, agent_id,
@@ -205,9 +238,10 @@ class CachedAccountService:
                     cash_before, cash_after, agent_id, source_module, details)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
-                    self.account_id, "BUY", symbol, quantity, price, amount,
+                    self.account_id, "BUY", symbol, quantity, price, total_cost,
                     cash_before, cash_after, agent_id, source_module,
-                    json.dumps({"reason": reason, "trade_id": trade_id}),
+                    json.dumps({"reason": reason, "trade_id": trade_id,
+                                "commission": commission}),
                 ),
             )
 
@@ -252,6 +286,7 @@ class CachedAccountService:
         reason: str = "",
         agent_id: str = "system",
         source_module: str = "",
+        commission_rate: float = 0.0,
     ) -> TradeResult:
         """卖出 — cash 增加 + position 扣减 + trade 记录 原子完成
 
@@ -274,6 +309,8 @@ class CachedAccountService:
             InsufficientPositionError: 持仓不足
         """
         amount = price * quantity
+        commission = amount * commission_rate
+        net_proceeds = amount - commission
         trade_id = self._generate_trade_id()
 
         def do_sell(conn):
@@ -298,7 +335,7 @@ class CachedAccountService:
                 (self.account_id,),
             ).fetchone()
             cash_before = cash_row[0]
-            cash_after = cash_before + amount
+            cash_after = cash_before + net_proceeds
 
             # 4. 更新 cash
             conn.execute(
@@ -340,7 +377,7 @@ class CachedAccountService:
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     self.account_id, symbol, "SELL", quantity, price,
-                    amount, 0.0,
+                    amount, commission,
                     now.strftime("%Y%m%d"), now.strftime("%H:%M:%S"),
                     trade_id, "filled", now.isoformat(),
                     reason, agent_id,
@@ -354,12 +391,13 @@ class CachedAccountService:
                     cash_before, cash_after, agent_id, source_module, details)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
-                    self.account_id, "SELL", symbol, quantity, price, amount,
+                    self.account_id, "SELL", symbol, quantity, price, net_proceeds,
                     cash_before, cash_after, agent_id, source_module,
                     json.dumps({
                         "reason": reason,
                         "trade_id": trade_id,
                         "realized_pnl": realized_pnl,
+                        "commission": commission,
                     }),
                 ),
             )
@@ -569,8 +607,12 @@ class CachedAccountService:
     def snapshot(self, trade_date: str = None) -> Snapshot:
         """生成并保存每日快照
 
+        Phase 6: 开头调用 refresh_prices() 刷新持仓价格
         更新操作后失效缓存。
         """
+        # Phase 6: 刷新持仓价格
+        self.refresh_prices()
+
         if trade_date is None:
             trade_date = datetime.now().strftime("%Y%m%d")
 

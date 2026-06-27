@@ -445,3 +445,67 @@ class TestTradeIdGeneration(TestAccountServiceBase):
             ids.add(result.trade_id)
 
         assert len(ids) == 10
+
+
+class TestAccountServiceRefreshPrices(TestAccountServiceBase):
+    """Phase 6: 价格刷新测试"""
+
+    def test_refresh_prices(self):
+        """refresh_prices: 更新持仓价格"""
+        svc = AccountService(TEST_ACCOUNT_ID)
+
+        # 先买入一只股票
+        svc.buy("000001.SZSE", "平安银行", 10.0, 100)
+
+        # 验证初始状态
+        positions = svc.get_positions()
+        assert len(positions) == 1
+        assert positions[0].current_price == 10.0  # 买入时价格
+        assert positions[0].unrealized_pnl == 0.0
+
+        # 调用 refresh_prices (会从 CSV 读取最新价格)
+        updated = svc.refresh_prices()
+
+        # 应该返回 1 (CSV 文件存在，更新了 1 个持仓)
+        assert updated == 1
+
+        # 验证价格已更新 (CSV 中最新收盘价 11.08)
+        positions = svc.get_positions()
+        assert positions[0].current_price == 11.08
+        # 浮盈 = 100 * (11.08 - 10.0) = 108.0
+        assert positions[0].unrealized_pnl == 108.0
+
+    def test_refresh_prices_with_mock(self):
+        """refresh_prices: 使用 mock PriceUpdater"""
+        from unittest.mock import patch, MagicMock
+        from accounts.price_updater import PriceUpdater
+
+        svc = AccountService(TEST_ACCOUNT_ID)
+        svc.buy("000001.SZSE", "平安银行", 10.0, 100)
+
+        # Mock PriceUpdater.refresh_positions
+        with patch.object(PriceUpdater, 'refresh_positions', return_value=1) as mock_refresh:
+            updated = svc.refresh_prices()
+
+            assert updated == 1
+            mock_refresh.assert_called_once_with(TEST_ACCOUNT_ID)
+
+    def test_snapshot_calls_refresh_prices(self):
+        """snapshot: 开头调用 refresh_prices"""
+        from unittest.mock import patch, MagicMock
+        from accounts.price_updater import PriceUpdater
+
+        svc = AccountService(TEST_ACCOUNT_ID)
+        svc.buy("000001.SZSE", "平安银行", 10.0, 100)
+
+        # Mock refresh_prices
+        with patch.object(svc, 'refresh_prices', return_value=0) as mock_refresh:
+            snap = svc.snapshot(trade_date="20260627")
+
+            # 验证 refresh_prices 被调用
+            mock_refresh.assert_called_once()
+
+            # 验证快照数据正确
+            assert snap.account_id == TEST_ACCOUNT_ID
+            assert snap.trade_date == "20260627"
+            assert snap.cash == 99_000.0
