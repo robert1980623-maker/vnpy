@@ -1,23 +1,25 @@
 #!/usr/bin/env python3
 """
-GLM 错误分析器
+错误分析器
 
-使用本地 GLM 模型分析错误类型，提供智能判断
+使用本地 LLM 模型分析错误类型，提供智能判断。
+默认模型：qwen3.6-35b-a3b (LMStudio)
 """
 
 import json
 import requests
 from typing import Dict, Optional
+from vnpy_config import get_error_analyzer_config
 
 
-class GLMErrorAnalyzer:
-    """GLM 错误分析器"""
+class ErrorAnalyzer:
+    """错误分析器"""
     
-    def __init__(self, model_url: str = "http://localhost:1234/v1/chat/completions", 
-                 model_name: str = "glm-4.7-flash"):
-        self.model_url = model_url
-        self.model_name = model_name
-        self.timeout = 30  # 30 秒超时
+    def __init__(self, model_url: str = None, model_name: str = None):
+        cfg = get_error_analyzer_config()
+        self.model_url = model_url or cfg.get("model_url", "http://localhost:1234/v1/chat/completions")
+        self.model_name = model_name or cfg.get("model_name", "qwen/qwen3.6-35b-a3b")
+        self.timeout = cfg.get("timeout", 30)  # 30 秒超时
     
     def analyze(self, error_type: str, error_message: str, 
                 context: Optional[str] = None) -> Dict:
@@ -67,8 +69,8 @@ class GLMErrorAnalyzer:
             else:
                 return self._fallback_result(error_type, error_message, f"API 错误：{response.status_code}")
         
-        except requests.exceptions.Timeout:
-            return self._fallback_result(error_type, error_message, "GLM 超时")
+        except requests.exceptions.Timeout:  # pragma: no cover
+            return self._fallback_result(error_type, error_message, "LLM 超时")
         except Exception as e:
             return self._fallback_result(error_type, error_message, f"异常：{str(e)}")
     
@@ -106,7 +108,7 @@ class GLMErrorAnalyzer:
         return prompt
     
     def _parse_response(self, content: str) -> Dict:
-        """解析 GLM 响应"""
+        """解析 LLM 响应"""
         try:
             # 尝试提取 JSON
             import re
@@ -116,14 +118,14 @@ class GLMErrorAnalyzer:
                 return {
                     'task_type': result.get('task_type', 'engineering'),
                     'confidence': float(result.get('confidence', 0.8)),
-                    'reasoning': result.get('reasoning', 'GLM 分析'),
+                    'reasoning': result.get('reasoning', 'LLM 分析'),
                     'suggested_agent': result.get('suggested_agent', 'delta')
                 }
             else:
                 return {
                     'task_type': 'engineering',
                     'confidence': 0.5,
-                    'reasoning': f'GLM 返回格式异常：{content[:100]}',
+                    'reasoning': f'LLM 返回格式异常：{content[:100]}',
                     'suggested_agent': 'delta'
                 }
         except Exception as e:
@@ -140,14 +142,14 @@ class GLMErrorAnalyzer:
         return {
             'task_type': 'engineering',
             'confidence': 0.0,
-            'reasoning': f'GLM 分析失败，使用默认规则。原因：{reason}',
+            'reasoning': f'LLM 分析失败，使用默认规则。原因：{reason}',
             'suggested_agent': 'delta'
         }
 
 
-def main():
-    """测试 GLM 分析器"""
-    analyzer = GLMErrorAnalyzer()
+def main():  # pragma: no cover
+    """测试错误分析器"""
+    analyzer = ErrorAnalyzer()
     
     # 测试用例
     test_cases = [

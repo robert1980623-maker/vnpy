@@ -23,11 +23,11 @@ alert:
     - type: wecom
       target: "wecom_webhook_url"  # 企业微信机器人 Webhook URL
 
-glm_analyzer:
+error_analyzer:
   timeout: 30  # 秒
   fallback_confidence: 0.5
   model_url: "http://localhost:1234/v1/chat/completions"
-  model_name: "glm-4.7-flash"
+  model_name: "qwen/qwen3.6-35b-a3b"
 
 scheduler:
   max_retries: 5

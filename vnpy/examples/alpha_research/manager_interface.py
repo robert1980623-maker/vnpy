@@ -16,7 +16,7 @@ from datetime import datetime
 from typing import Dict, List, Optional
 from issue_queue import IssueQueue, Issue
 from alert_notifier import AlertNotifier, Alert
-from glm_error_analyzer import GLMErrorAnalyzer
+from error_analyzer import ErrorAnalyzer
 
 
 class QuantManager:
@@ -32,7 +32,7 @@ class QuantManager:
             "data": "data-agent",
             "general": "delta",
         }
-        self.glm_analyzer = GLMErrorAnalyzer()
+        self.error_analyzer = ErrorAnalyzer()
     """量化 Manager - 协调调度中心"""
     
     def __init__(self, base_dir: str = "./issues"):
@@ -40,7 +40,7 @@ class QuantManager:
         self.issue_queue = IssueQueue(base_dir=base_dir)
         self.notifier = AlertNotifier()
         self.active_tasks: Dict[str, Dict] = {}
-        self.glm_analyzer = GLMErrorAnalyzer()
+        self.error_analyzer = ErrorAnalyzer()
         self.agent_mapping = {
             'qa': 'qa',
             'trading': 'trading-agent',
@@ -88,15 +88,15 @@ class QuantManager:
             return rule_result['task_type']
         
         try:
-            glm_result = self.glm_analyzer.analyze(
+            llm_result = self.error_analyzer.analyze(
                 error_type=issue.error_type,
                 error_message=issue.error_message,
                 context=None
             )
-            if glm_result['confidence'] >= 0.7:
-                return glm_result['task_type']
+            if llm_result['confidence'] >= 0.7:
+                return llm_result['task_type']
         except Exception as e:
-            print(f"⚠️  GLM 分析失败：{e}")
+            print(f"⚠️  LLM 分析失败：{e}")
         
         return rule_result['task_type']
     

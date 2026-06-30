@@ -23,7 +23,7 @@ def get_config() -> dict[str, Any]:
             'delta_consumer': {'max_retries': 3, 'max_history': 100, 'poll_interval': 30},
             'manager': {'default_timeout_minutes': 30, 'max_retries': 3, 'poll_interval': 5},
             'alert': {'notify_threshold': 3, 'channels': [...]},
-            'glm_analyzer': {'timeout': 30, 'fallback_confidence': 0.5, ...},
+            'error_analyzer': {'timeout': 30, 'fallback_confidence': 0.5, ...},
             'scheduler': {'max_retries': 5, ...},
         }
     """
@@ -50,9 +50,9 @@ def get_alert_config() -> dict[str, Any]:
     return get_config().get("alert", {})
 
 
-def get_glm_analyzer_config() -> dict[str, Any]:
-    """获取 glm_analyzer 配置"""
-    return get_config().get("glm_analyzer", {})
+def get_error_analyzer_config() -> dict[str, Any]:
+    """获取 error_analyzer 配置"""
+    return get_config().get("error_analyzer", {})
 
 
 def get_scheduler_config() -> dict[str, Any]:
@@ -78,11 +78,11 @@ MANAGER_POLL_INTERVAL = get_manager_config().get("poll_interval", 5)
 NOTIFY_THRESHOLD = get_alert_config().get("notify_threshold", 3)
 ALERT_CHANNELS = get_alert_config().get("channels", [])
 
-# glm_analyzer
-GLM_TIMEOUT = get_glm_analyzer_config().get("timeout", 30)
-GLM_FALLBACK_CONFIDENCE = get_glm_analyzer_config().get("fallback_confidence", 0.5)
-GLM_MODEL_URL = get_glm_analyzer_config().get("model_url", "http://localhost:1234/v1/chat/completions")
-GLM_MODEL_NAME = get_glm_analyzer_config().get("model_name", "glm-4.7-flash")
+# error_analyzer
+ERROR_ANALYZER_TIMEOUT = get_error_analyzer_config().get("timeout", 30)
+ERROR_ANALYZER_FALLBACK_CONFIDENCE = get_error_analyzer_config().get("fallback_confidence", 0.5)
+ERROR_ANALYZER_MODEL_URL = get_error_analyzer_config().get("model_url", "http://localhost:1234/v1/chat/completions")
+ERROR_ANALYZER_MODEL_NAME = get_error_analyzer_config().get("model_name", "qwen/qwen3.6-35b-a3b")
 
 # scheduler
 SCHEDULER_MAX_RETRIES = get_scheduler_config().get("max_retries", 5)

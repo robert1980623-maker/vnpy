@@ -232,7 +232,7 @@ class TestQuantManagerEdgeCases:
             error_message='Test',
             severity='P1'
         )
-        with patch.object(manager.glm_analyzer, 'analyze', side_effect=Exception("GLM error")):
+        with patch.object(manager.error_analyzer, 'analyze', side_effect=Exception("LLM error")):
             result = manager.analyze_error(issue)
             assert result is not None
     

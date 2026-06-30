@@ -30,7 +30,7 @@ from issue_queue import IssueQueue, Issue
 from human_report import human_manager_report
 from alert_notifier import AlertNotifier, Alert
 from vnpy_config import get_manager_config
-from glm_error_analyzer import GLMErrorAnalyzer
+from error_analyzer import ErrorAnalyzer
 from file_lock import FileLock
 
 logger = logging.getLogger(__name__)
@@ -49,7 +49,7 @@ class QuantManager:
         self.issue_queue = IssueQueue(base_dir=base_dir)
         self.notifier = AlertNotifier()
         self.active_tasks: Dict[str, Dict] = {}
-        self.glm_analyzer = GLMErrorAnalyzer()
+        self.error_analyzer = ErrorAnalyzer()
         self.agent_mapping = {
             'qa': 'qa',
             'trading': 'trading-agent',
@@ -256,15 +256,15 @@ class QuantManager:
             return rule_result['task_type']
         
         try:
-            glm_result = self.glm_analyzer.analyze(
+            llm_result = self.error_analyzer.analyze(
                 error_type=issue.error_type,
                 error_message=issue.error_message,
                 context=None
             )
-            if glm_result['confidence'] >= 0.7:
-                return glm_result['task_type']
+            if llm_result['confidence'] >= 0.7:
+                return llm_result['task_type']
         except Exception as e:  # pragma: no cover
-            logger.warning(f"GLM analysis failed: {e}")
+            logger.warning(f"LLM analysis failed: {e}")
         
         return rule_result['task_type']
     

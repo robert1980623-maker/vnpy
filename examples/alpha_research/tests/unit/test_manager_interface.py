@@ -109,9 +109,9 @@ class TestQuantManager:
         assert 'issue_id' in task
         assert task['issue_id'] == sample_issue.id
     
-    def test_analyze_error_glm_fallback(self, manager, sample_issue):
-        """测试 GLM 分析失败时的回退"""
-        with patch.object(manager.glm_analyzer, 'analyze', side_effect=Exception("GLM error")):
+    def test_analyze_error_llm_fallback(self, manager, sample_issue):
+        """测试 LLM 分析失败时的回退"""
+        with patch.object(manager.error_analyzer, 'analyze', side_effect=Exception("LLM error")):
             result = manager.analyze_error(sample_issue)
             assert result is not None
 
@@ -215,14 +215,14 @@ class TestIssueQueue:
         assert archived_file.exists()
 
 
-class TestGLMErrorAnalyzer:
-    """GLMErrorAnalyzer 测试"""
+class TestErrorAnalyzer:
+    """ErrorAnalyzer 测试"""
     
     @pytest.fixture
     def analyzer(self):
         """创建测试用分析器"""
-        from glm_error_analyzer import GLMErrorAnalyzer
-        return GLMErrorAnalyzer()
+        from error_analyzer import ErrorAnalyzer
+        return ErrorAnalyzer()
     
     def test_init(self, analyzer):
         """测试初始化"""
@@ -288,7 +288,7 @@ class TestQuantManagerAdvanced:
     
     def test_analyze_error_low_confidence(self, manager, sample_issue):
         """测试低置信度分析"""
-        with patch.object(manager.glm_analyzer, 'analyze', return_value={'task_type': 'general', 'confidence': 0.5}):
+        with patch.object(manager.error_analyzer, 'analyze', return_value={'task_type': 'general', 'confidence': 0.5}):
             result = manager.analyze_error(sample_issue)
             assert result is not None
     
